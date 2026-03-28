@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORAGH High-Fidelity v1</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./oragh-hi-fi-v1.css">
+</head>
+<body>
+  <main class="board">
+    <section class="intro">
+      <div class="eyebrow">Direction 02 Applied</div>
+      <h1>ORAGH warmer cultural</h1>
+      <p>
+        First high-fidelity pass for the chosen direction. These screens test the visual
+        language in real product flows: feed-first community home, desktop feed shell, and
+        event detail with inline official updates.
+      </p>
+    </section>
+
+    <section class="token-strip">
+      <div class="token">
+        <span class="swatch brand"></span>
+        <div>
+          <strong>Brand green</strong>
+          <span>#0E5D43</span>
+        </div>
+      </div>
+      <div class="token">
+        <span class="swatch accent"></span>
+        <div>
+          <strong>Brass accent</strong>
+          <span>#A88652</span>
+        </div>
+      </div>
+      <div class="token">
+        <span class="swatch canvas"></span>
+        <div>
+          <strong>Parchment canvas</strong>
+          <span>#F4EBDD</span>
+        </div>
+      </div>
+      <div class="token">
+        <span class="swatch surface"></span>
+        <div>
+          <strong>Warm ivory</strong>
+          <span>#FCF7EE</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen-grid">
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Feed / Home / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="status-bar"></div>
+
+              <header class="mobile-header">
+                <div class="mobile-page-name">Orkiestra Reprezentacyjna AGH</div>
+                <div class="mobile-header-actions">
+                  <button class="ghost-action compact">Write post</button>
+                  <div class="profile-chip">OR</div>
+                </div>
+              </header>
+
+              <div class="chip-row">
+                <span class="filter-chip active">All</span>
+                <span class="filter-chip">Official</span>
+                <span class="filter-chip">Surveys</span>
+                <span class="filter-chip">Social</span>
+              </div>
+
+              <section class="feed-stack">
+                <article class="post-card featured">
+                  <div class="post-topline">
+                    <span class="type-pill featured-pill">Pinned</span>
+                    <span class="type-pill">Announcement</span>
+                  </div>
+                  <h3>Upcoming dates for April and May are now confirmed</h3>
+                  <p>
+                    Concert rehearsals, the spring trip, and the community party now have final
+                    dates. Full details are linked in Events.
+                  </p>
+                  <div class="link-row">
+                    <span class="inline-link">Concert at X Hall</span>
+                    <span class="inline-link">Spring trip</span>
+                  </div>
+                  <div class="meta-line">Organization - 18 Mar - 12 comments</div>
+                </article>
+
+                <article class="post-card">
+                  <div class="post-topline">
+                    <span class="type-pill">Survey</span>
+                  </div>
+                  <h3>Bus survey for the Krakow trip</h3>
+                  <p>Please respond by Sunday so we can reserve the correct number of seats.</p>
+                  <div class="meta-line">Aneta - 19 Mar - 8 replies</div>
+                </article>
+
+                <article class="post-card">
+                  <div class="post-topline">
+                    <span class="type-pill">Social</span>
+                  </div>
+                  <h3>Post-concert party at Klub Stary Fort</h3>
+                  <p>Dietary questions and guest count are welcome in comments.</p>
+                  <div class="meta-line">Social team - 19 Mar - 5 replies</div>
+                </article>
+              </section>
+
+              <nav class="mobile-nav">
+                <span class="nav-item active">Feed</span>
+                <span class="nav-item">Events</span>
+                <span class="nav-item">Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>The feed should feel warm and editorial, not like a student portal.</li>
+              <li>The post action stays available, but visually secondary.</li>
+              <li>Pinned organizational posts get a richer treatment without turning into banners.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Feed / Home / Web</div>
+            <div class="frame-meta">1440 x 1024</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="desktop-shell">
+            <aside class="desktop-sidebar">
+              <div class="brand-block">
+                <div class="brand-mark">OR</div>
+                <div>
+                  <div class="brand-name">ORAGH</div>
+                  <div class="brand-subtitle">Orkiestra Reprezentacyjna AGH</div>
+                </div>
+              </div>
+
+              <nav class="sidebar-nav">
+                <a class="sidebar-link active">Feed</a>
+                <a class="sidebar-link">Events</a>
+                <a class="sidebar-link">Profile</a>
+              </nav>
+
+              <div class="sidebar-panel">
+                <div class="panel-title">Next dates</div>
+                <div class="event-row">
+                  <span class="event-date">22/03</span>
+                  <span>Concert at X Hall</span>
+                </div>
+                <div class="event-row">
+                  <span class="event-date">04/12</span>
+                  <span>Barborka</span>
+                </div>
+                <div class="event-row">
+                  <span class="event-date">12/01</span>
+                  <span>Warsztaty</span>
+                </div>
+              </div>
+            </aside>
+
+            <section class="desktop-main">
+              <div class="desktop-header">
+                <div>
+                  <div class="header-kicker">Community</div>
+                  <h2>Feed</h2>
+                </div>
+                <div class="desktop-actions">
+                  <button class="ghost-action wide">Filter</button>
+                  <button class="primary-action">New post</button>
+                </div>
+              </div>
+
+              <article class="post-card featured desktop-post">
+                <div class="post-topline">
+                  <span class="type-pill featured-pill">Pinned</span>
+                  <span class="type-pill">Announcement</span>
+                </div>
+                <h3>Upcoming dates for April and May are now confirmed</h3>
+                <p>
+                  Concert rehearsals, the spring trip, and the community party now have final
+                  dates. Full details are linked in Events so members can move into each topic.
+                </p>
+                <div class="link-row">
+                  <span class="inline-link">Concert at X Hall</span>
+                  <span class="inline-link">Spring trip</span>
+                  <span class="inline-link">Community party</span>
+                </div>
+                <div class="meta-line">Organization - 18 Mar - 12 comments</div>
+              </article>
+
+              <article class="post-card desktop-post">
+                <div class="post-topline">
+                  <span class="type-pill">Survey</span>
+                </div>
+                <h3>Bus survey for the Krakow trip</h3>
+                <p>Please respond by Sunday so we can reserve the correct number of seats.</p>
+                <div class="meta-line">Aneta - 19 Mar - 8 replies</div>
+              </article>
+
+              <article class="post-card desktop-post">
+                <div class="post-topline">
+                  <span class="type-pill">Social</span>
+                </div>
+                <h3>Post-concert party at Klub Stary Fort</h3>
+                <p>Dietary questions and guest count are welcome in comments.</p>
+                <div class="meta-line">Social team - 19 Mar - 5 replies</div>
+              </article>
+            </section>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>The web shell should feel stable and calm without needing a right rail.</li>
+              <li>The left sidebar carries navigation and upcoming dates cleanly.</li>
+              <li>This should read as an orchestra community space, not generic SaaS.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Events / Detail / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen event-screen">
+              <div class="status-bar"></div>
+
+              <header class="event-header">
+                <div class="back-button">&lt;</div>
+                <div class="event-header-copy">
+                  <div class="event-title">Concert at X Hall</div>
+                  <div class="event-subtitle">22/03/2026 - Saturday - 19:00</div>
+                </div>
+                <div class="profile-chip pale">i</div>
+              </header>
+
+              <article class="event-hero">
+                <div class="post-topline">
+                  <span class="type-pill featured-pill">Event</span>
+                  <span class="type-pill">Official</span>
+                </div>
+                <h3>Main spring concert at X Hall</h3>
+                <p>
+                  Call time is 17:45. Dress code is black formal. Use this page for official
+                  updates, attendance confirmation, and member questions.
+                </p>
+
+                <div class="hero-updates">
+                  <div class="update-card">
+                    <div class="update-title">19 Mar - Seating chart updated</div>
+                    <div class="update-author">Anna K. - Orchestra admin</div>
+                    <div class="update-copy">Violas now enter from stage left.</div>
+                  </div>
+                  <div class="update-card">
+                    <div class="update-title">18 Mar - Dress code confirmed</div>
+                    <div class="update-author">Piotr N. - Event coordinator</div>
+                    <div class="update-copy">Black formal attire for everyone.</div>
+                  </div>
+                </div>
+              </article>
+
+              <section class="detail-block">
+                <div class="section-kicker">Attendance</div>
+                <div class="survey-card">
+                  <div class="survey-question">Will you attend this event?</div>
+                  <div class="survey-meta">Please respond by 20/03 so transport and seating can be finalized.</div>
+                  <div class="survey-options">
+                    <span class="survey-option active">Going</span>
+                    <span class="survey-option">Maybe</span>
+                    <span class="survey-option">Not going</span>
+                  </div>
+                  <div class="attendance-summary-strip">
+                    <div class="attendance-summary-item positive">
+                      <strong>38</strong>
+                      <span>Going</span>
+                    </div>
+                    <div class="attendance-summary-item">
+                      <strong>6</strong>
+                      <span>Maybe</span>
+                    </div>
+                    <div class="attendance-summary-item negative">
+                      <strong>4</strong>
+                      <span>Not going</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="detail-block">
+                <div class="section-kicker">Setlist</div>
+                <div class="setlist-preview">
+                  <div class="setlist-preview-top">
+                    <div class="setlist-preview-title">Concert program</div>
+                    <div class="setlist-preview-link">Open full-screen</div>
+                  </div>
+                  <div class="setlist-preview-lines">
+                    <div class="setlist-preview-line">1. Mozart - Overture to The Magic Flute</div>
+                    <div class="setlist-preview-line">2. Mahler - Adagietto</div>
+                    <div class="setlist-preview-line">3. Kilar - Orawa</div>
+                  </div>
+                  <div class="setlist-preview-footer">Tap to open the full setlist reader for concert use</div>
+                </div>
+              </section>
+
+              <section class="detail-block">
+                <div class="section-kicker">Squad composition</div>
+                <div class="composition-preview">
+                  <div class="setlist-preview-top">
+                    <div class="setlist-preview-title">Going 38 - Maybe 6 - Not going 4</div>
+                    <div class="setlist-preview-link">Open roster</div>
+                  </div>
+                  <div class="composition-preview-grid">
+                    <div class="composition-preview-row">
+                      <span>Trabki</span>
+                      <span>2 going</span>
+                    </div>
+                    <div class="composition-preview-row">
+                      <span>Flety</span>
+                      <span>0 going</span>
+                    </div>
+                    <div class="composition-preview-row">
+                      <span>Klarnety</span>
+                      <span>3 going</span>
+                    </div>
+                  </div>
+                  <div class="setlist-preview-footer">Grouped from attendance and member instruments</div>
+                </div>
+              </section>
+
+              <section class="detail-block">
+                <div class="section-kicker">Comments</div>
+                <div class="comment-card">
+                  <div class="comment-author">Ewa</div>
+                  <div class="comment-copy">Will printed setlists be available backstage?</div>
+                </div>
+                <div class="comment-card">
+                  <div class="comment-author">Marek</div>
+                  <div class="comment-copy">Bus departure list is now in the trip sheet.</div>
+                </div>
+              </section>
+
+              <div class="composer">
+                <div class="composer-input">Add comment</div>
+                <div class="composer-send">Post</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>Updates are merged into the event identity instead of floating as a separate section.</li>
+              <li>The event page should feel ceremonial but still practical, including attendance response.</li>
+              <li>The setlist stays lightweight here as a clickable preview that opens a full-screen reader.</li>
+              <li>Squad composition is exposed the same way: small preview here, full grouped roster on its own page.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

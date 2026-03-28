@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORAGH Auth + Localization Sync</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --surface: #fffcf7;
+      --ink: #1e1e1e;
+      --muted: #6e675c;
+      --border: #d7cebf;
+      --brand: #00693c;
+      --brand-soft: #e4efe8;
+      --radius: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Manrope", "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(180deg, #f8f4eb 0%, var(--bg) 100%);
+    }
+
+    main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+      display: grid;
+      gap: 24px;
+    }
+
+    .intro {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 24px;
+    }
+
+    .kicker {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 8px 0 6px;
+      font-size: 32px;
+      line-height: 1.15;
+    }
+
+    .intro p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .grid {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 18px;
+      min-height: 760px;
+      display: grid;
+      align-content: start;
+      gap: 14px;
+    }
+
+    .frame-title {
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 390px;
+      min-height: 680px;
+      margin: 0 auto;
+      border-radius: 30px;
+      border: 1px solid var(--border);
+      background: #f7f2e8;
+      padding: 18px;
+      display: grid;
+      align-content: start;
+      gap: 12px;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .title {
+      font-size: 28px;
+      margin: 0;
+      line-height: 1.1;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .label {
+      margin-top: 8px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .field {
+      background: #fffbf4;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      min-height: 46px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-size: 16px;
+    }
+
+    .field.muted {
+      color: var(--muted);
+    }
+
+    .dropdown {
+      border: 1px solid #89b29a;
+      border-radius: var(--radius);
+      background: #fffbf4;
+      overflow: hidden;
+    }
+
+    .dropdown-head {
+      min-height: 46px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 14px;
+      font-size: 16px;
+    }
+
+    .caret {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .option {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      border-top: 1px solid var(--border);
+      background: #fffdf8;
+      font-size: 15px;
+    }
+
+    .option.active {
+      background: var(--brand-soft);
+      color: var(--brand);
+      font-weight: 700;
+    }
+
+    .cta {
+      margin-top: 8px;
+      min-height: 44px;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .cta.primary {
+      color: white;
+      background: var(--brand);
+    }
+
+    .cta.secondary {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+    }
+
+    .feed-shell {
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+      border-radius: 26px;
+      border: 1px solid var(--border);
+      background: #f7f2e8;
+      padding: 16px;
+      display: grid;
+      align-content: start;
+      gap: 10px;
+    }
+
+    .chip-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chip {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #f1eadc;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 6px 10px;
+    }
+
+    .chip.active {
+      background: var(--brand-soft);
+      color: var(--brand);
+      border-color: #89b29a;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      background: #fffcf7;
+      border-radius: 16px;
+      padding: 12px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .card h3 {
+      margin: 0;
+      font-size: 17px;
+      line-height: 1.25;
+    }
+
+    .tabs {
+      margin-top: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+    }
+
+    .tabs .active {
+      color: var(--brand);
+    }
+
+    @media (max-width: 1120px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .frame {
+        min-height: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="intro">
+      <div class="kicker">Figma sync</div>
+      <h1>Polish-first auth update</h1>
+      <p>
+        This sync captures current implementation changes: Polish default copy,
+        improved desktop auth width, and a custom styled instrument dropdown in registration.
+      </p>
+    </section>
+
+    <section class="grid">
+      <article class="frame">
+        <div class="frame-title">Auth / Logowanie / Mobile</div>
+        <div class="phone">
+          <div class="eyebrow">ORAGH</div>
+          <h2 class="title">Zaloguj się</h2>
+          <p class="sub">Użyj konta orkiestry, aby przejść do aktualności i wydarzeń.</p>
+
+          <div class="label">E-mail</div>
+          <div class="field muted">you@example.com</div>
+
+          <div class="label">Hasło</div>
+          <div class="field muted">Twoje hasło</div>
+
+          <div class="cta primary">Zaloguj się</div>
+          <div class="cta secondary">Załóż konto</div>
+        </div>
+      </article>
+
+      <article class="frame">
+        <div class="frame-title">Auth / Rejestracja / Mobile</div>
+        <div class="phone">
+          <div class="eyebrow">ORAGH</div>
+          <h2 class="title">Załóż konto</h2>
+          <p class="sub">Imię, nazwisko i instrument są wymagane do składu i ankiet obecności.</p>
+
+          <div class="label">Imię</div>
+          <div class="field muted">Imię</div>
+
+          <div class="label">Nazwisko</div>
+          <div class="field muted">Nazwisko</div>
+
+          <div class="label">Instrument główny</div>
+          <div class="dropdown">
+            <div class="dropdown-head">
+              <span>Trąbki</span>
+              <span class="caret">^</span>
+            </div>
+            <div class="option">Flety</div>
+            <div class="option">Klarnety</div>
+            <div class="option active">Trąbki</div>
+            <div class="option">Puzony</div>
+            <div class="option">Perkusja</div>
+          </div>
+
+          <div class="label">E-mail</div>
+          <div class="field muted">you@example.com</div>
+
+          <div class="cta primary">Załóż konto</div>
+        </div>
+      </article>
+
+      <article class="frame">
+        <div class="frame-title">App / Polish labels / Mobile</div>
+        <div class="feed-shell">
+          <div class="eyebrow">ORAGH</div>
+          <h2 class="title">Orkiestra Reprezentacyjna AGH</h2>
+          <p class="sub">Aktualności to strona główna.</p>
+
+          <div class="chip-row">
+            <span class="chip active">Napisz post</span>
+            <span class="chip">Przypięty</span>
+          </div>
+
+          <div class="card">
+            <div class="meta">Wojtek - teraz</div>
+            <h3>Najbliższe wydarzenia i próby</h3>
+            <div class="sub">Krótki podgląd po polsku jako domyślna lokalizacja.</div>
+          </div>
+
+          <div class="tabs">
+            <span class="active">Aktualności</span>
+            <span>Wydarzenia</span>
+            <span>Profil</span>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

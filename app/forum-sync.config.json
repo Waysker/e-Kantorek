@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://www.oragh.agh.edu.pl/forum",
+  "memberListPath": "/memberlist.php",
+  "concertForumPaths": [
+    "/forumdisplay.php?fid=27",
+    "/forumdisplay.php?fid=50"
+  ],
+  "eventYear": 2026,
+  "eventThreadUrls": [],
+  "maxThreads": 24
+}

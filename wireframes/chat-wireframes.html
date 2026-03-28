@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orchestra Community App Wireframes</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./chat-wireframes.css">
+</head>
+<body>
+  <main class="board">
+    <section class="board-intro">
+      <div class="eyebrow">Round 1 low-fi</div>
+      <h1>Orchestra Community App</h1>
+      <p>
+        First wireframe slice based on the docs in <code>/docs</code>. This page focuses on the
+        four chat frames called out in the Figma brief: small and large phone variants for
+        Chat List and Chat Detail.
+      </p>
+    </section>
+
+    <section class="wireframe-grid">
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Chat / List / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-small">
+            <div class="screen">
+              <div class="safe-area"></div>
+
+              <header class="topbar">
+                <div>
+                  <div class="topbar-kicker">Warsaw Chamber Orchestra</div>
+                  <h2>Chats</h2>
+                </div>
+                <div class="avatar placeholder">AK</div>
+              </header>
+
+              <div class="search">Search groups or messages</div>
+
+              <div class="chips">
+                <span class="chip active">All</span>
+                <span class="chip">Unread</span>
+                <span class="chip">Sections</span>
+                <span class="chip">Projects</span>
+              </div>
+
+              <section class="section-block">
+                <div class="section-title">Priority</div>
+                <div class="list">
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">O</div>
+                      <div>
+                        <div class="primary">Full Orchestra</div>
+                        <div class="secondary">Anna: Bowing updated for rehearsal tonight</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">18:12</div>
+                      <div class="badge">4</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">V1</div>
+                      <div>
+                        <div class="primary">Violin I</div>
+                        <div class="secondary">Reminder: black attire for Saturday concert</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">17:40</div>
+                      <div class="badge">1</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section-block">
+                <div class="section-title">All Groups</div>
+                <div class="list">
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Vc</div>
+                      <div>
+                        <div class="primary">Cello Section</div>
+                        <div class="secondary">Mateusz: PDF is now in Notes</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">16:25</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Br</div>
+                      <div>
+                        <div class="primary">Brass</div>
+                        <div class="secondary">Meeting moved to 18:30</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">15:04</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Wd</div>
+                      <div>
+                        <div class="primary">Woodwinds</div>
+                        <div class="secondary">Pinned message updated</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Yesterday</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Cc</div>
+                      <div>
+                        <div class="primary">Concert Committee</div>
+                        <div class="secondary">Venue volunteer list is ready</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Yesterday</div>
+                      <div class="dot"></div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Mp</div>
+                      <div>
+                        <div class="primary">Mahler Project</div>
+                        <div class="secondary">Full score attachment uploaded</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Mon</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row">
+                    <div class="list-leading">
+                      <div class="avatar icon">Tl</div>
+                      <div>
+                        <div class="primary">Tour Logistics</div>
+                        <div class="secondary">Coach departure confirmed</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Mon</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <nav class="tabbar">
+                <span>Home</span>
+                <span class="active-tab">Chats</span>
+                <span>Forum</span>
+                <span>Notes</span>
+                <span>Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes-panel">
+            <h3>What this frame is proving</h3>
+            <ul>
+              <li>Unread activity stands out without overloading the list.</li>
+              <li>Priority groups sit above the full group list.</li>
+              <li>Tabs, search, and filters fit on a small phone without crowding.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Chat / List / Large</div>
+            <div class="frame-meta">430 x 932</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-large">
+            <div class="screen">
+              <div class="safe-area"></div>
+
+              <header class="topbar">
+                <div>
+                  <div class="topbar-kicker">Warsaw Chamber Orchestra</div>
+                  <h2>Chats</h2>
+                </div>
+                <div class="avatar placeholder">AK</div>
+              </header>
+
+              <div class="search">Search groups or messages</div>
+
+              <div class="chips">
+                <span class="chip active">All</span>
+                <span class="chip">Unread</span>
+                <span class="chip">Sections</span>
+                <span class="chip">Projects</span>
+              </div>
+
+              <section class="section-block">
+                <div class="section-title">Priority</div>
+                <div class="list">
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">O</div>
+                      <div>
+                        <div class="primary">Full Orchestra</div>
+                        <div class="secondary">Anna: Bowing updated for rehearsal tonight</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">18:12</div>
+                      <div class="badge">4</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">V1</div>
+                      <div>
+                        <div class="primary">Violin I</div>
+                        <div class="secondary">Reminder: black attire for Saturday concert</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">17:40</div>
+                      <div class="badge">1</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="section-block">
+                <div class="section-title">All Groups</div>
+                <div class="list">
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Vc</div>
+                      <div>
+                        <div class="primary">Cello Section</div>
+                        <div class="secondary">Mateusz: PDF is now in Notes</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">16:25</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Br</div>
+                      <div>
+                        <div class="primary">Brass</div>
+                        <div class="secondary">Meeting moved to 18:30</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">15:04</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Wd</div>
+                      <div>
+                        <div class="primary">Woodwinds</div>
+                        <div class="secondary">Pinned message updated</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Yesterday</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Cc</div>
+                      <div>
+                        <div class="primary">Concert Committee</div>
+                        <div class="secondary">Venue volunteer list is ready</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Yesterday</div>
+                      <div class="dot"></div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Mp</div>
+                      <div>
+                        <div class="primary">Mahler Project</div>
+                        <div class="secondary">Full score attachment uploaded</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Mon</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Tl</div>
+                      <div>
+                        <div class="primary">Tour Logistics</div>
+                        <div class="secondary">Coach departure confirmed</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Mon</div>
+                    </div>
+                  </div>
+
+                  <div class="list-row roomy">
+                    <div class="list-leading">
+                      <div class="avatar icon">Ad</div>
+                      <div>
+                        <div class="primary">Admin Desk</div>
+                        <div class="secondary">Updated member access list</div>
+                      </div>
+                    </div>
+                    <div class="list-trailing">
+                      <div class="time">Sun</div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <nav class="tabbar">
+                <span>Home</span>
+                <span class="active-tab">Chats</span>
+                <span>Forum</span>
+                <span>Notes</span>
+                <span>Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes-panel">
+            <h3>Large-phone adjustment</h3>
+            <ul>
+              <li>More breathing room in rows and section spacing.</li>
+              <li>One extra row proves the larger device can show more without changing the pattern.</li>
+              <li>The same navigation grammar is preserved across sizes.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Chat / Detail / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-small">
+            <div class="screen">
+              <div class="safe-area"></div>
+
+              <header class="conversation-header">
+                <div class="header-left">
+                  <div class="back-button">&lt;</div>
+                  <div>
+                    <div class="primary">Violin I</div>
+                    <div class="secondary">24 members</div>
+                  </div>
+                </div>
+                <div class="icon-button">i</div>
+              </header>
+
+              <div class="pinned-strip">Pinned: rehearsal starts at 19:00 on stage</div>
+
+              <div class="message-area">
+                <div class="date-separator">Today</div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Anna K.</div>
+                  <div class="bubble">Can everyone confirm attendance for Friday?</div>
+                  <div class="meta">17:42</div>
+                </div>
+
+                <div class="message-group outgoing">
+                  <div class="bubble">I will be there by 18:30.</div>
+                  <div class="meta">17:44</div>
+                </div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Mateusz</div>
+                  <div class="bubble attachment">
+                    <div class="attachment-title">Updated bowings.pdf</div>
+                    <div class="attachment-meta">Attachment</div>
+                  </div>
+                  <div class="meta">17:47</div>
+                </div>
+
+                <div class="message-group outgoing">
+                  <div class="bubble">Thanks, received.</div>
+                  <div class="meta">17:51</div>
+                </div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Ewa</div>
+                  <div class="bubble">
+                    Section leader says the final seating plan will be posted in Notes.
+                  </div>
+                  <div class="meta">Reply available · 17:55</div>
+                </div>
+
+                <div class="reaction-row">Seen by 8 · + Add reaction</div>
+              </div>
+
+              <div class="composer">
+                <div class="composer-action">+</div>
+                <div class="composer-input">Write a message</div>
+                <div class="composer-action send">Send</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="notes-panel">
+            <h3>What this frame is proving</h3>
+            <ul>
+              <li>Incoming and outgoing messages stay readable in grayscale.</li>
+              <li>The pinned banner is visible but does not dominate the thread.</li>
+              <li>The composer remains thumb-friendly at the bottom.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Chat / Detail / Large</div>
+            <div class="frame-meta">430 x 932</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-large">
+            <div class="screen">
+              <div class="safe-area"></div>
+
+              <header class="conversation-header">
+                <div class="header-left">
+                  <div class="back-button">&lt;</div>
+                  <div>
+                    <div class="primary">Violin I</div>
+                    <div class="secondary">24 members</div>
+                  </div>
+                </div>
+                <div class="icon-button">i</div>
+              </header>
+
+              <div class="pinned-strip">Pinned: rehearsal starts at 19:00 on stage</div>
+
+              <div class="message-area spacious">
+                <div class="date-separator">Today</div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Anna K.</div>
+                  <div class="bubble">Can everyone confirm attendance for Friday?</div>
+                  <div class="meta">17:42</div>
+                </div>
+
+                <div class="message-group outgoing">
+                  <div class="bubble">I will be there by 18:30.</div>
+                  <div class="meta">17:44</div>
+                </div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Mateusz</div>
+                  <div class="bubble attachment">
+                    <div class="attachment-title">Updated bowings.pdf</div>
+                    <div class="attachment-meta">Attachment</div>
+                  </div>
+                  <div class="meta">17:47</div>
+                </div>
+
+                <div class="message-group outgoing">
+                  <div class="bubble">Thanks, received.</div>
+                  <div class="meta">17:51</div>
+                </div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Ewa</div>
+                  <div class="bubble">
+                    Section leader says the final seating plan will be posted in Notes.
+                  </div>
+                  <div class="meta">Reply available · 17:55</div>
+                </div>
+
+                <div class="message-group incoming">
+                  <div class="sender">Tomek</div>
+                  <div class="bubble">Thanks. I can also bring spare stands if needed.</div>
+                  <div class="meta">17:58</div>
+                </div>
+
+                <div class="reaction-row">Seen by 8 · + Add reaction</div>
+              </div>
+
+              <div class="composer">
+                <div class="composer-action">+</div>
+                <div class="composer-input">Write a message</div>
+                <div class="composer-action send">Send</div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="notes-panel">
+            <h3>Large-phone adjustment</h3>
+            <ul>
+              <li>Bubble widths grow while message rhythm stays the same.</li>
+              <li>Extra vertical space lets the thread feel calmer, not denser.</li>
+              <li>The same header, pinned strip, and composer rules still apply.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

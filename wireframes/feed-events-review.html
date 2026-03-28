@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orchestra Community App Feed and Events Review</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./feed-events-wireframes.css">
+</head>
+<body>
+  <main class="board">
+    <section class="board-intro">
+      <div class="eyebrow">Feedback revision</div>
+      <h1>Focused review board</h1>
+      <p>
+        This lighter board captures only the revised screens: quieter mobile feed posting,
+        simpler web feed shell, and event detail with inline authored updates plus a separate
+        setlist reading mode.
+      </p>
+    </section>
+
+    <section class="wireframe-grid">
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Feed / Home / Small</div>
+            <div class="frame-meta">390 x 844 - post action softened</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-small">
+            <div class="screen">
+              <div class="safe-area"></div>
+              <header class="topbar">
+                <div>
+                  <div class="topbar-kicker">Warsaw Chamber Orchestra</div>
+                  <h2>Feed</h2>
+                </div>
+                <div class="avatar placeholder">WS</div>
+              </header>
+              <div class="subtle-action-row">
+                <span class="subtle-action">Write post</span>
+              </div>
+              <div class="chips">
+                <span class="chip active">All</span>
+                <span class="chip">Official</span>
+                <span class="chip">Surveys</span>
+                <span class="chip">Social</span>
+              </div>
+              <section class="feed-stack">
+                <article class="feed-card pinned">
+                  <div class="card-tags">
+                    <span class="tag strong">Pinned</span>
+                    <span class="tag">Announcement</span>
+                  </div>
+                  <h3>Upcoming dates for April and May are now confirmed</h3>
+                  <p>Concert rehearsals, the spring trip, and the community party now have final dates.</p>
+                  <div class="card-meta">Organization - 18 Mar - 12 comments</div>
+                </article>
+                <article class="feed-card">
+                  <div class="card-tags">
+                    <span class="tag">Survey</span>
+                  </div>
+                  <h3>Bus survey for the Krakow trip</h3>
+                  <p>Please respond by Sunday so we can reserve the correct number of seats.</p>
+                  <div class="card-meta">Aneta - 19 Mar - 8 replies</div>
+                </article>
+              </section>
+              <nav class="tabbar">
+                <span class="active-tab">Feed</span>
+                <span>Events</span>
+                <span>Chats</span>
+                <span>Profile</span>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Feed / Home / Web</div>
+            <div class="frame-meta">1440 x 1024 - right rail removed</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="desktop-frame">
+            <div class="desktop-shell desktop-shell-feed">
+              <aside class="sidebar">
+                <div class="brand-block">
+                  <div class="brand-mark">O</div>
+                  <div>
+                    <div class="brand-title">Orchestra Community</div>
+                    <div class="brand-subtitle">Warsaw Chamber Orchestra</div>
+                  </div>
+                </div>
+                <nav class="sidebar-nav">
+                  <a class="nav-item active">Feed</a>
+                  <a class="nav-item">Events</a>
+                  <a class="nav-item">Chats</a>
+                  <a class="nav-item">Members</a>
+                  <a class="nav-item">Profile</a>
+                </nav>
+                <div class="sidebar-card">
+                  <div class="sidebar-card-title">Next dates</div>
+                  <div class="compact-row"><div class="mini-date">22/03</div><div>Concert at X Hall</div></div>
+                  <div class="compact-row"><div class="mini-date">04/12</div><div>Barborka</div></div>
+                  <div class="compact-row"><div class="mini-date">12/01</div><div>Warsztaty</div></div>
+                </div>
+              </aside>
+              <section class="main-column feed-main">
+                <div class="column-header">
+                  <div>
+                    <div class="topbar-kicker">Community</div>
+                    <h2>Feed</h2>
+                  </div>
+                  <div class="header-actions">
+                    <span class="pill">Filter</span>
+                    <span class="pill strong">New post</span>
+                  </div>
+                </div>
+                <div class="composer-wide">Share update with the whole community</div>
+                <article class="feed-card wide pinned">
+                  <div class="card-tags">
+                    <span class="tag strong">Pinned</span>
+                    <span class="tag">Announcement</span>
+                  </div>
+                  <h3>Upcoming dates for April and May are now confirmed</h3>
+                  <p>Concert rehearsals, the spring trip, and the community party now have final dates.</p>
+                  <div class="card-meta">Organization - 18 Mar - 12 comments</div>
+                </article>
+                <article class="feed-card wide">
+                  <div class="card-tags">
+                    <span class="tag">Social</span>
+                  </div>
+                  <h3>Post-concert party at Klub Stary Fort</h3>
+                  <p>Dietary questions and guest count are welcome in comments.</p>
+                  <div class="card-meta">Social team - 19 Mar - 5 replies</div>
+                </article>
+              </section>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Events / Detail / Small</div>
+            <div class="frame-meta">390 x 844 - updates merged into event</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="phone phone-small">
+            <div class="screen">
+              <div class="safe-area"></div>
+              <header class="conversation-header">
+                <div class="header-left">
+                  <div class="back-button">&lt;</div>
+                  <div>
+                    <div class="primary">Concert at X Hall</div>
+                    <div class="secondary">22/03/2026 - Saturday - 19:00</div>
+                  </div>
+                </div>
+                <div class="icon-button">i</div>
+              </header>
+              <div class="hero-card">
+                <div class="card-tags">
+                  <span class="tag strong">Event</span>
+                  <span class="tag">Official</span>
+                </div>
+                <h3>Main spring concert at X Hall</h3>
+                <p>Call time is 17:45. Dress code is black formal. Use this page for official updates and member questions.</p>
+                <div class="hero-updates">
+                  <div class="hero-updates-title">Official updates</div>
+                  <div class="update-item">
+                    <div class="timeline-title">19 Mar - Seating chart updated</div>
+                    <div class="update-meta">Anna K. - Orchestra admin</div>
+                    <div class="timeline-copy">Violas now enter from stage left.</div>
+                  </div>
+                  <div class="update-item">
+                    <div class="timeline-title">18 Mar - Dress code confirmed</div>
+                    <div class="update-meta">Piotr N. - Event coordinator</div>
+                    <div class="timeline-copy">Black formal attire for everyone.</div>
+                  </div>
+                </div>
+              </div>
+              <section class="detail-section">
+                <div class="section-title">Setlist</div>
+                <div class="detail-card compact-action">Open setlist page for concert reading</div>
+              </section>
+              <section class="detail-section">
+                <div class="section-title">Comments</div>
+                <div class="detail-card stack">
+                  <div class="comment-item">
+                    <div class="timeline-title">Ewa</div>
+                    <div class="timeline-copy">Will printed setlists be available backstage?</div>
+                  </div>
+                </div>
+              </section>
+              <div class="composer">
+                <div class="composer-input full">Add comment</div>
+                <div class="composer-action send">Post</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="wireframe-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">WF / Events / Detail / Web</div>
+            <div class="frame-meta">1440 x 1024 - inline updates + visible setlist</div>
+          </div>
+          <div class="chip muted">Low-fi</div>
+        </div>
+
+        <div class="wireframe-layout">
+          <div class="desktop-frame">
+            <div class="desktop-shell event-detail-shell">
+              <aside class="sidebar">
+                <div class="brand-block">
+                  <div class="brand-mark">O</div>
+                  <div>
+                    <div class="brand-title">Orchestra Community</div>
+                    <div class="brand-subtitle">Warsaw Chamber Orchestra</div>
+                  </div>
+                </div>
+                <nav class="sidebar-nav">
+                  <a class="nav-item">Feed</a>
+                  <a class="nav-item active">Events</a>
+                  <a class="nav-item">Chats</a>
+                  <a class="nav-item">Members</a>
+                  <a class="nav-item">Profile</a>
+                </nav>
+              </aside>
+              <section class="main-column">
+                <div class="column-header">
+                  <div>
+                    <div class="topbar-kicker">Event detail</div>
+                    <h2>22/03/2026 - Concert at X Hall</h2>
+                  </div>
+                  <div class="header-actions">
+                    <span class="pill">Share</span>
+                    <span class="pill strong">Add update</span>
+                  </div>
+                </div>
+                <article class="hero-card wide">
+                  <div class="card-tags">
+                    <span class="tag strong">Event</span>
+                    <span class="tag">Official</span>
+                  </div>
+                  <h3>Main spring concert at X Hall</h3>
+                  <p>Call time is 17:45. Dress code is black formal. Use this page for official updates and member questions.</p>
+                  <div class="hero-updates">
+                    <div class="hero-updates-title">Official updates</div>
+                    <div class="update-item">
+                      <div class="timeline-title">19 Mar - Seating chart updated</div>
+                      <div class="update-meta">Anna K. - Orchestra admin</div>
+                      <div class="timeline-copy">Violas now enter from stage left.</div>
+                    </div>
+                    <div class="update-item">
+                      <div class="timeline-title">18 Mar - Dress code confirmed</div>
+                      <div class="update-meta">Piotr N. - Event coordinator</div>
+                      <div class="timeline-copy">Black formal attire for everyone.</div>
+                    </div>
+                  </div>
+                </article>
+                <section class="detail-block">
+                  <div class="section-title">Comments</div>
+                  <div class="detail-card stack">
+                    <div class="comment-item">
+                      <div class="timeline-title">Marek</div>
+                      <div class="timeline-copy">Bus departure list is now in the trip sheet.</div>
+                    </div>
+                  </div>
+                </section>
+              </section>
+              <aside class="right-rail">
+                <div class="rail-card">
+                  <div class="sidebar-card-title">Event info</div>
+                  <div class="rail-item">Date: 22/03/2026</div>
+                  <div class="rail-item">Time: 19:00</div>
+                  <div class="rail-item">Venue: X Hall</div>
+                  <div class="rail-item">Call time: 17:45</div>
+                </div>
+                <div class="rail-card">
+                  <div class="sidebar-card-title">Setlist</div>
+                  <div class="plain-text-list">
+                    <div class="plain-text-line">1. Mozart - Overture</div>
+                    <div class="plain-text-line">2. Mahler - Adagietto</div>
+                    <div class="plain-text-line">3. Szymanowski - Encore</div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORAGH System v1</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./oragh-hi-fi-v1.css">
+  <link rel="stylesheet" href="./oragh-hi-fi-v2.css">
+  <link rel="stylesheet" href="./oragh-system-v1.css">
+</head>
+<body>
+  <main class="board">
+    <section class="intro">
+      <div class="eyebrow">System Page</div>
+      <h1>ORAGH tokens and components</h1>
+      <p>
+        A compact working page for the reusable building blocks behind the current direction.
+        This is not a final design system yet, but it keeps us from restyling common patterns by hand.
+      </p>
+    </section>
+
+    <section class="system-grid">
+      <article class="system-card">
+        <h3>Color Tokens</h3>
+        <div class="system-token-grid">
+          <div class="system-token"><span class="swatch brand"></span><strong>Brand</strong><span>#0E5D43</span></div>
+          <div class="system-token"><span class="swatch accent"></span><strong>Accent</strong><span>#A88652</span></div>
+          <div class="system-token"><span class="swatch canvas"></span><strong>Canvas</strong><span>#F4EBDD</span></div>
+          <div class="system-token"><span class="swatch surface"></span><strong>Surface</strong><span>#FCF7EE</span></div>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Typography</h3>
+        <div class="type-sample display">Community headlines</div>
+        <div class="type-sample title">Event and feed titles</div>
+        <div class="type-sample body">Body copy stays clear and practical for updates, messages, and logistics.</div>
+      </article>
+
+      <article class="system-card">
+        <h3>Buttons & Chips</h3>
+        <div class="system-row">
+          <button class="primary-action">New post</button>
+          <button class="ghost-action wide">Filter</button>
+          <button class="ghost-action compact">Write post</button>
+        </div>
+        <div class="system-row">
+          <span class="filter-chip active">Upcoming</span>
+          <span class="filter-chip">Official</span>
+          <span class="type-pill featured-pill">Pinned</span>
+          <span class="type-pill">Survey</span>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Cards</h3>
+        <div class="system-row vertical">
+          <article class="post-card featured mini-card">
+            <div class="post-topline">
+              <span class="type-pill featured-pill">Pinned</span>
+              <span class="type-pill">Announcement</span>
+            </div>
+            <h3>Upcoming dates are now confirmed</h3>
+            <p>Concert rehearsals, trip details, and community events now have final dates.</p>
+          </article>
+
+          <article class="event-list-card mini-event">
+            <div class="event-date-block">
+              <span class="event-day">22</span>
+              <span class="event-month">MAR</span>
+            </div>
+            <div class="event-list-copy">
+              <h3>Concert at X Hall</h3>
+              <p>Main spring concert with updates and comments.</p>
+            </div>
+          </article>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Update & Comment Blocks</h3>
+        <div class="system-row vertical">
+          <div class="update-card">
+            <div class="update-title">19 Mar - Seating chart updated</div>
+            <div class="update-author">Anna K. - Orchestra admin</div>
+            <div class="update-copy">Violas now enter from stage left.</div>
+          </div>
+          <div class="comment-card">
+            <div class="comment-author">Ewa</div>
+            <div class="comment-copy">Will printed setlists be available backstage?</div>
+          </div>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Attendance Survey & Summary</h3>
+        <div class="system-row vertical">
+          <div class="survey-card mini-card">
+            <div class="survey-question">Will you attend this event?</div>
+            <div class="survey-meta">Please answer by 20/03 so planning can be finalized.</div>
+            <div class="survey-options">
+              <span class="survey-option active">Going</span>
+              <span class="survey-option">Maybe</span>
+              <span class="survey-option">Not going</span>
+            </div>
+            <div class="attendance-summary-strip">
+              <div class="attendance-summary-item positive">
+                <strong>38</strong>
+                <span>Going</span>
+              </div>
+              <div class="attendance-summary-item">
+                <strong>6</strong>
+                <span>Maybe</span>
+              </div>
+              <div class="attendance-summary-item negative">
+                <strong>4</strong>
+                <span>Not going</span>
+              </div>
+            </div>
+          </div>
+          <div class="system-copy">
+            Reuse this compact attendance-summary strip anywhere we need quick counts: event detail, attendance page, web side rail, and squad-composition header.
+          </div>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Setlist Preview & Reader</h3>
+        <div class="system-row vertical">
+          <div class="setlist-preview mini-card">
+            <div class="setlist-preview-top">
+              <div class="setlist-preview-title">Concert program</div>
+              <div class="setlist-preview-link">Open full-screen</div>
+            </div>
+            <div class="setlist-preview-lines">
+              <div class="setlist-preview-line">1. Mozart - Overture</div>
+              <div class="setlist-preview-line">2. Mahler - Adagietto</div>
+              <div class="setlist-preview-line">3. Kilar - Orawa</div>
+            </div>
+            <div class="setlist-preview-footer">Small sneak peek inside event detail</div>
+          </div>
+          <div class="setlist-reader-card mini-card document-sheet">
+            <div class="setlist-reader-meta">Fit when readable</div>
+            <div class="document-title">Concert program</div>
+            <div class="setlist-block fit-mode">
+              <div class="setlist-section">Program</div>
+              <div class="setlist-item">
+                <span class="setlist-index">1</span>
+                <div class="setlist-item-copy">
+                  <strong>Mozart - Overture</strong>
+                  <span>Stage call after tuning.</span>
+                </div>
+              </div>
+              <div class="setlist-item">
+                <span class="setlist-index">2</span>
+                <div class="setlist-item-copy">
+                  <strong>Mahler - Adagietto</strong>
+                  <span>Pause before applause cue.</span>
+                </div>
+              </div>
+              <div class="setlist-item">
+                <span class="setlist-index">3</span>
+                <div class="setlist-item-copy">
+                  <strong>Kilar - Orawa</strong>
+                  <span>Stand order unchanged.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="setlist-reader-card mini-card scroll-mode document-sheet">
+            <div class="setlist-reader-meta">Scroll when dense</div>
+            <div class="document-title">Concert program</div>
+            <div class="setlist-scroll-frame compact">
+              <div class="setlist-scroll-shell">
+                <div class="setlist-block scroll-mode">
+                  <div class="setlist-section">Program</div>
+                  <div class="setlist-item">
+                    <span class="setlist-index">1</span>
+                    <div class="setlist-item-copy">
+                      <strong>AGH Fanfare</strong>
+                      <span>Opening cue after tuning.</span>
+                    </div>
+                  </div>
+                  <div class="setlist-item">
+                    <span class="setlist-index">2</span>
+                    <div class="setlist-item-copy">
+                      <strong>Mozart - Overture</strong>
+                      <span>Conductor enters after applause settles.</span>
+                    </div>
+                  </div>
+                  <div class="setlist-item">
+                    <span class="setlist-index">3</span>
+                    <div class="setlist-item-copy">
+                      <strong>Moniuszko - Bajka</strong>
+                      <span>Woodwinds stay seated.</span>
+                    </div>
+                  </div>
+                  <div class="setlist-item">
+                    <span class="setlist-index">4</span>
+                    <div class="setlist-item-copy">
+                      <strong>Mahler - Adagietto</strong>
+                      <span>Pause before applause cue.</span>
+                    </div>
+                  </div>
+                  <div class="setlist-item">
+                    <span class="setlist-index">5</span>
+                    <div class="setlist-item-copy">
+                      <strong>Kilar - Orawa</strong>
+                      <span>Stand order unchanged.</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="setlist-scroll-fade" aria-hidden="true"></div>
+            </div>
+            <div class="setlist-scroll-hint">Scroll for full list</div>
+          </div>
+          <div class="system-copy">
+            On mobile, show only a small clickable preview in the event page. Opening it should feel like an immersive monochrome document reader that fills the screen like a page. Inside that reader, keep the whole list on one screen only while the type remains comfortably readable. Once the parsed content gets denser, preserve readable sizing and switch to scroll mode instead of compressing the layout.
+          </div>
+        </div>
+      </article>
+
+      <article class="system-card">
+        <h3>Squad Composition</h3>
+        <div class="system-row vertical">
+          <div class="composition-preview mini-card">
+            <div class="setlist-preview-top">
+              <div class="setlist-preview-title">Confirmed lineup by instrument</div>
+              <div class="setlist-preview-link">Open roster</div>
+            </div>
+            <div class="composition-preview-grid">
+              <div class="composition-preview-row">
+                <span>Trabki</span>
+                <span>2 going</span>
+              </div>
+              <div class="composition-preview-row">
+                <span>Flety</span>
+                <span>0 going</span>
+              </div>
+              <div class="composition-preview-row">
+                <span>Klarnety</span>
+                <span>3 going</span>
+              </div>
+            </div>
+            <div class="setlist-preview-footer">Preview in event detail, dedicated roster page on tap</div>
+          </div>
+          <div class="instrument-group-card mini-card">
+            <div class="instrument-group-top">
+              <div class="instrument-group-name">Trabki</div>
+              <div class="instrument-group-count">2 confirmed</div>
+            </div>
+            <div class="instrument-members">
+              <div class="instrument-member">Member A</div>
+              <div class="instrument-member">Member B</div>
+            </div>
+          </div>
+          <div class="system-copy">
+            Build this page from confirmed attendance and each member's primary instrument. The grouped confirmed squad should be the main thing, while maybe or missing responses remain secondary context.
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

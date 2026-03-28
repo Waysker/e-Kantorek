@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORAGH High-Fidelity v2</title>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./oragh-hi-fi-v1.css">
+  <link rel="stylesheet" href="./oragh-hi-fi-v2.css">
+</head>
+<body>
+  <main class="board">
+    <section class="intro">
+      <div class="eyebrow">Direction 02 Extended</div>
+      <h1>ORAGH core communication screens</h1>
+      <p>
+        Extending the chosen direction into the next v1 product surfaces: event browsing,
+        event attendance response, fit-and-scroll setlist reading, and web support for the event flow.
+        These screens should stay tightly aligned with the earlier feed and event-detail work.
+      </p>
+    </section>
+
+    <section class="screen-grid">
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Events / List / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen events-list-screen">
+              <div class="status-bar"></div>
+
+              <header class="mobile-header">
+                <div class="mobile-page-name">Orkiestra Reprezentacyjna AGH</div>
+                <div class="mobile-header-actions">
+                  <div class="profile-chip">OR</div>
+                </div>
+              </header>
+
+              <div class="section-head">
+                <div>
+                  <div class="header-kicker">Dated topics</div>
+                  <h2>Events</h2>
+                </div>
+              </div>
+
+              <div class="search-shell">Search events, halls, or dates</div>
+
+              <div class="chip-row events-filters">
+                <span class="filter-chip active">Upcoming</span>
+                <span class="filter-chip">Past</span>
+                <span class="filter-chip">Official</span>
+              </div>
+
+              <section class="events-stack">
+                <article class="event-list-card">
+                  <div class="event-date-block">
+                    <span class="event-day">22</span>
+                    <span class="event-month">MAR</span>
+                  </div>
+                  <div class="event-list-copy">
+                    <h3>Concert at X Hall</h3>
+                    <p>Main spring concert with scores, logistics, and updates.</p>
+                    <div class="event-stats">4 official updates - 11 comments</div>
+                  </div>
+                </article>
+
+                <article class="event-list-card soft">
+                  <div class="event-date-block">
+                    <span class="event-day">04</span>
+                    <span class="event-month">DEC</span>
+                  </div>
+                  <div class="event-list-copy">
+                    <h3>Barborka</h3>
+                    <p>Community gathering with transport, guest count, and schedule details.</p>
+                    <div class="event-stats">2 official updates - 7 comments</div>
+                  </div>
+                </article>
+
+                <article class="event-list-card soft">
+                  <div class="event-date-block">
+                    <span class="event-day">12</span>
+                    <span class="event-month">JAN</span>
+                  </div>
+                  <div class="event-list-copy">
+                    <h3>Warsztaty</h3>
+                    <p>Workshop day with room assignments, materials, and later updates.</p>
+                    <div class="event-stats">3 official updates - 5 comments</div>
+                  </div>
+                </article>
+              </section>
+
+              <nav class="mobile-nav">
+                <span class="nav-item">Feed</span>
+                <span class="nav-item active">Events</span>
+                <span class="nav-item">Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>Events should feel structured and scannable without looking like an old forum.</li>
+              <li>The date block should carry strong weight without overwhelming the title.</li>
+              <li>This should read as a list of living topics, not static bulletin entries.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Events / Detail / Web</div>
+            <div class="frame-meta">1440 x 1024</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="desktop-shell with-rail">
+            <aside class="desktop-sidebar">
+              <div class="brand-block">
+                <div class="brand-mark">OR</div>
+                <div>
+                  <div class="brand-name">ORAGH</div>
+                  <div class="brand-subtitle">Orkiestra Reprezentacyjna AGH</div>
+                </div>
+              </div>
+
+              <nav class="sidebar-nav">
+                <a class="sidebar-link">Feed</a>
+                <a class="sidebar-link active">Events</a>
+                <a class="sidebar-link">Profile</a>
+              </nav>
+            </aside>
+
+            <section class="desktop-main">
+              <div class="desktop-header">
+                <div>
+                  <div class="header-kicker">Event detail</div>
+                  <h2>Concert at X Hall</h2>
+                </div>
+                <div class="desktop-actions">
+                  <button class="ghost-action wide">Share</button>
+                  <button class="primary-action">Add update</button>
+                </div>
+              </div>
+
+              <article class="event-hero desktop-event-hero">
+                <div class="post-topline">
+                  <span class="type-pill featured-pill">Event</span>
+                  <span class="type-pill">Official</span>
+                </div>
+                <h3>Main spring concert at X Hall</h3>
+                <p>
+                  Call time is 17:45. Dress code is black formal. Use this page for official
+                  updates, attendance confirmation, and member questions.
+                </p>
+                <div class="hero-updates">
+                  <div class="update-card">
+                    <div class="update-title">19 Mar - Seating chart updated</div>
+                    <div class="update-author">Anna K. - Orchestra admin</div>
+                    <div class="update-copy">Violas now enter from stage left.</div>
+                  </div>
+                  <div class="update-card">
+                    <div class="update-title">18 Mar - Dress code confirmed</div>
+                    <div class="update-author">Piotr N. - Event coordinator</div>
+                    <div class="update-copy">Black formal attire for everyone.</div>
+                  </div>
+                </div>
+              </article>
+
+              <section class="detail-block web-comments">
+                <div class="section-kicker">Comments</div>
+                <div class="comment-card">
+                  <div class="comment-author">Ewa</div>
+                  <div class="comment-copy">Will printed setlists be available backstage?</div>
+                </div>
+              </section>
+            </section>
+
+            <aside class="desktop-rail">
+              <div class="rail-panel">
+                <div class="panel-title">Attendance survey</div>
+                <div class="survey-question">Will you attend?</div>
+                <div class="survey-meta">Responses requested by 20/03.</div>
+                <div class="survey-options">
+                  <span class="survey-option active">Going</span>
+                  <span class="survey-option">Maybe</span>
+                  <span class="survey-option">Not going</span>
+                </div>
+                <div class="attendance-summary-strip compact">
+                  <div class="attendance-summary-item positive">
+                    <strong>38</strong>
+                    <span>Going</span>
+                  </div>
+                  <div class="attendance-summary-item">
+                    <strong>6</strong>
+                    <span>Maybe</span>
+                  </div>
+                  <div class="attendance-summary-item negative">
+                    <strong>4</strong>
+                    <span>Not going</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rail-panel">
+                <div class="panel-title">Setlist</div>
+                <div class="plain-text-list">
+                  <div class="plain-text-line">1. Mozart - Overture</div>
+                  <div class="plain-text-line">2. Mahler - Adagietto</div>
+                  <div class="plain-text-line">3. Szymanowski - Encore</div>
+                </div>
+              </div>
+            </aside>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>Desktop should make attendance easy without pushing updates out of the main event story.</li>
+              <li>The survey block needs to feel actionable, not like a generic form widget.</li>
+              <li>The right rail now carries event utilities instead of feeling like generic overflow space.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Events / Attendance / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen event-screen">
+              <div class="status-bar"></div>
+
+              <header class="event-header">
+                <div class="back-button">&lt;</div>
+                <div class="event-header-copy">
+                  <div class="event-title">Concert at X Hall</div>
+                  <div class="event-subtitle">Attendance survey</div>
+                </div>
+                <div class="profile-chip pale">i</div>
+              </header>
+
+              <article class="event-hero survey-hero">
+                <div class="post-topline">
+                  <span class="type-pill featured-pill">Event</span>
+                  <span class="type-pill">Survey</span>
+                </div>
+                <h3>Will you attend this event?</h3>
+                <p>
+                  Please answer by 20/03 so transport, seating, and music stand planning can be
+                  finalized for the concert.
+                </p>
+              </article>
+
+              <section class="detail-block">
+                <div class="survey-card">
+                  <div class="survey-question">Your response</div>
+                  <div class="survey-options stacked">
+                    <span class="survey-option active">Going</span>
+                    <span class="survey-option">Maybe</span>
+                    <span class="survey-option">Not going</span>
+                  </div>
+                  <div class="survey-summary">You can update your answer until 20/03.</div>
+                </div>
+              </section>
+
+              <section class="detail-block">
+                <div class="section-kicker">Current responses</div>
+                <div class="attendance-summary-strip">
+                  <div class="attendance-summary-item positive">
+                    <strong>38</strong>
+                    <span>Going</span>
+                  </div>
+                  <div class="attendance-summary-item">
+                    <strong>6</strong>
+                    <span>Maybe</span>
+                  </div>
+                  <div class="attendance-summary-item negative">
+                    <strong>4</strong>
+                    <span>Not going</span>
+                  </div>
+                </div>
+              </section>
+
+              <nav class="mobile-nav">
+                <span class="nav-item">Feed</span>
+                <span class="nav-item active">Events</span>
+                <span class="nav-item">Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>The survey flow should feel like part of the event, not a detached survey tool.</li>
+              <li>Answer options should be obvious and quick to tap.</li>
+              <li>This gives v1 a concrete planning workflow without adding another major section.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Setlist / Small / Fit</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+          <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen setlist-screen fullscreen-document">
+              <div class="status-bar"></div>
+
+              <header class="event-header reader-header monochrome-reader-header">
+                <div class="back-button reader-back-button">&lt;</div>
+                <div class="reader-header-copy">
+                  <div class="reader-label">Setlist</div>
+                  <div class="reader-title">Concert at X Hall</div>
+                </div>
+                <div class="reader-action">Aa</div>
+              </header>
+
+              <section class="reader-stage">
+                <section class="setlist-reader-card fullscreen-reader document-sheet">
+                  <div class="setlist-reader-meta">22 Mar 2026 - X Hall - whole list fits on screen at concert size</div>
+                  <div class="document-title">Main spring concert program</div>
+
+                  <div class="setlist-block fit-mode">
+                    <div class="setlist-section">Opening</div>
+                    <div class="setlist-item">
+                      <span class="setlist-index">1</span>
+                      <div class="setlist-item-copy">
+                        <strong>Mozart - Overture to The Magic Flute</strong>
+                        <span>Conductor enters after stage call.</span>
+                      </div>
+                    </div>
+
+                    <div class="setlist-section">Main program</div>
+                    <div class="setlist-item">
+                      <span class="setlist-index">2</span>
+                      <div class="setlist-item-copy">
+                        <strong>Mahler - Adagietto</strong>
+                        <span>Short pause before applause cue.</span>
+                      </div>
+                    </div>
+                    <div class="setlist-item">
+                      <span class="setlist-index">3</span>
+                      <div class="setlist-item-copy">
+                        <strong>Kilar - Orawa</strong>
+                        <span>Stand order stays unchanged from final rehearsal.</span>
+                      </div>
+                    </div>
+
+                    <div class="setlist-section">Encore</div>
+                    <div class="setlist-item">
+                      <span class="setlist-index">4</span>
+                      <div class="setlist-item-copy">
+                        <strong>Szymanowski - Mazurek</strong>
+                        <span>Encore only after conductor signal.</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="setlist-footnote">
+                    Opened from a lightweight preview in the event page. This reader stays black-and-white and fills the screen like a document page.
+                  </div>
+                </section>
+              </section>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>This should feel like an immersive full-screen page, closer to opening a document or video than opening another app subpage.</li>
+              <li>The source should behave like parsed formatted text, not a fixed poster image.</li>
+              <li>The screen should read in black and white, like a book page.</li>
+              <li>Fit the whole setlist only when it remains comfortably readable.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Setlist / Small / Scroll</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+          <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen setlist-screen fullscreen-document">
+              <div class="status-bar"></div>
+
+              <header class="event-header reader-header monochrome-reader-header">
+                <div class="back-button reader-back-button">&lt;</div>
+                <div class="reader-header-copy">
+                  <div class="reader-label">Setlist</div>
+                  <div class="reader-title">Concert at X Hall</div>
+                </div>
+                <div class="reader-action">Aa</div>
+              </header>
+
+              <section class="reader-stage">
+                <section class="setlist-reader-card fullscreen-reader scroll-mode document-sheet">
+                  <div class="setlist-reader-meta">22 Mar 2026 - X Hall - readable size preserved, scroll for full list</div>
+                  <div class="document-title">Main spring concert program</div>
+
+                  <div class="setlist-scroll-frame">
+                    <div class="setlist-scroll-shell">
+                      <div class="setlist-block scroll-mode">
+                        <div class="setlist-section">Opening</div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">1</span>
+                          <div class="setlist-item-copy">
+                            <strong>AGH Fanfare</strong>
+                            <span>Stand by after tuning cue from stage manager.</span>
+                          </div>
+                        </div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">2</span>
+                          <div class="setlist-item-copy">
+                            <strong>Mozart - Overture to The Magic Flute</strong>
+                            <span>Conductor enters after opening applause settles.</span>
+                          </div>
+                        </div>
+
+                        <div class="setlist-section">First half</div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">3</span>
+                          <div class="setlist-item-copy">
+                            <strong>Moniuszko - Bajka</strong>
+                            <span>Woodwinds stay seated for immediate start.</span>
+                          </div>
+                        </div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">4</span>
+                          <div class="setlist-item-copy">
+                            <strong>Mahler - Adagietto</strong>
+                            <span>Short pause before applause cue from conductor.</span>
+                          </div>
+                        </div>
+
+                        <div class="setlist-section">Second half</div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">5</span>
+                          <div class="setlist-item-copy">
+                            <strong>Kilar - Orawa</strong>
+                            <span>Stand order stays unchanged from final rehearsal.</span>
+                          </div>
+                        </div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">6</span>
+                          <div class="setlist-item-copy">
+                            <strong>Lutoslawski - Funeral Music</strong>
+                            <span>Celli begin after clear baton hold.</span>
+                          </div>
+                        </div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">7</span>
+                          <div class="setlist-item-copy">
+                            <strong>Holst - Jupiter</strong>
+                            <span>Brass remain standing through final cutoff.</span>
+                          </div>
+                        </div>
+
+                        <div class="setlist-section">Encore</div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">8</span>
+                          <div class="setlist-item-copy">
+                            <strong>Szymanowski - Mazurek</strong>
+                            <span>Encore only after conductor confirmation backstage.</span>
+                          </div>
+                        </div>
+                        <div class="setlist-item">
+                          <span class="setlist-index">9</span>
+                          <div class="setlist-item-copy">
+                            <strong>ORAGH March</strong>
+                            <span>Use parade ending only if audience remains standing.</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="setlist-scroll-fade" aria-hidden="true"></div>
+                  </div>
+
+                  <div class="setlist-scroll-hint">Scroll for full running order</div>
+
+                  <div class="setlist-footnote">
+                    Readable size wins over single-screen fit. The full-screen page should switch to scroll mode instead of compressing the text.
+                  </div>
+                </section>
+              </section>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>This longer case should still feel like an immersive monochrome page, not a standard event subpage.</li>
+              <li>This longer case should prove that we do not compress the typography just to keep a one-screen composition.</li>
+              <li>The fade and hint should make the scroll behavior clear without pulling the screen back toward normal app chrome.</li>
+              <li>The two variants together define the rule inside the full-screen reader: fit when readable, scroll when dense.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+
+      <article class="screen-card">
+        <div class="card-header">
+          <div>
+            <div class="frame-name">HF / Squad Composition / Small</div>
+            <div class="frame-meta">390 x 844</div>
+          </div>
+          <div class="status-pill">Working direction</div>
+        </div>
+
+        <div class="card-body">
+          <div class="phone">
+            <div class="phone-screen event-screen composition-screen">
+              <div class="status-bar"></div>
+
+              <header class="event-header">
+                <div class="back-button">&lt;</div>
+                <div class="event-header-copy">
+                  <div class="event-title">Concert at X Hall</div>
+                  <div class="event-subtitle">Squad composition</div>
+                </div>
+                <div class="profile-chip pale">i</div>
+              </header>
+
+              <section class="composition-summary-card">
+                <div class="attendance-summary-strip">
+                  <div class="attendance-summary-item positive">
+                    <strong>38</strong>
+                    <span>Going</span>
+                  </div>
+                  <div class="attendance-summary-item">
+                    <strong>6</strong>
+                    <span>Maybe</span>
+                  </div>
+                  <div class="attendance-summary-item negative">
+                    <strong>4</strong>
+                    <span>Not going</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="composition-groups">
+                <article class="instrument-group-card">
+                  <div class="instrument-group-top">
+                    <div class="instrument-group-name">Trabki</div>
+                    <div class="instrument-group-count">2 confirmed</div>
+                  </div>
+                  <div class="instrument-members">
+                    <div class="instrument-member">Member A</div>
+                    <div class="instrument-member">Member B</div>
+                  </div>
+                </article>
+
+                <article class="instrument-group-card">
+                  <div class="instrument-group-top">
+                    <div class="instrument-group-name">Flety</div>
+                    <div class="instrument-group-count">0 confirmed</div>
+                  </div>
+                  <div class="instrument-members">
+                    <div class="instrument-member empty">--</div>
+                  </div>
+                </article>
+
+                <article class="instrument-group-card">
+                  <div class="instrument-group-top">
+                    <div class="instrument-group-name">Klarnety</div>
+                    <div class="instrument-group-count">3 confirmed</div>
+                  </div>
+                  <div class="instrument-members">
+                    <div class="instrument-member">Karolina M.</div>
+                    <div class="instrument-member">Marek P.</div>
+                    <div class="instrument-member">Ewa N.</div>
+                  </div>
+                </article>
+
+                <article class="instrument-group-card muted">
+                  <div class="instrument-group-top">
+                    <div class="instrument-group-name">Puzony</div>
+                    <div class="instrument-group-count">1 maybe</div>
+                  </div>
+                  <div class="instrument-members">
+                    <div class="instrument-member subtle">Piotr N. waiting on confirmation</div>
+                  </div>
+                </article>
+              </section>
+
+              <nav class="mobile-nav">
+                <span class="nav-item">Feed</span>
+                <span class="nav-item active">Events</span>
+                <span class="nav-item">Profile</span>
+              </nav>
+            </div>
+          </div>
+
+          <aside class="notes">
+            <h4>What to review</h4>
+            <ul>
+              <li>This should feel like a practical roster page, not as immersive as the setlist reader.</li>
+              <li>The main grouping should come from `Going` responses plus the user instrument property.</li>
+              <li>Maybe or missing responses can exist here, but should stay clearly secondary to the confirmed squad.</li>
+            </ul>
+          </aside>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
