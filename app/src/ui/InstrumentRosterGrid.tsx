@@ -11,6 +11,8 @@ type InstrumentRosterGridProps = {
   maxWidth?: number;
 };
 
+const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
+
 export function InstrumentRosterGrid({
   groups,
   maxWidth = 1200,
@@ -30,6 +32,16 @@ export function InstrumentRosterGrid({
             tokens.spacing.md * (desktopColumns - 1)) /
             desktopColumns,
         );
+  const visibleGroups = groups.filter((group) => {
+    const hasAnyMembers =
+      group.confirmedMembers.length > 0 || group.maybeMembers.length > 0;
+
+    if (!hasAnyMembers && group.instrument === UNKNOWN_INSTRUMENT_LABEL) {
+      return false;
+    }
+
+    return true;
+  });
 
   function toggleGroup(groupKey: string) {
     setExpandedGroups((current) => ({
@@ -55,7 +67,7 @@ export function InstrumentRosterGrid({
 
   return (
     <View style={styles.grid}>
-      {groups.map((group) => {
+      {visibleGroups.map((group) => {
         const isExpanded = !isPackedMobile || expandedGroups[group.instrument] === true;
         const useDenseMemberGrid = isExpanded && viewportWidth >= 360;
 
@@ -173,6 +185,13 @@ export function InstrumentRosterGrid({
           </SurfaceCard>
         );
       })}
+      {visibleGroups.length === 0 ? (
+        <SurfaceCard variant="outline" style={styles.emptyStateCard}>
+          <Text style={styles.emptyStateLabel}>
+            {tr("Brak potwierdzonego składu dla tego wydarzenia.", "No confirmed roster for this event yet.")}
+          </Text>
+        </SurfaceCard>
+      ) : null}
     </View>
   );
 }
@@ -272,6 +291,14 @@ const styles = StyleSheet.create({
     color: tokens.colors.ink,
   },
   memberRowMuted: {
+    fontSize: tokens.typography.body,
+    lineHeight: 22,
+    color: tokens.colors.muted,
+  },
+  emptyStateCard: {
+    width: "100%",
+  },
+  emptyStateLabel: {
     fontSize: tokens.typography.body,
     lineHeight: 22,
     color: tokens.colors.muted,
