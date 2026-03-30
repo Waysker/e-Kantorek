@@ -3,6 +3,7 @@ import type {
   FeedRepository,
   UsersRepository,
 } from "./contracts";
+import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { StaticFeedRepository } from "./fixtures/feedFixtures";
 import { ForumSnapshotRepository } from "./snapshotRepository";
 import { SupabaseSnapshotRepository } from "./supabaseSnapshotRepository";
@@ -25,6 +26,7 @@ function createEventRepository(): EventRepositorySelection {
 
   if (supabaseUrl && supabaseClientKey) {
     const repository = new SupabaseSnapshotRepository({
+      client: supabaseAuthClient ?? undefined,
       url: supabaseUrl,
       anonKey: supabaseClientKey,
     });

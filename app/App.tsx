@@ -359,8 +359,8 @@ export default function App() {
       eyebrow: tr("Brak konfiguracji logowania", "Auth configuration missing"),
       title: tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
       copy: tr(
-        "Ustaw EXPO_PUBLIC_SUPABASE_URL i EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY w app/.env.",
-        "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in app/.env.",
+        "Ustaw EXPO_PUBLIC_SUPABASE_URL i EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY lokalnie w app/.env albo jako GitHub Secrets dla buildu Pages.",
+        "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in app/.env (local) or as GitHub Secrets for the Pages build.",
       ),
     });
   }

@@ -11,8 +11,9 @@ type SnapshotRow = {
 };
 
 type SupabaseSnapshotRepositoryOptions = {
-  url: string;
-  anonKey: string;
+  url?: string;
+  anonKey?: string;
+  client?: SupabaseClient;
   snapshotKey?: string;
 };
 
@@ -26,11 +27,21 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
   constructor({
     url,
     anonKey,
+    client,
     snapshotKey = "forum",
   }: SupabaseSnapshotRepositoryOptions) {
-    this.client = createClient(url, anonKey, {
-      auth: { persistSession: false },
-    });
+    if (client) {
+      this.client = client;
+    } else {
+      if (!url || !anonKey) {
+        throw new Error(
+          "SupabaseSnapshotRepository requires either an existing client or url+anonKey.",
+        );
+      }
+      this.client = createClient(url, anonKey, {
+        auth: { persistSession: false },
+      });
+    }
     this.snapshotKey = snapshotKey;
     this.fallbackRepository = new ForumSnapshotRepository();
   }

@@ -27,11 +27,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate required secrets
+        env:
+          ORAGH_FORUM_USERNAME: ${{ secrets.ORAGH_FORUM_USERNAME }}
+          ORAGH_FORUM_PASSWORD: ${{ secrets.ORAGH_FORUM_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          missing=0
+          for key in ORAGH_FORUM_USERNAME ORAGH_FORUM_PASSWORD SUPABASE_URL SUPABASE_SECRET_KEY; do
+            if [ -z "${!key}" ]; then
+              echo "::error::$key is missing in repository secrets."
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Sync forum and publish snapshot
         env:
           ORAGH_FORUM_USERNAME: ${{ secrets.ORAGH_FORUM_USERNAME }}
           ORAGH_FORUM_PASSWORD: ${{ secrets.ORAGH_FORUM_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          ORAGH_SNAPSHOT_KEY: forum
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
         run: npm run forum:sync:publish
