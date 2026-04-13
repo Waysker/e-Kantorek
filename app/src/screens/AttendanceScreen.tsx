@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -7,7 +8,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-import type { EventDetail } from "../domain/models";
+import type { EventDetail, SquadGroup } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { AttendanceSummaryStrip } from "../ui/AttendanceSummaryStrip";
@@ -19,9 +20,57 @@ type AttendanceScreenProps = {
   onBack: () => void;
 };
 
+const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
+
+function sortGroupsByInstrument(left: SquadGroup, right: SquadGroup) {
+  if (left.instrument === UNKNOWN_INSTRUMENT_LABEL) {
+    return 1;
+  }
+  if (right.instrument === UNKNOWN_INSTRUMENT_LABEL) {
+    return -1;
+  }
+  return left.instrument.localeCompare(right.instrument, "pl");
+}
+
+function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
+  const grouped = new Map<string, SquadGroup>();
+
+  for (const responseGroup of event.attendanceGroups) {
+    if (responseGroup.status !== "not_going") {
+      continue;
+    }
+
+    for (const participant of responseGroup.participants) {
+      const instrument = participant.primaryInstrument ?? UNKNOWN_INSTRUMENT_LABEL;
+      const group = grouped.get(instrument) ?? {
+        instrument,
+        confirmedMembers: [],
+        maybeMembers: [],
+      };
+
+      group.confirmedMembers.push({
+        id: participant.id,
+        fullName: participant.fullName,
+      });
+      grouped.set(instrument, group);
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((group) => ({
+      ...group,
+      confirmedMembers: [...group.confirmedMembers].sort((left, right) =>
+        left.fullName.localeCompare(right.fullName, "pl"),
+      ),
+    }))
+    .sort(sortGroupsByInstrument);
+}
+
 export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
+  const [isDeclinedVisible, setIsDeclinedVisible] = useState(false);
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
+  const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
   const options = [
     { key: "going", label: tr("Będę", "Going") },
     { key: "maybe", label: tr("Może", "Maybe") },
@@ -139,6 +188,52 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
       </View>
 
       <InstrumentRosterGrid groups={event.squad.groups} />
+
+      {event.attendanceSummary.notGoing > 0 ? (
+        <View style={styles.declinedSection}>
+          <Pressable
+            onPress={() => setIsDeclinedVisible((current) => !current)}
+            style={[
+              styles.declinedToggle,
+              isDeclinedVisible && styles.declinedToggleActive,
+            ]}
+          >
+            <Text style={styles.declinedToggleTitle}>
+              {isDeclinedVisible
+                ? tr("Ukryj osoby, które odmówiły", "Hide declined members")
+                : tr("Pokaż osoby, które odmówiły", "Show declined members")}
+            </Text>
+            <Text style={styles.declinedToggleMeta}>
+              {tr("Odmówili", "Declined")}: {event.attendanceSummary.notGoing}
+            </Text>
+          </Pressable>
+
+          {isDeclinedVisible ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>
+                  {tr("Odmowy według instrumentu", "Declined by instrument")}
+                </Text>
+                <Text style={styles.sectionCopy}>
+                  {tr(
+                    "Ten widok jest domyślnie ukryty, żeby skupić się na potwierdzonym składzie.",
+                    "This view is hidden by default to keep focus on the confirmed roster.",
+                  )}
+                </Text>
+              </View>
+
+              <InstrumentRosterGrid
+                groups={declinedGroups}
+                confirmedLabel={tr("odmówiło", "declined")}
+                emptyStateLabel={tr(
+                  "Brak osób, które odmówiły udziału.",
+                  "No declined members for this event.",
+                )}
+              />
+            </>
+          ) : null}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -255,6 +350,31 @@ const styles = StyleSheet.create({
   sectionCopy: {
     fontSize: tokens.typography.body,
     lineHeight: 22,
+    color: tokens.colors.muted,
+  },
+  declinedSection: {
+    gap: tokens.spacing.sm,
+  },
+  declinedToggle: {
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.surface,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    gap: 2,
+  },
+  declinedToggleActive: {
+    borderColor: tokens.colors.brand,
+    backgroundColor: tokens.colors.brandTint,
+  },
+  declinedToggleTitle: {
+    fontSize: tokens.typography.body,
+    color: tokens.colors.ink,
+    fontWeight: "700",
+  },
+  declinedToggleMeta: {
+    fontSize: tokens.typography.caption,
     color: tokens.colors.muted,
   },
 });

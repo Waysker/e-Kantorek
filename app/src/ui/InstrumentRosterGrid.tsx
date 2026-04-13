@@ -9,6 +9,10 @@ import { SurfaceCard } from "./SurfaceCard";
 type InstrumentRosterGridProps = {
   groups: SquadGroup[];
   maxWidth?: number;
+  confirmedLabel?: string;
+  maybeLabel?: string;
+  maybeSectionLabel?: string;
+  emptyStateLabel?: string;
 };
 
 const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
@@ -16,6 +20,10 @@ const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
 export function InstrumentRosterGrid({
   groups,
   maxWidth = 1200,
+  confirmedLabel = tr("obecnych", "going"),
+  maybeLabel = tr("może", "maybe"),
+  maybeSectionLabel = tr("Może", "Maybe"),
+  emptyStateLabel = tr("Brak potwierdzonego składu dla tego wydarzenia.", "No confirmed roster for this event yet."),
 }: InstrumentRosterGridProps) {
   const { width } = useWindowDimensions();
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -98,9 +106,9 @@ export function InstrumentRosterGrid({
                 </Text>
                 {!isPackedMobile ? (
                   <Text style={styles.instrumentMeta}>
-                    {group.confirmedMembers.length} {tr("obecnych", "going")}
+                    {group.confirmedMembers.length} {confirmedLabel}
                     {group.maybeMembers.length > 0
-                      ? ` / ${group.maybeMembers.length} ${tr("może", "maybe")}`
+                      ? ` / ${group.maybeMembers.length} ${maybeLabel}`
                       : ""}
                   </Text>
                 ) : null}
@@ -119,9 +127,9 @@ export function InstrumentRosterGrid({
               <>
                 {isPackedMobile ? (
                   <Text style={styles.mobileExpandedMeta}>
-                    {group.confirmedMembers.length} {tr("obecnych", "going")}
+                    {group.confirmedMembers.length} {confirmedLabel}
                     {group.maybeMembers.length > 0
-                      ? ` - ${group.maybeMembers.length} ${tr("może", "maybe")}`
+                      ? ` - ${group.maybeMembers.length} ${maybeLabel}`
                       : ""}
                   </Text>
                 ) : null}
@@ -157,7 +165,7 @@ export function InstrumentRosterGrid({
 
                 {group.maybeMembers.length > 0 ? (
                   <View style={styles.sectionBlock}>
-                    <Text style={styles.sectionTitle}>{tr("Może", "Maybe")}</Text>
+                    <Text style={styles.sectionTitle}>{maybeSectionLabel}</Text>
                     <View
                       style={[
                         styles.memberGrid,
@@ -187,9 +195,7 @@ export function InstrumentRosterGrid({
       })}
       {visibleGroups.length === 0 ? (
         <SurfaceCard variant="outline" style={styles.emptyStateCard}>
-          <Text style={styles.emptyStateLabel}>
-            {tr("Brak potwierdzonego składu dla tego wydarzenia.", "No confirmed roster for this event yet.")}
-          </Text>
+          <Text style={styles.emptyStateLabel}>{emptyStateLabel}</Text>
         </SurfaceCard>
       ) : null}
     </View>
