@@ -96,10 +96,11 @@ To prepare a real sync:
 
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
-3. Optionally copy `forum-sync.instrument-overrides.example.json` to `forum-sync.instrument-overrides.json` and fill your local mappings
-4. Run `npm.cmd run forum:sync`
-5. Optionally publish to cloud with `npm.cmd run forum:publish`
-6. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
+3. Keep `forum-sync.instrument-overrides.example.json` updated for shared/CI mapping
+4. Optionally copy it to `forum-sync.instrument-overrides.json` for local-only overrides (this local file takes precedence and is gitignored)
+5. Run `npm.cmd run forum:sync`
+6. Optionally publish to cloud with `npm.cmd run forum:publish`
+7. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
 
 The current sync auto-discovers dated concert threads from both `Dzial Koncert` (`fid=27`) and `Propozycje koncertow` (`fid=50`), filtered to the configured `eventYear`, unless `eventThreadUrls` is filled explicitly. It writes authenticated raw HTML into `.cache/forum-sync`, fetches poll results from `Ankieta`, parses setlist-like posts, and writes `.cache/forum-sync/snapshot.json`.
 To explicitly refresh local fallback TypeScript snapshot, run sync with `FORUM_SYNC_WRITE_LOCAL_SNAPSHOT=1`.
