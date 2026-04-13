@@ -49,6 +49,40 @@ function normalizeWhitespace(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const POLISH_MOJIBAKE_REPLACEMENTS = [
+  ["Ä…", "ą"],
+  ["Ä„", "Ą"],
+  ["Ä‡", "ć"],
+  ["Ä†", "Ć"],
+  ["Ä™", "ę"],
+  ["Ä˜", "Ę"],
+  ["Å‚", "ł"],
+  ["Å\u0081", "Ł"],
+  ["Å„", "ń"],
+  ["Åƒ", "Ń"],
+  ["Ã³", "ó"],
+  ["Ã“", "Ó"],
+  ["Å›", "ś"],
+  ["Åš", "Ś"],
+  ["Åº", "ź"],
+  ["Å¹", "Ź"],
+  ["Å¼", "ż"],
+  ["Å»", "Ż"],
+];
+
+function repairPolishMojibake(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    return value;
+  }
+
+  let repaired = value;
+  for (const [from, to] of POLISH_MOJIBAKE_REPLACEMENTS) {
+    repaired = repaired.replaceAll(from, to);
+  }
+
+  return repaired;
+}
+
 function normalizeMultilineText(value) {
   return value.replace(/\r/g, "").split("\n").map((line) => normalizeWhitespace(line)).filter(Boolean).join("\n");
 }
@@ -124,14 +158,46 @@ async function readConfig() {
 }
 
 async function readOverrides() {
+  const envOverrides = readOverridesFromEnv();
   const localOverrides = await readJson(OVERRIDES_PATH);
-  const templateOverrides = localOverrides ? null : await readJson(OVERRIDES_EXAMPLE_PATH);
-  const raw = localOverrides ?? templateOverrides ?? {};
+  const templateOverrides = localOverrides || envOverrides ? null : await readJson(OVERRIDES_EXAMPLE_PATH);
+  const template = templateOverrides ?? {};
+  const local = localOverrides ?? {};
+  const env = envOverrides ?? {};
+
   return {
-    byUid: toObject(raw.byUid),
-    byFullName: toObject(raw.byFullName),
-    byUsername: toObject(raw.byUsername),
+    byUid: { ...toObject(template.byUid), ...toObject(local.byUid), ...toObject(env.byUid) },
+    byFullName: {
+      ...toObject(template.byFullName),
+      ...toObject(local.byFullName),
+      ...toObject(env.byFullName),
+    },
+    byUsername: {
+      ...toObject(template.byUsername),
+      ...toObject(local.byUsername),
+      ...toObject(env.byUsername),
+    },
   };
+}
+
+function readOverridesFromEnv() {
+  const raw = process.env.ORAGH_FORUM_INSTRUMENT_OVERRIDES_JSON;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      byUid: toObject(parsed.byUid),
+      byFullName: toObject(parsed.byFullName),
+      byUsername: toObject(parsed.byUsername),
+    };
+  } catch {
+    throw new Error(
+      "ORAGH_FORUM_INSTRUMENT_OVERRIDES_JSON is not valid JSON. It must contain { byUid, byFullName, byUsername } objects.",
+    );
+  }
 }
 
 async function requestHtml({ jar, url, method = "GET", body }) {
@@ -474,15 +540,15 @@ function parseProfilePage(html, participant) {
     if (cells.length < 2) {
       return;
     }
-    const label = stripDiacritics(cells.eq(0).text()).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const value = normalizeWhitespace(cells.eq(1).text());
+    const label = stripDiacritics(repairPolishMojibake(cells.eq(0).text())).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const value = normalizeWhitespace(repairPolishMojibake(cells.eq(1).text()));
     if (label && value) {
       fields[label] = value;
     }
   });
-  const title = normalizeWhitespace($("title").text());
+  const title = normalizeWhitespace(repairPolishMojibake($("title").text()));
   const titleUsername = title.replace(/^.*Profil:\s*/i, "").split(" - ")[0];
-  const username = participant.username || normalizeWhitespace(titleUsername);
+  const username = repairPolishMojibake(participant.username) || normalizeWhitespace(titleUsername);
   const fullName = normalizeWhitespace(`${fields.imie ?? ""} ${fields.nazwisko ?? ""}`) || username;
   return { uid: participant.uid ?? null, username, fullName };
 }
@@ -492,7 +558,7 @@ function toUserKey(participant) {
 }
 
 function normalizeOverrideKey(value) {
-  return stripDiacritics(value).toLowerCase().replace(/\s+/g, " ").trim();
+  return stripDiacritics(repairPolishMojibake(value)).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
 function normalizeInstrumentValue(value) {
@@ -500,7 +566,7 @@ function normalizeInstrumentValue(value) {
     return undefined;
   }
 
-  const trimmed = value.trim();
+  const trimmed = repairPolishMojibake(value).trim();
   return trimmed && trimmed !== "-" ? trimmed : undefined;
 }
 
