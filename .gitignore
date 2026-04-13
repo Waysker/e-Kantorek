@@ -8,6 +8,7 @@
 /app/web-err.log
 /app/web-out.log
 /app/supabase/migrations/.env
+/app/forum-sync.instrument-overrides.json
 
 # wireframe local logs
 /wireframes/server-err.log
