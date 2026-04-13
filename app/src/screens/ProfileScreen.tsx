@@ -38,12 +38,16 @@ export function ProfileScreen({
   dataSourceGeneratedAt,
   signedInEmail,
   onSignOut,
+  canManageAttendanceSetup,
+  onOpenAttendanceSetup,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
+  canManageAttendanceSetup?: boolean;
+  onOpenAttendanceSetup?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
@@ -82,6 +86,28 @@ export function ProfileScreen({
           </Pressable>
         ) : null}
       </SurfaceCard>
+
+      {canManageAttendanceSetup && onOpenAttendanceSetup ? (
+        <SurfaceCard variant="default">
+          <Text style={styles.cardEyebrow}>
+            {tr("Narzędzia lidera", "Leader tools")}
+          </Text>
+          <Text style={styles.cardTitle}>
+            {tr("Konfiguracja obecności", "Attendance setup")}
+          </Text>
+          <Text style={styles.cardBody}>
+            {tr(
+              "Załaduj kopię arkusza obecności i opublikuj ją do Supabase. Ten PoC zasila też mapowanie instrumentów dla importu forum.",
+              "Upload the attendance workbook copy and publish it to Supabase. This PoC also refreshes instrument mapping for forum import.",
+            )}
+          </Text>
+          <Pressable style={styles.manageButton} onPress={onOpenAttendanceSetup}>
+            <Text style={styles.manageButtonLabel}>
+              {tr("Otwórz konfigurację", "Open setup")}
+            </Text>
+          </Pressable>
+        </SurfaceCard>
+      ) : null}
 
       <SurfaceCard variant="muted">
         <Text style={styles.cardEyebrow}>
@@ -153,6 +179,21 @@ const styles = StyleSheet.create({
   },
   signOutLabel: {
     color: tokens.colors.ink,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  manageButton: {
+    marginTop: tokens.spacing.md,
+    alignSelf: "flex-start",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radii.round,
+    backgroundColor: tokens.colors.brand,
+  },
+  manageButtonLabel: {
+    color: tokens.colors.surface,
     fontSize: tokens.typography.caption,
     fontWeight: "700",
     textTransform: "uppercase",

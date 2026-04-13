@@ -9,6 +9,7 @@ Current data setup:
 - `Feed` uses local fixture content
 - `Events`, `Users`, and `Attendance` currently come from a normalized local snapshot
 - that snapshot is the boundary between the app UI and the temporary forum integration
+- leader/admin users now have a web-only PoC setup screen for attendance workbook import
 
 That boundary is intentional.
 
@@ -33,7 +34,9 @@ The UI should not depend directly on legacy forum fields or markup.
 - `npm run web:build`
 - `npm run web:build:pages`
 - `npm run forum:sync`
+- `npm run forum:publish:attendance`
 - `npm run forum:publish`
+- `npm run forum:publish:overrides`
 - `npm run forum:sync:publish`
 
 ## Authentication (Supabase)
@@ -87,9 +90,11 @@ Current pieces:
 
 - `src/data/generated/forumSnapshot.ts`: app-facing snapshot data
 - `scripts/sync-forum-snapshot.mjs`: MyBB login + HTML pull script
+- `scripts/publish-attendance-sheet-to-supabase.mjs`: publish workbook-based attendance payload to Supabase
+- `scripts/publish-instrument-overrides-to-supabase.mjs`: bootstrap/update instrument overrides row in Supabase
 - `scripts/publish-snapshot-to-supabase.mjs`: upload latest snapshot payload to Supabase
 - `forum-sync.config.json`: local sync config
-- `forum-sync.instrument-overrides.json`: source-controlled production instrument mapping used by local runs and CI
+- `forum-sync.instrument-overrides.json`: local/bootstrap fallback mapping
 - `forum-sync.instrument-overrides.example.json`: optional template/reference
 - `.env.example`: required env variable names for client and publisher scripts
 
@@ -97,11 +102,14 @@ To prepare a real sync:
 
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
-3. Keep `forum-sync.instrument-overrides.json` updated as production mapping
-4. Optionally use `forum-sync.instrument-overrides.example.json` as a clean template/reference
-5. Run `npm.cmd run forum:sync`
-6. Optionally publish to cloud with `npm.cmd run forum:publish`
-7. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
+3. Apply `supabase/migrations/005_forum_instrument_overrides.sql`
+4. Apply `supabase/migrations/006_attendance_sheet_cache.sql`
+5. Optional local source file for PoC/backward compatibility: `../Copy of Obecności 25'-26'.xlsx`
+6. Optionally publish workbook payload with `npm.cmd run forum:publish:attendance`
+7. Bootstrap DB overrides from workbook/JSON with `npm.cmd run forum:publish:overrides`
+8. Run `npm.cmd run forum:sync`
+9. Optionally publish snapshot with `npm.cmd run forum:publish`
+10. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
 
 The current sync auto-discovers dated concert threads from both `Dzial Koncert` (`fid=27`) and `Propozycje koncertow` (`fid=50`), filtered to the configured `eventYear`, unless `eventThreadUrls` is filled explicitly. It writes authenticated raw HTML into `.cache/forum-sync`, fetches poll results from `Ankieta`, parses setlist-like posts, and writes `.cache/forum-sync/snapshot.json`.
 To explicitly refresh local fallback TypeScript snapshot, run sync with `FORUM_SYNC_WRITE_LOCAL_SNAPSHOT=1`.
@@ -111,10 +119,17 @@ Cloud-ready mode:
 - If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are set, the app reads from `forum_snapshot_cache` in Supabase.
 - If they are missing or the cloud row is unavailable, the app falls back to local `forumSnapshot.ts`.
 - Profile screen shows data source and `Last synced` timestamp from snapshot metadata.
+- Leader/admin profile includes an Attendance Setup PoC screen (web) to upload workbook and publish to Supabase.
+- `forum:publish:attendance` publishes parsed workbook payload into `attendance_sheet_cache` (`ORAGH_ATTENDANCE_KEY`, fallback `ORAGH_SNAPSHOT_KEY`).
+- `forum:sync` reads instrument overrides from `forum_instrument_overrides` first (key: `ORAGH_INSTRUMENT_OVERRIDES_KEY`, fallback `ORAGH_SNAPSHOT_KEY`, default `forum`).
+- If DB overrides are missing/unavailable, `forum:sync` falls back to local/env overrides.
+- `forum:publish:overrides` bootstraps the DB row from workbook/file or `ORAGH_FORUM_INSTRUMENT_OVERRIDES_JSON`.
 - `forum:publish` expects `SUPABASE_URL` and a server key (`SUPABASE_SECRET_KEY` preferred, `SUPABASE_SERVICE_ROLE_KEY` legacy fallback) in your local shell and pushes `.cache/forum-sync/snapshot.json`.
-- `forum:publish` reads `.env.local` and `.env` automatically before checking env variables.
+- `forum:publish`, `forum:publish:attendance`, and `forum:publish:overrides` read `.env.local` and `.env` automatically before checking env variables.
 - SQL bootstrap for the cloud table is in `supabase/migrations/001_forum_snapshot_cache.sql`.
 - Authenticated-only reads are enforced by `supabase/migrations/004_snapshot_cache_authenticated_only.sql`.
+- SQL bootstrap for override storage is in `supabase/migrations/005_forum_instrument_overrides.sql`.
+- SQL bootstrap for attendance workbook payload + privileged writer policies is in `supabase/migrations/006_attendance_sheet_cache.sql`.
 
 Scheduling / trigger:
 
@@ -131,8 +146,10 @@ GitHub Actions setup:
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY`
 3. Optional repository variable: `ORAGH_SNAPSHOT_KEY` (defaults to `forum`).
-4. Enable Actions and run workflow `Forum Sync Publish` manually once.
-5. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
+4. Optional repository variable: `ORAGH_ATTENDANCE_KEY` (defaults to `ORAGH_SNAPSHOT_KEY`, then `forum`).
+5. Optional repository variable: `ORAGH_INSTRUMENT_OVERRIDES_KEY` (defaults to `ORAGH_SNAPSHOT_KEY`, then `forum`).
+6. Enable Actions and run workflow `Forum Sync Publish` manually once.
+7. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
 
 ## Web Hosting (GitHub Pages)
 
@@ -153,13 +170,16 @@ Instrument override note:
 - prefer `byUid` for production stability
 - `byFullName` is useful as a bridge when uid mapping is incomplete
 - `byUsername` still works as a fallback for cases where the full name is unknown
+- current PoC source of truth is workbook copy (`Obecności`) and its Supabase mirror
+- `forum_instrument_overrides` is refreshed from workbook upload/publish for forum sync compatibility
+- local JSON mapping remains a fallback/bootstrap path
 
 Temporary limitation:
 
 - the forum exposes attendance voters and member names cleanly
 - it does not expose instruments in the same way
-- `forum-sync.instrument-overrides.json` is the temporary bridge for squad composition until the real backend exists
-- TODO: move instrument mapping to encrypted/DB-managed storage with admin editing workflow
+- instrument mapping is currently DB-managed via JSON payload rows (`attendance_sheet_cache` + `forum_instrument_overrides`)
+- PoC admin UI exists (web) for workbook upload, but still needs audited edit history and stronger governance
 
 ## Next Build Targets
 

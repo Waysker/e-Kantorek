@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { load } from "cheerio";
+import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,6 +11,11 @@ const CACHE_DIR = path.join(APP_ROOT, ".cache", "forum-sync");
 const CONFIG_PATH = path.join(APP_ROOT, "forum-sync.config.json");
 const OVERRIDES_PATH = path.join(APP_ROOT, "forum-sync.instrument-overrides.json");
 const OVERRIDES_EXAMPLE_PATH = path.join(APP_ROOT, "forum-sync.instrument-overrides.example.json");
+const ENV_PATHS = [
+  path.join(APP_ROOT, ".env.local"),
+  path.join(APP_ROOT, ".env"),
+];
+const FORUM_OVERRIDES_TABLE = "forum_instrument_overrides";
 const SNAPSHOT_PATH = path.join(APP_ROOT, "src", "data", "generated", "forumSnapshot.ts");
 const DEFAULT_CONFIG = {
   baseUrl: "https://www.oragh.agh.edu.pl/forum",
@@ -139,6 +145,122 @@ async function readJson(filePath) {
   }
 }
 
+async function loadEnvFile(filePath) {
+  try {
+    const raw = await fs.readFile(filePath, "utf8");
+    const lines = raw.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        continue;
+      }
+      const splitIndex = trimmed.indexOf("=");
+      if (splitIndex <= 0) {
+        continue;
+      }
+      const key = trimmed.slice(0, splitIndex).trim();
+      if (!key || process.env[key] !== undefined) {
+        continue;
+      }
+      let value = trimmed.slice(splitIndex + 1).trim();
+      if (
+        (value.startsWith("\"") && value.endsWith("\"")) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      process.env[key] = value;
+    }
+  } catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) {
+      throw error;
+    }
+  }
+}
+
+async function loadEnv() {
+  for (const envPath of ENV_PATHS) {
+    await loadEnvFile(envPath);
+  }
+}
+
+function normalizeOverridesShape(value) {
+  const parsed = toObject(value);
+  return {
+    byUid: toObject(parsed.byUid),
+    byFullName: toObject(parsed.byFullName),
+    byUsername: toObject(parsed.byUsername),
+  };
+}
+
+function countOverrideEntries(overrides) {
+  return (
+    Object.keys(overrides.byUid).length +
+    Object.keys(overrides.byFullName).length +
+    Object.keys(overrides.byUsername).length
+  );
+}
+
+function resolveOverridesKey() {
+  return process.env.ORAGH_INSTRUMENT_OVERRIDES_KEY?.trim() ?? process.env.ORAGH_SNAPSHOT_KEY?.trim() ?? "forum";
+}
+
+async function readOverridesFromSupabase() {
+  const supabaseUrl = process.env.SUPABASE_URL?.trim();
+  const serviceRoleKey =
+    process.env.SUPABASE_SECRET_KEY?.trim() ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return null;
+  }
+
+  const overridesKey = resolveOverridesKey();
+  const client = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  });
+
+  try {
+    const { data, error } = await client
+      .from(FORUM_OVERRIDES_TABLE)
+      .select("overrides_key,payload")
+      .eq("overrides_key", overridesKey)
+      .maybeSingle();
+
+    if (error) {
+      const normalizedMessage = `${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
+      if (
+        normalizedMessage.includes("pgrst205") ||
+        normalizedMessage.includes("could not find the table") ||
+        normalizedMessage.includes("does not exist")
+      ) {
+        console.warn(
+          `Supabase table '${FORUM_OVERRIDES_TABLE}' is not available yet. Falling back to local/env overrides.`,
+        );
+        return null;
+      }
+
+      throw new Error(`Supabase overrides query failed: ${error.message}`);
+    }
+
+    if (!data?.payload) {
+      return null;
+    }
+
+    return {
+      source: `supabase:${FORUM_OVERRIDES_TABLE}:${overridesKey}`,
+      overrides: normalizeOverridesShape(data.payload),
+    };
+  } catch (error) {
+    console.warn(
+      `Could not fetch overrides from Supabase. Falling back to local/env overrides. (${
+        error instanceof Error ? error.message : String(error)
+      })`,
+    );
+    return null;
+  }
+}
+
 async function readConfig() {
   const raw = (await readJson(CONFIG_PATH)) ?? {};
   const configuredForumPaths = Array.isArray(raw.concertForumPaths)
@@ -158,14 +280,20 @@ async function readConfig() {
 }
 
 async function readOverrides() {
-  const envOverrides = readOverridesFromEnv();
-  const localOverrides = await readJson(OVERRIDES_PATH);
-  const templateOverrides = localOverrides || envOverrides ? null : await readJson(OVERRIDES_EXAMPLE_PATH);
-  const template = templateOverrides ?? {};
-  const local = localOverrides ?? {};
-  const env = envOverrides ?? {};
+  const envOverridesRaw = readOverridesFromEnv();
+  const localOverridesRaw = await readJson(OVERRIDES_PATH);
+  const templateOverridesRaw = localOverridesRaw || envOverridesRaw ? null : await readJson(OVERRIDES_EXAMPLE_PATH);
+  const envOverrides = normalizeOverridesShape(envOverridesRaw);
+  const localOverrides = normalizeOverridesShape(localOverridesRaw);
+  const templateOverrides = normalizeOverridesShape(templateOverridesRaw);
+  const supabaseOverridesResult = await readOverridesFromSupabase();
+  const supabaseOverrides = normalizeOverridesShape(supabaseOverridesResult?.overrides);
+  const template = templateOverrides;
+  const local = localOverrides;
+  const env = envOverrides;
+  const supabase = supabaseOverrides;
 
-  return {
+  const merged = {
     byUid: { ...toObject(template.byUid), ...toObject(local.byUid), ...toObject(env.byUid) },
     byFullName: {
       ...toObject(template.byFullName),
@@ -178,6 +306,21 @@ async function readOverrides() {
       ...toObject(env.byUsername),
     },
   };
+
+  if (supabaseOverridesResult) {
+    merged.byUid = { ...merged.byUid, ...toObject(supabase.byUid) };
+    merged.byFullName = { ...merged.byFullName, ...toObject(supabase.byFullName) };
+    merged.byUsername = { ...merged.byUsername, ...toObject(supabase.byUsername) };
+    console.log(
+      `Instrument overrides loaded from ${supabaseOverridesResult.source} (${countOverrideEntries(supabaseOverrides)} entries).`,
+    );
+  } else {
+    console.log(
+      `Instrument overrides loaded from local/env sources (${countOverrideEntries(merged)} entries).`,
+    );
+  }
+
+  return merged;
 }
 
 function readOverridesFromEnv() {
@@ -890,6 +1033,7 @@ export const forumSnapshot: {
 }
 
 async function main() {
+  await loadEnv();
   const config = await readConfig();
   const overrides = await readOverrides();
   const username = process.env.ORAGH_FORUM_USERNAME;

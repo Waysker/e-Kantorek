@@ -21,6 +21,7 @@ import { EventsScreen } from "./src/screens/EventsScreen";
 import { FeedScreen } from "./src/screens/FeedScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
+import { AttendanceSetupScreen } from "./src/screens/AttendanceSetupScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
@@ -455,6 +456,8 @@ export default function App() {
   const activeTab = routeToTab(route);
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
+  const canManageAttendanceSetup =
+    effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
 
   function openTab(tab: PrimaryTab) {
     if (tab === "feed") {
@@ -571,6 +574,24 @@ export default function App() {
             dataSourceGeneratedAt={dataSourceGeneratedAt}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
+            canManageAttendanceSetup={canManageAttendanceSetup}
+            onOpenAttendanceSetup={
+              canManageAttendanceSetup
+                ? () => setRoute({ name: "attendanceSetup" })
+                : undefined
+            }
+          />
+        );
+      case "attendanceSetup":
+        return canManageAttendanceSetup ? (
+          <AttendanceSetupScreen
+            currentUser={effectiveCurrentUser}
+            onBack={() => setRoute({ name: "profile" })}
+          />
+        ) : (
+          <MissingEventScreen
+            onBack={() => setRoute({ name: "profile" })}
+            title={tr("Brak uprawnień", "No permission")}
           />
         );
       default:

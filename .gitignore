@@ -2,6 +2,7 @@
 /package-lock.json
 /github
 /github.pub
+/Copy of Obecności*.xlsx
 
 # app local secrets/logs
 /app/.env

@@ -51,5 +51,7 @@ jobs:
           ORAGH_FORUM_PASSWORD: ${{ secrets.ORAGH_FORUM_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORAGH_ATTENDANCE_KEY: ${{ vars.ORAGH_ATTENDANCE_KEY || vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
           ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
+          ORAGH_INSTRUMENT_OVERRIDES_KEY: ${{ vars.ORAGH_INSTRUMENT_OVERRIDES_KEY || vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
         run: npm run forum:sync:publish
