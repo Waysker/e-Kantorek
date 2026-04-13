@@ -89,15 +89,16 @@ Current pieces:
 - `scripts/sync-forum-snapshot.mjs`: MyBB login + HTML pull script
 - `scripts/publish-snapshot-to-supabase.mjs`: upload latest snapshot payload to Supabase
 - `forum-sync.config.json`: local sync config
-- `forum-sync.instrument-overrides.example.json`: tracked template for optional instrument mapping
+- `forum-sync.instrument-overrides.json`: source-controlled production instrument mapping used by local runs and CI
+- `forum-sync.instrument-overrides.example.json`: optional template/reference
 - `.env.example`: required env variable names for client and publisher scripts
 
 To prepare a real sync:
 
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
-3. Keep `forum-sync.instrument-overrides.example.json` updated for shared/CI mapping
-4. Optionally copy it to `forum-sync.instrument-overrides.json` for local-only overrides (this local file takes precedence and is gitignored)
+3. Keep `forum-sync.instrument-overrides.json` updated as production mapping
+4. Optionally use `forum-sync.instrument-overrides.example.json` as a clean template/reference
 5. Run `npm.cmd run forum:sync`
 6. Optionally publish to cloud with `npm.cmd run forum:publish`
 7. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
@@ -149,15 +150,16 @@ After first successful run, the site will be available under your Pages URL (usu
 
 Instrument override note:
 
-- prefer `byFullName` for manual mapping
+- prefer `byUid` for production stability
+- `byFullName` is useful as a bridge when uid mapping is incomplete
 - `byUsername` still works as a fallback for cases where the full name is unknown
-- `byUid` remains the most stable option if you ever want it later
 
 Temporary limitation:
 
 - the forum exposes attendance voters and member names cleanly
 - it does not expose instruments in the same way
-- `forum-sync.instrument-overrides.json` (local, gitignored) is the temporary bridge for squad composition until the real backend exists
+- `forum-sync.instrument-overrides.json` is the temporary bridge for squad composition until the real backend exists
+- TODO: move instrument mapping to encrypted/DB-managed storage with admin editing workflow
 
 ## Next Build Targets
 

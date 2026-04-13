@@ -5,7 +5,6 @@
 
 # app local secrets/logs
 /app/.env
-/app/forum-sync.instrument-overrides.json
 /app/web-err.log
 /app/web-out.log
 /app/supabase/migrations/.env
