@@ -33,6 +33,7 @@ The UI should not depend directly on legacy forum fields or markup.
 - `npm run web`
 - `npm run web:build`
 - `npm run web:build:pages`
+- `npm run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
 - `npm run forum:sync`
 - `npm run forum:publish:attendance`
 - `npm run forum:publish`
@@ -93,6 +94,7 @@ Current pieces:
 - `scripts/publish-attendance-sheet-to-supabase.mjs`: publish workbook-based attendance payload to Supabase
 - `scripts/publish-instrument-overrides-to-supabase.mjs`: bootstrap/update instrument overrides row in Supabase
 - `scripts/publish-snapshot-to-supabase.mjs`: upload latest snapshot payload to Supabase
+- `scripts/attendance-sheet-preflight.mjs`: validate Google Sheet/CSV attendance input before sync
 - `forum-sync.config.json`: local sync config
 - `forum-sync.instrument-overrides.json`: local/bootstrap fallback mapping
 - `forum-sync.instrument-overrides.example.json`: optional template/reference
@@ -130,6 +132,10 @@ Cloud-ready mode:
 - Authenticated-only reads are enforced by `supabase/migrations/004_snapshot_cache_authenticated_only.sql`.
 - SQL bootstrap for override storage is in `supabase/migrations/005_forum_instrument_overrides.sql`.
 - SQL bootstrap for attendance workbook payload + privileged writer policies is in `supabase/migrations/006_attendance_sheet_cache.sql`.
+- Sheet-sync dry-run foundation (canonical tables + run logging + scheduler helpers) lives in:
+  - `supabase/migrations/010_attendance_sync_foundation.sql`
+  - `supabase/migrations/011_sheet_sync_scheduler_helpers.sql`
+- Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
 
 Scheduling / trigger:
 
