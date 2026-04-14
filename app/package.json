@@ -9,6 +9,7 @@
     "web": "expo start --web",
     "web:build": "expo export --platform web",
     "web:build:pages": "expo export --platform web && node ./scripts/patch-web-dist-for-pages.mjs",
+    "attendance:preflight": "node ./scripts/attendance-sheet-preflight.mjs",
     "typecheck": "tsc --noEmit",
     "forum:publish:attendance": "node ./scripts/publish-attendance-sheet-to-supabase.mjs",
     "forum:sync": "node ./scripts/sync-forum-snapshot.mjs",
