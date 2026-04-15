@@ -142,6 +142,9 @@ Cloud-ready mode:
 - Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
 - Supabase Edge Function write path:
   - `supabase/functions/attendance_write_sheet_first/index.ts`
+- Attendance response writes from app UI:
+  - optional explicit URL: `EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL`
+  - if omitted, app derives function URL from `EXPO_PUBLIC_SUPABASE_URL`
 
 Scheduling / trigger:
 
