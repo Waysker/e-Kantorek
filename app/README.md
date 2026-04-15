@@ -135,7 +135,13 @@ Cloud-ready mode:
 - Sheet-sync dry-run foundation (canonical tables + run logging + scheduler helpers) lives in:
   - `supabase/migrations/010_attendance_sync_foundation.sql`
   - `supabase/migrations/011_sheet_sync_scheduler_helpers.sql`
+- Sheet-sync upsert enablement (service-role grants + cron payload dryRun=false):
+  - `supabase/migrations/012_sheet_sync_upsert_enablement.sql`
+- Sheet-first write path foundation (queue + mapping + worker scheduler):
+  - `supabase/migrations/013_attendance_sheet_first_write_path.sql`
 - Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
+- Supabase Edge Function write path:
+  - `supabase/functions/attendance_write_sheet_first/index.ts`
 
 Scheduling / trigger:
 
