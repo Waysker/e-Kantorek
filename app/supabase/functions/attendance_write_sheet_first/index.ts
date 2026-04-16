@@ -91,6 +91,7 @@ const APPS_SCRIPT_WEBHOOK_TOKEN =
   Deno.env.get("APPS_SCRIPT_WEBHOOK_TOKEN");
 const SHEET_TO_SUPABASE_SYNC_URL = Deno.env.get("SHEET_TO_SUPABASE_SYNC_URL");
 const SHEET_TO_SUPABASE_SYNC_TOKEN = Deno.env.get("SHEET_TO_SUPABASE_SYNC_TOKEN");
+const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));
 
 const DEFAULT_PROCESS_BATCH_SIZE = parseIntegerEnv("ATTENDANCE_WRITE_PROCESS_BATCH_SIZE", 25, 1, 200);
 const DEFAULT_MAX_ATTEMPTS = parseIntegerEnv("ATTENDANCE_WRITE_MAX_ATTEMPTS", 5, 1, 50);
@@ -105,6 +106,61 @@ function parseIntegerEnv(name: string, fallback: number, min: number, max: numbe
     return fallback;
   }
   return Math.min(Math.max(parsed, min), max);
+}
+
+function parseCorsAllowedOrigins(rawValue: string | undefined): string[] {
+  const normalized = normalizeWhitespace(rawValue ?? "");
+  if (!normalized) {
+    return ["*"];
+  }
+
+  const parsed = normalized
+    .split(",")
+    .map((item) => normalizeWhitespace(item))
+    .filter((item) => item.length > 0);
+
+  return parsed.length > 0 ? parsed : ["*"];
+}
+
+function resolveCorsOrigin(request: Request): string {
+  const requestOrigin = normalizeWhitespace(request.headers.get("origin") ?? "");
+  if (CORS_ALLOWED_ORIGINS.includes("*")) {
+    return "*";
+  }
+
+  if (!requestOrigin) {
+    return CORS_ALLOWED_ORIGINS[0] ?? "*";
+  }
+
+  if (CORS_ALLOWED_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  return CORS_ALLOWED_ORIGINS[0] ?? "*";
+}
+
+function buildCorsHeaders(request: Request): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": resolveCorsOrigin(request),
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+function withCors(response: Response, request: Request): Response {
+  const headers = new Headers(response.headers);
+  const corsHeaders = buildCorsHeaders(request);
+  for (const [headerName, headerValue] of Object.entries(corsHeaders)) {
+    headers.set(headerName, headerValue);
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -1088,8 +1144,15 @@ async function handleProcessMode(
 }
 
 Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: buildCorsHeaders(request),
+    });
+  }
+
   if (request.method !== "POST") {
-    return jsonResponse({ error: "method_not_allowed" }, 405);
+    return withCors(jsonResponse({ error: "method_not_allowed" }, 405), request);
   }
 
   try {
@@ -1114,28 +1177,28 @@ Deno.serve(async (request) => {
     });
 
     if (mode === "process") {
-      return await handleProcessMode(request, body, supabaseAdmin);
+      return withCors(await handleProcessMode(request, body, supabaseAdmin), request);
     }
 
-    return await handleEnqueueMode(request, body, supabaseAdmin);
+    return withCors(await handleEnqueueMode(request, body, supabaseAdmin), request);
   } catch (error) {
     if (error instanceof HttpError) {
-      return jsonResponse(
+      return withCors(jsonResponse(
         {
           error: error.code,
           message: error.message,
           details: error.details ?? null,
         },
         error.status,
-      );
+      ), request);
     }
 
-    return jsonResponse(
+    return withCors(jsonResponse(
       {
         error: "internal_error",
         message: sanitizeErrorMessage(error),
       },
       500,
-    );
+    ), request);
   }
 });

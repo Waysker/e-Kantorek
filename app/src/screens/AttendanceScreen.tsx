@@ -35,6 +35,12 @@ type EnqueueResponsePayload = {
 const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
 const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
 const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
+const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
+
+function parseBooleanEnv(rawValue: string | undefined): boolean {
+  const normalized = (rawValue ?? "").trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
@@ -171,7 +177,11 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
-  const canWriteFromApp = Boolean(supabaseAuthClient && ATTENDANCE_WRITE_FUNCTION_URL);
+  const canWriteFromApp = Boolean(
+    ATTENDANCE_WRITE_UI_ENABLED &&
+      supabaseAuthClient &&
+      ATTENDANCE_WRITE_FUNCTION_URL,
+  );
 
   const options: Array<{ key: SelectableAttendanceStatus; label: string }> = [
     { key: "going", label: tr("Będę", "Going") },
@@ -325,10 +335,15 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
 
       {!canWriteFromApp ? (
         <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
-          {tr(
-            "Ta kompilacja działa w trybie podglądu. Włącz EXPO_PUBLIC_SUPABASE_URL i funkcję attendance_write_sheet_first, aby zapisywać obecność z panelu.",
-            "This build is in preview mode. Configure EXPO_PUBLIC_SUPABASE_URL and attendance_write_sheet_first to enable updates from the panel.",
-          )}
+          {ATTENDANCE_WRITE_UI_ENABLED
+            ? tr(
+                "Ta kompilacja działa w trybie podglądu. Włącz EXPO_PUBLIC_SUPABASE_URL i funkcję attendance_write_sheet_first, aby zapisywać obecność z panelu.",
+                "This build is in preview mode. Configure EXPO_PUBLIC_SUPABASE_URL and attendance_write_sheet_first to enable updates from the panel.",
+              )
+            : tr(
+                "Deklaracje obecności są obecnie synchronizowane z forum (źródło prawdy). Zmiany z panelu są wyłączone.",
+                "Attendance declarations are currently synced from the forum (source of truth). Panel writes are disabled.",
+              )}
         </Text>
       ) : null}
 
