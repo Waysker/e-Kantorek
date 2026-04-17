@@ -35,9 +35,7 @@ The UI should not depend directly on legacy forum fields or markup.
 - `npm run web:build:pages`
 - `npm run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
 - `npm run forum:sync`
-- `npm run forum:publish:attendance`
 - `npm run forum:publish`
-- `npm run forum:publish:overrides`
 - `npm run forum:sync:publish`
 
 ## Authentication (Supabase)
@@ -91,8 +89,6 @@ Current pieces:
 
 - `src/data/generated/forumSnapshot.ts`: app-facing snapshot data
 - `scripts/sync-forum-snapshot.mjs`: MyBB login + HTML pull script
-- `scripts/publish-attendance-sheet-to-supabase.mjs`: publish workbook-based attendance payload to Supabase
-- `scripts/publish-instrument-overrides-to-supabase.mjs`: bootstrap/update instrument overrides row in Supabase
 - `scripts/publish-snapshot-to-supabase.mjs`: upload latest snapshot payload to Supabase
 - `scripts/attendance-sheet-preflight.mjs`: validate Google Sheet/CSV attendance input before sync
 - `forum-sync.config.json`: local sync config
@@ -104,14 +100,12 @@ To prepare a real sync:
 
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
-3. Apply `supabase/migrations/005_forum_instrument_overrides.sql`
-4. Apply `supabase/migrations/006_attendance_sheet_cache.sql`
-5. Optional local source file for PoC/backward compatibility: `../Copy of Obecności 25'-26'.xlsx`
-6. Optionally publish workbook payload with `npm.cmd run forum:publish:attendance`
-7. Bootstrap DB overrides from workbook/JSON with `npm.cmd run forum:publish:overrides`
-8. Run `npm.cmd run forum:sync`
-9. Optionally publish snapshot with `npm.cmd run forum:publish`
-10. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
+3. Run `npm.cmd run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
+4. Apply `supabase/migrations/010_attendance_sync_foundation.sql` through `013_attendance_sheet_first_write_path.sql`
+5. Configure/deploy Edge Functions from `docs/sheet-sync-setup.md`
+6. Run `npm.cmd run forum:sync`
+7. Optionally publish snapshot with `npm.cmd run forum:publish`
+8. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
 
 The current sync auto-discovers dated concert threads from both `Dzial Koncert` (`fid=27`) and `Propozycje koncertow` (`fid=50`), filtered to the configured `eventYear`, unless `eventThreadUrls` is filled explicitly. It writes authenticated raw HTML into `.cache/forum-sync`, fetches poll results from `Ankieta`, parses setlist-like posts, and writes `.cache/forum-sync/snapshot.json`.
 To explicitly refresh local fallback TypeScript snapshot, run sync with `FORUM_SYNC_WRITE_LOCAL_SNAPSHOT=1`.
@@ -121,17 +115,14 @@ Cloud-ready mode:
 - If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are set, the app reads from `forum_snapshot_cache` in Supabase.
 - If they are missing or the cloud row is unavailable, the app falls back to local `forumSnapshot.ts`.
 - Profile screen shows data source and `Last synced` timestamp from snapshot metadata.
-- Leader/admin profile includes an Attendance Setup PoC screen (web) to upload workbook and publish to Supabase.
-- `forum:publish:attendance` publishes parsed workbook payload into `attendance_sheet_cache` (`ORAGH_ATTENDANCE_KEY`, fallback `ORAGH_SNAPSHOT_KEY`).
+- Leader/admin profile includes an Attendance Setup PoC screen (web) with checklist/runbook for preflight and sheet sync.
+- Attendance source-of-truth sync is handled by Supabase functions (`sheet_to_supabase_sync`, `attendance_write_sheet_first`).
 - `forum:sync` reads instrument overrides from `forum_instrument_overrides` first (key: `ORAGH_INSTRUMENT_OVERRIDES_KEY`, fallback `ORAGH_SNAPSHOT_KEY`, default `forum`).
 - If DB overrides are missing/unavailable, `forum:sync` falls back to local/env overrides.
-- `forum:publish:overrides` bootstraps the DB row from workbook/file or `ORAGH_FORUM_INSTRUMENT_OVERRIDES_JSON`.
 - `forum:publish` expects `SUPABASE_URL` and a server key (`SUPABASE_SECRET_KEY` preferred, `SUPABASE_SERVICE_ROLE_KEY` legacy fallback) in your local shell and pushes `.cache/forum-sync/snapshot.json`.
-- `forum:publish`, `forum:publish:attendance`, and `forum:publish:overrides` read `.env.local` and `.env` automatically before checking env variables.
+- `forum:publish` reads `.env.local` and `.env` automatically before checking env variables.
 - SQL bootstrap for the cloud table is in `supabase/migrations/001_forum_snapshot_cache.sql`.
 - Authenticated-only reads are enforced by `supabase/migrations/004_snapshot_cache_authenticated_only.sql`.
-- SQL bootstrap for override storage is in `supabase/migrations/005_forum_instrument_overrides.sql`.
-- SQL bootstrap for attendance workbook payload + privileged writer policies is in `supabase/migrations/006_attendance_sheet_cache.sql`.
 - Sheet-sync dry-run foundation (canonical tables + run logging + scheduler helpers) lives in:
   - `supabase/migrations/010_attendance_sync_foundation.sql`
   - `supabase/migrations/011_sheet_sync_scheduler_helpers.sql`
@@ -164,10 +155,9 @@ GitHub Actions setup:
    - `SUPABASE_URL`
    - `SUPABASE_SECRET_KEY`
 3. Optional repository variable: `ORAGH_SNAPSHOT_KEY` (defaults to `forum`).
-4. Optional repository variable: `ORAGH_ATTENDANCE_KEY` (defaults to `ORAGH_SNAPSHOT_KEY`, then `forum`).
-5. Optional repository variable: `ORAGH_INSTRUMENT_OVERRIDES_KEY` (defaults to `ORAGH_SNAPSHOT_KEY`, then `forum`).
-6. Enable Actions and run workflow `Forum Sync Publish` manually once.
-7. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
+4. Optional repository variable: `ORAGH_INSTRUMENT_OVERRIDES_KEY` (defaults to `ORAGH_SNAPSHOT_KEY`, then `forum`).
+5. Enable Actions and run workflow `Forum Sync Publish` manually once.
+6. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
 
 ## Web Hosting (GitHub Pages)
 
