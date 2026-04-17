@@ -11,10 +11,14 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { PrimaryTab } from "../navigation/routes";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { DataFreshnessBanner } from "./DataFreshnessBanner";
 
 type AppShellProps = {
   activeTab: PrimaryTab;
   hideNavigation?: boolean;
+  dataSourceLabel: string;
+  dataSourceGeneratedAt: string | null;
+  expectedSyncIntervalHours?: number;
   onNavigate: (tab: PrimaryTab) => void;
   children: ReactNode;
 };
@@ -28,6 +32,9 @@ const tabs: { key: PrimaryTab; label: string }[] = [
 export function AppShell({
   activeTab,
   hideNavigation,
+  dataSourceLabel,
+  dataSourceGeneratedAt,
+  expectedSyncIntervalHours,
   onNavigate,
   children,
 }: AppShellProps) {
@@ -36,7 +43,16 @@ export function AppShell({
   const isDesktop = width >= tokens.breakpoints.desktop;
 
   if (hideNavigation) {
-    return <View style={styles.immersiveRoot}>{children}</View>;
+    return (
+      <View style={styles.immersiveRoot}>
+        <DataFreshnessBanner
+          dataSourceLabel={dataSourceLabel}
+          dataSourceGeneratedAt={dataSourceGeneratedAt}
+          expectedSyncIntervalHours={expectedSyncIntervalHours}
+        />
+        <View style={styles.immersiveContent}>{children}</View>
+      </View>
+    );
   }
 
   if (isDesktop) {
@@ -70,7 +86,14 @@ export function AppShell({
             </View>
           </View>
 
-          <View style={styles.desktopMain}>{children}</View>
+          <View style={styles.desktopMain}>
+            <DataFreshnessBanner
+              dataSourceLabel={dataSourceLabel}
+              dataSourceGeneratedAt={dataSourceGeneratedAt}
+              expectedSyncIntervalHours={expectedSyncIntervalHours}
+            />
+            <View style={styles.desktopContent}>{children}</View>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -78,7 +101,14 @@ export function AppShell({
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <View style={styles.mobileContent}>{children}</View>
+      <View style={styles.mobileLayout}>
+        <DataFreshnessBanner
+          dataSourceLabel={dataSourceLabel}
+          dataSourceGeneratedAt={dataSourceGeneratedAt}
+          expectedSyncIntervalHours={expectedSyncIntervalHours}
+        />
+        <View style={styles.mobileContent}>{children}</View>
+      </View>
       <View
         style={[
           styles.bottomNav,
@@ -118,6 +148,9 @@ const styles = StyleSheet.create({
   immersiveRoot: {
     flex: 1,
     backgroundColor: tokens.colors.readerBackdrop,
+  },
+  immersiveContent: {
+    flex: 1,
   },
   desktopLayout: {
     flex: 1,
@@ -164,6 +197,12 @@ const styles = StyleSheet.create({
     color: tokens.colors.brand,
   },
   desktopMain: {
+    flex: 1,
+  },
+  desktopContent: {
+    flex: 1,
+  },
+  mobileLayout: {
     flex: 1,
   },
   mobileContent: {

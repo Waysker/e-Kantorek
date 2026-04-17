@@ -604,6 +604,9 @@ export default function App() {
       <AppShell
         activeTab={activeTab}
         hideNavigation={route.name === "setlist"}
+        dataSourceLabel={dataSourceLabel}
+        dataSourceGeneratedAt={dataSourceGeneratedAt}
+        expectedSyncIntervalHours={4}
         onNavigate={openTab}
       >
         <StatusBar style={route.name === "setlist" ? "light" : "dark"} />
