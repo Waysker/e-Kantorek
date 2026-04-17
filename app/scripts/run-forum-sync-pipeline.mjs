@@ -31,8 +31,6 @@ function runStep(name, args) {
 }
 
 async function main() {
-  await runStep("forum:publish:attendance", ["run", "forum:publish:attendance"]);
-  await runStep("forum:publish:overrides", ["run", "forum:publish:overrides"]);
   await runStep("forum:sync", ["run", "forum:sync"]);
   await runStep("forum:publish", ["run", "forum:publish"]);
   console.log("\n[forum:sync:publish] Sync pipeline completed.");

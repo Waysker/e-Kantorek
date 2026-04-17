@@ -34,27 +34,27 @@ const setupSteps: SetupStep[] = [
     titlePl: "Uruchom migracje SQL",
     titleEn: "Apply SQL migrations",
     detailPl:
-      "Wgraj migracje 005 i 006, aby włączyć cache obecności i mapowania instrumentów.",
+      "Wgraj migracje 010-013 i skonfiguruj funkcje zgodnie z docs/sheet-sync-setup.md.",
     detailEn:
-      "Apply migrations 005 and 006 to enable attendance-sheet and instrument-overrides storage.",
+      "Apply migrations 010-013 and configure functions from docs/sheet-sync-setup.md.",
   },
   {
-    id: "publishWorkbook",
-    titlePl: "Opublikuj arkusz obecności",
-    titleEn: "Publish attendance workbook",
+    id: "preflight",
+    titlePl: "Zrób preflight arkusza",
+    titleEn: "Run sheet preflight",
     detailPl:
-      "Uruchom skrypt publikacji arkusza, aby zasilić attendance_sheet_cache.",
+      "Uruchom attendance:preflight i napraw ewentualne błędy kontraktu danych.",
     detailEn:
-      "Run the workbook publish script to fill attendance_sheet_cache.",
+      "Run attendance:preflight and fix any contract validation issues.",
   },
   {
-    id: "publishOverrides",
-    titlePl: "Odśwież mapowanie instrumentów",
-    titleEn: "Refresh instrument overrides",
+    id: "sheetSync",
+    titlePl: "Sprawdź sheet->Supabase sync",
+    titleEn: "Validate sheet->Supabase sync",
     detailPl:
-      "Uruchom publikację overrides, aby forum sync używał aktualnych mapowań.",
+      "Uruchom ręcznie lub przez cron funkcję sheet_to_supabase_sync i sprawdź sync_runs.",
     detailEn:
-      "Run overrides publish so forum sync uses current instrument mapping.",
+      "Run sheet_to_supabase_sync manually or via cron and verify sync_runs.",
   },
   {
     id: "syncPublish",
@@ -68,8 +68,8 @@ const setupSteps: SetupStep[] = [
 ];
 
 const runbookCommands = [
-  "npm run forum:publish:attendance",
-  "npm run forum:publish:overrides",
+  "npm run attendance:preflight -- --sheet-id <id> --gid <gid> --strict",
+  "supabase functions deploy sheet_to_supabase_sync --no-verify-jwt",
   "npm run forum:sync:publish",
 ] as const;
 
@@ -106,8 +106,8 @@ export function AttendanceSetupScreen({
         <Text style={styles.screenTitle}>{tr("Konfiguracja obecności", "Attendance setup")}</Text>
         <Text style={styles.cardBody}>
           {tr(
-            "To ekran operacyjny PoC: prowadzi przez publikację danych obecności i mapowań instrumentów do Supabase.",
-            "This is a PoC operations screen: it guides publishing attendance data and instrument mappings to Supabase.",
+            "To ekran operacyjny PoC: prowadzi przez walidację arkusza i synchronizację sheet->Supabase.",
+            "This is a PoC operations screen: it guides sheet validation and sheet->Supabase sync.",
           )}
         </Text>
         <Text style={styles.cardSecondary}>
