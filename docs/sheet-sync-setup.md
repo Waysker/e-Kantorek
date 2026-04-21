@@ -177,7 +177,7 @@ Set on project:
 - `SHEET_TO_SUPABASE_SYNC_URL` (full URL to `sheet_to_supabase_sync`)
 - `SHEET_TO_SUPABASE_SYNC_TOKEN` (same token used by sync function)
 - optional:
-  - `ATTENDANCE_SHEET_ID` + `ATTENDANCE_SHEET_GID` (fallback tab for auto-created rehearsal columns when date has no mapped column yet)
+  - `ATTENDANCE_SHEET_ID` + `ATTENDANCE_SHEET_GID` (emergency fallback only; normal flow resolves `gid` by event date/month from existing mapped events)
   - `ATTENDANCE_WRITE_PROCESS_BATCH_SIZE` (default `25`)
   - `ATTENDANCE_WRITE_MAX_ATTEMPTS` (default `5`)
   - `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK` (default `false`; when `false`, process mode fails if sync trigger cannot run)
@@ -219,6 +219,68 @@ function normalizeIsoDate(raw) {
   var fromIso = value.match(/^(\d{4}-\d{2}-\d{2})T/);
   if (fromIso) return fromIso[1];
   return "";
+}
+
+function monthKeyFromIsoDate(isoDate) {
+  return String(isoDate || "").slice(0, 7);
+}
+
+function monthLabelFromIsoDate(isoDate) {
+  var monthKey = monthKeyFromIsoDate(isoDate);
+  if (!monthKey) return "";
+  return "Obecnosc " + monthKey;
+}
+
+function findMonthlyAttendanceSheet(ss, monthKey) {
+  var directLabel = "Obecnosc " + monthKey;
+  var direct = ss.getSheets().find(function (sheet) {
+    return String(sheet.getName() || "").trim() === directLabel;
+  });
+  if (direct) return direct;
+
+  var regex = new RegExp(monthKey.replace("-", "\\\\-"));
+  return ss.getSheets().find(function (sheet) {
+    return regex.test(String(sheet.getName() || "").trim());
+  }) || null;
+}
+
+function pickTemplateSheet(ss, suggestedGid) {
+  if (suggestedGid) {
+    var fromGid = ss.getSheets().find(function (sheet) {
+      return String(sheet.getSheetId()) === String(suggestedGid);
+    });
+    if (fromGid) return fromGid;
+  }
+  return ss.getSheets()[0] || null;
+}
+
+function ensureAttendanceMonthSheet(ss, eventDate, suggestedGid) {
+  var monthKey = monthKeyFromIsoDate(eventDate);
+  if (!monthKey) {
+    throw new Error("invalid_event_date");
+  }
+
+  var existing = findMonthlyAttendanceSheet(ss, monthKey);
+  if (existing) {
+    return { sheet: existing, created: false };
+  }
+
+  var templateSheet = pickTemplateSheet(ss, suggestedGid);
+  if (!templateSheet) {
+    throw new Error("template_sheet_not_found");
+  }
+
+  var created = templateSheet.copyTo(ss);
+  var targetName = monthLabelFromIsoDate(eventDate);
+  var finalName = targetName;
+  var suffix = 2;
+  while (ss.getSheets().some(function (sheet) { return sheet.getName() === finalName; })) {
+    finalName = targetName + " (" + suffix + ")";
+    suffix += 1;
+  }
+  created.setName(finalName);
+
+  return { sheet: created, created: true };
 }
 
 function findColumnByDateToken(sheet, eventDate) {
@@ -266,14 +328,43 @@ function doPost(e) {
     var action = String(body.action || "").trim();
     var sheetId = String(body.sheetId || "");
     var gid = String(body.gid || "");
+    var suggestedGid = String(body.suggestedGid || body.suggested_gid || gid || "");
 
-    if (!action || !sheetId || !gid) {
+    if (!action || !sheetId) {
       return ContentService
         .createTextOutput(JSON.stringify({ ok: false, error: "invalid_payload" }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     var ss = SpreadsheetApp.openById(sheetId);
+
+    if (action === "ensure_attendance_sheet") {
+      var ensuredEventDate = normalizeIsoDate(body.eventDate || body.event_date);
+      if (!ensuredEventDate) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ ok: false, error: "invalid_event_date" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var ensuredSheetResult = ensureAttendanceMonthSheet(ss, ensuredEventDate, suggestedGid);
+      SpreadsheetApp.flush();
+      return ContentService
+        .createTextOutput(JSON.stringify({
+          ok: true,
+          action: action,
+          gid: String(ensuredSheetResult.sheet.getSheetId()),
+          title: ensuredSheetResult.sheet.getName(),
+          created: ensuredSheetResult.created
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (!gid) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: "missing_gid" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     var targetSheet = ss.getSheets().find(function (s) {
       return String(s.getSheetId()) === gid;
     });

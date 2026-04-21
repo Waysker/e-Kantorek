@@ -245,6 +245,29 @@ function parseEventDateInput(value: unknown): string | null {
   return null;
 }
 
+function toIsoDateFromLocalDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToIsoDate(isoDate: string, deltaDays: number): string {
+  const date = new Date(`${isoDate}T12:00:00`);
+  date.setDate(date.getDate() + deltaDays);
+  return toIsoDateFromLocalDate(date);
+}
+
+function startOfMonthIsoDate(isoDate: string): string {
+  return `${isoDate.slice(0, 7)}-01`;
+}
+
+function startOfNextMonthIsoDate(isoDate: string): string {
+  const monthStart = new Date(`${startOfMonthIsoDate(isoDate)}T12:00:00`);
+  monthStart.setMonth(monthStart.getMonth() + 1);
+  return toIsoDateFromLocalDate(monthStart);
+}
+
 function scoreTitleMatch(requestedTitle: string, candidateTitle: string): number {
   if (!requestedTitle || !candidateTitle) {
     return 0;
@@ -371,6 +394,103 @@ function parseWebhookColumnRef(payload: unknown): string | null {
     return null;
   }
   return toColumnRef(columnRefToIndex(rawColumn));
+}
+
+function parseWebhookGid(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const asRecord = payload as Record<string, unknown>;
+  const rawGid = normalizeWhitespace(asRecord.gid ?? asRecord.source_gid ?? asRecord.sheetGid ?? asRecord.sheet_gid ?? "");
+  if (!rawGid || !/^\d+$/.test(rawGid)) {
+    return null;
+  }
+  return rawGid;
+}
+
+async function ensureAttendanceSheetViaAppsScript(params: {
+  sheetId: string;
+  eventDate: string;
+  suggestedGid: string | null;
+}): Promise<{ gid: string; title: string | null; created: boolean }> {
+  const normalizedSheetId = normalizeWhitespace(params.sheetId);
+  if (!normalizedSheetId) {
+    throw new HttpError(422, "invalid_source_sheet_id", "Invalid source sheet ID.");
+  }
+
+  const normalizedEventDate = parseEventDateInput(params.eventDate);
+  if (!normalizedEventDate) {
+    throw new HttpError(422, "invalid_event_date", `Invalid event date value: ${params.eventDate}`);
+  }
+
+  const normalizedSuggestedGid = normalizeWhitespace(params.suggestedGid ?? "");
+  const suggestedGid = normalizedSuggestedGid && /^\d+$/.test(normalizedSuggestedGid)
+    ? normalizedSuggestedGid
+    : null;
+
+  const responseText = await callAppsScriptWebhook({
+    action: "ensure_attendance_sheet",
+    sheetId: normalizedSheetId,
+    eventDate: normalizedEventDate,
+    suggestedGid,
+  });
+
+  if (!responseText) {
+    throw new HttpError(
+      502,
+      "apps_script_ensure_sheet_invalid_response",
+      "Apps Script ensure_attendance_sheet returned an empty response.",
+    );
+  }
+
+  try {
+    const parsed = JSON.parse(responseText) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      created?: boolean;
+      title?: string;
+      sheetTitle?: string;
+      sheet_title?: string;
+      gid?: string | number;
+      source_gid?: string | number;
+      sheetGid?: string | number;
+      sheet_gid?: string | number;
+    };
+    if (parsed.ok === false) {
+      throw new HttpError(
+        502,
+        "apps_script_write_failed",
+        `Apps Script responded with failure: ${extractWebhookErrorMessage(parsed) ?? "unknown_error"}`,
+      );
+    }
+
+    const gid = parseWebhookGid(parsed);
+    if (!gid) {
+      throw new HttpError(
+        502,
+        "apps_script_ensure_sheet_invalid_response",
+        "Apps Script ensure_attendance_sheet did not return gid.",
+      );
+    }
+
+    const title = normalizeWhitespace(parsed.title ?? parsed.sheetTitle ?? parsed.sheet_title ?? "");
+    return {
+      gid,
+      title: title || null,
+      created: parsed.created === true,
+    };
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw error;
+    }
+
+    throw new HttpError(
+      502,
+      "apps_script_ensure_sheet_invalid_response",
+      `Could not parse Apps Script ensure_attendance_sheet response: ${responseText.slice(0, 500)}`,
+    );
+  }
 }
 
 async function ensureAttendanceColumnViaAppsScript(params: {
@@ -723,12 +843,76 @@ async function resolveEventSource(
 
 async function resolveDefaultSheetSource(
   supabaseAdmin: ReturnType<typeof createClient>,
+  options?: {
+    eventDate?: string | null;
+  },
 ): Promise<SheetSource | null> {
-  if (DEFAULT_ATTENDANCE_SHEET_ID && DEFAULT_ATTENDANCE_SHEET_GID && /^\d+$/.test(DEFAULT_ATTENDANCE_SHEET_GID)) {
-    return {
-      sheetId: DEFAULT_ATTENDANCE_SHEET_ID,
-      gid: DEFAULT_ATTENDANCE_SHEET_GID,
-    };
+  const preferredEventDate = parseEventDateInput(options?.eventDate ?? null);
+
+  if (preferredEventDate) {
+    const monthStart = startOfMonthIsoDate(preferredEventDate);
+    const nextMonthStart = startOfNextMonthIsoDate(preferredEventDate);
+    const preferredDateEpoch = new Date(`${preferredEventDate}T12:00:00`).getTime();
+
+    const { data: sameMonthRows, error: sameMonthError } = await supabaseAdmin
+      .from("events")
+      .select("event_date,source_sheet_id,source_gid")
+      .gte("event_date", monthStart)
+      .lt("event_date", nextMonthStart)
+      .not("source_sheet_id", "is", null)
+      .not("source_gid", "is", null)
+      .returns<Array<{ event_date: string; source_sheet_id: string | null; source_gid: string | null }>>();
+
+    if (sameMonthError) {
+      throw new HttpError(500, "default_sheet_source_lookup_failed", sameMonthError.message);
+    }
+
+    const bestSameMonth = (sameMonthRows ?? [])
+      .map((row) => ({
+        row,
+        distance: Math.abs(new Date(`${row.event_date}T12:00:00`).getTime() - preferredDateEpoch),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.row;
+
+    const sameMonthSheetId = normalizeWhitespace(bestSameMonth?.source_sheet_id ?? "");
+    const sameMonthGid = normalizeWhitespace(bestSameMonth?.source_gid ?? "");
+    if (sameMonthSheetId && sameMonthGid && /^\d+$/.test(sameMonthGid)) {
+      return {
+        sheetId: sameMonthSheetId,
+        gid: sameMonthGid,
+      };
+    }
+
+    const searchStart = addDaysToIsoDate(preferredEventDate, -120);
+    const searchEnd = addDaysToIsoDate(preferredEventDate, 120);
+    const { data: nearbyRows, error: nearbyError } = await supabaseAdmin
+      .from("events")
+      .select("event_date,source_sheet_id,source_gid")
+      .gte("event_date", searchStart)
+      .lte("event_date", searchEnd)
+      .not("source_sheet_id", "is", null)
+      .not("source_gid", "is", null)
+      .returns<Array<{ event_date: string; source_sheet_id: string | null; source_gid: string | null }>>();
+
+    if (nearbyError) {
+      throw new HttpError(500, "default_sheet_source_lookup_failed", nearbyError.message);
+    }
+
+    const bestNearby = (nearbyRows ?? [])
+      .map((row) => ({
+        row,
+        distance: Math.abs(new Date(`${row.event_date}T12:00:00`).getTime() - preferredDateEpoch),
+      }))
+      .sort((left, right) => left.distance - right.distance)[0]?.row;
+
+    const nearbySheetId = normalizeWhitespace(bestNearby?.source_sheet_id ?? "");
+    const nearbyGid = normalizeWhitespace(bestNearby?.source_gid ?? "");
+    if (nearbySheetId && nearbyGid && /^\d+$/.test(nearbyGid)) {
+      return {
+        sheetId: nearbySheetId,
+        gid: nearbyGid,
+      };
+    }
   }
 
   const { data: fromEvents, error: fromEventsError } = await supabaseAdmin
@@ -776,6 +960,13 @@ async function resolveDefaultSheetSource(
     };
   }
 
+  if (DEFAULT_ATTENDANCE_SHEET_ID && DEFAULT_ATTENDANCE_SHEET_GID && /^\d+$/.test(DEFAULT_ATTENDANCE_SHEET_GID)) {
+    return {
+      sheetId: DEFAULT_ATTENDANCE_SHEET_ID,
+      gid: DEFAULT_ATTENDANCE_SHEET_GID,
+    };
+  }
+
   return null;
 }
 
@@ -797,7 +988,7 @@ async function createPlaceholderEvent(
 ): Promise<string> {
   const eventTitle = normalizeWhitespace(payload.eventTitleInput) || buildFallbackEventTitle(payload.eventDate);
   const sourceHeader = `${payload.eventDate} ${eventTitle}`.trim();
-  const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin);
+  const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin, { eventDate: payload.eventDate });
   if (!fallbackSource) {
     throw new HttpError(
       422,
@@ -963,11 +1154,15 @@ async function resolveSourceCoordinates(
   },
 ): Promise<SourceCoordinates> {
   const eventSource = await resolveEventSource(supabaseAdmin, queueRow.event_id);
+  const originalSourceSheetId = normalizeWhitespace(eventSource.source_sheet_id ?? "");
+  const originalSourceGid = normalizeWhitespace(eventSource.source_gid ?? "");
+  const originalSourceColumn = toUpperLetters(eventSource.source_column ?? "");
+  let resolvedSourceHeader = normalizeWhitespace(eventSource.source_header ?? eventSource.title) || eventSource.title;
 
   let sourceSheetId = normalizeWhitespace(queueRow.source_sheet_id ?? eventSource.source_sheet_id ?? "");
   let sourceGid = normalizeWhitespace(queueRow.source_gid ?? eventSource.source_gid ?? "");
   if (!sourceSheetId || !sourceGid) {
-    const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin);
+    const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin, { eventDate: eventSource.event_date });
     sourceSheetId = sourceSheetId || fallbackSource?.sheetId || "";
     sourceGid = sourceGid || fallbackSource?.gid || "";
   }
@@ -981,6 +1176,13 @@ async function resolveSourceCoordinates(
     );
   }
 
+  const ensuredSheet = await ensureAttendanceSheetViaAppsScript({
+    sheetId: sourceSheetId,
+    eventDate: eventSource.event_date,
+    suggestedGid: sourceGid || null,
+  });
+  sourceGid = ensuredSheet.gid;
+
   let sourceColumn = toUpperLetters(queueRow.source_column ?? eventSource.source_column ?? "");
   if (!sourceColumn) {
     const ensuredColumn = await ensureAttendanceColumnViaAppsScript({
@@ -991,15 +1193,23 @@ async function resolveSourceCoordinates(
       sourceHeader: eventSource.source_header,
     });
     sourceColumn = ensuredColumn.columnRef;
+    resolvedSourceHeader = normalizeWhitespace(ensuredColumn.header ?? resolvedSourceHeader) || eventSource.title;
+  }
 
-    const resolvedSourceHeader = normalizeWhitespace(ensuredColumn.header ?? eventSource.source_header ?? eventSource.title);
+  const sourceMappingChanged =
+    sourceSheetId !== originalSourceSheetId ||
+    sourceGid !== originalSourceGid ||
+    sourceColumn !== originalSourceColumn ||
+    resolvedSourceHeader !== normalizeWhitespace(eventSource.source_header ?? "");
+
+  if (sourceMappingChanged) {
     const { error: eventUpdateError } = await supabaseAdmin
       .from("events")
       .update({
         source_sheet_id: sourceSheetId,
         source_gid: sourceGid,
-        source_column: sourceColumn,
-        source_header: resolvedSourceHeader || eventSource.title,
+        source_column: sourceColumn || null,
+        source_header: resolvedSourceHeader,
         source_updated_at: new Date().toISOString(),
       })
       .eq("event_id", eventSource.event_id);
@@ -1013,7 +1223,7 @@ async function resolveSourceCoordinates(
 
   let sourceRowNumber = queueRow.source_row_number ?? null;
   if (!sourceRowNumber) {
-    const { data: rowMap, error: rowMapError } = await supabaseAdmin
+    const { data: rowMapExact, error: rowMapExactError } = await supabaseAdmin
       .from("sheet_member_rows")
       .select("source_row_number")
       .eq("member_id", queueRow.member_id)
@@ -1021,11 +1231,51 @@ async function resolveSourceCoordinates(
       .eq("source_gid", sourceGid)
       .maybeSingle<{ source_row_number: number }>();
 
-    if (rowMapError) {
-      throw new HttpError(500, "sheet_member_row_lookup_failed", rowMapError.message);
+    if (rowMapExactError) {
+      throw new HttpError(500, "sheet_member_row_lookup_failed", rowMapExactError.message);
     }
 
-    sourceRowNumber = rowMap?.source_row_number ?? null;
+    sourceRowNumber = rowMapExact?.source_row_number ?? null;
+
+    if (!sourceRowNumber) {
+      const { data: rowMapFallback, error: rowMapFallbackError } = await supabaseAdmin
+        .from("sheet_member_rows")
+        .select("source_row_number,source_gid")
+        .eq("member_id", queueRow.member_id)
+        .eq("source_sheet_id", sourceSheetId)
+        .order("source_updated_at", { ascending: false, nullsFirst: false })
+        .order("updated_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle<{ source_row_number: number; source_gid: string }>();
+
+      if (rowMapFallbackError) {
+        throw new HttpError(500, "sheet_member_row_lookup_failed", rowMapFallbackError.message);
+      }
+
+      sourceRowNumber = rowMapFallback?.source_row_number ?? null;
+      if (sourceRowNumber) {
+        const { error: rowMapUpsertError } = await supabaseAdmin
+          .from("sheet_member_rows")
+          .upsert(
+            {
+              member_id: queueRow.member_id,
+              source_sheet_id: sourceSheetId,
+              source_gid: sourceGid,
+              source_row_number: sourceRowNumber,
+              source_updated_at: new Date().toISOString(),
+            },
+            { onConflict: "member_id,source_sheet_id,source_gid" },
+          );
+
+        if (rowMapUpsertError) {
+          throw new HttpError(500, "sheet_member_row_upsert_failed", rowMapUpsertError.message, {
+            member_id: queueRow.member_id,
+            source_sheet_id: sourceSheetId,
+            source_gid: sourceGid,
+          });
+        }
+      }
+    }
   }
 
   if (!sourceRowNumber) {
