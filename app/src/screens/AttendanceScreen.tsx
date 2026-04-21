@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,7 +8,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import type { AttendanceStatus, EventDetail, SquadGroup } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
@@ -23,105 +22,7 @@ type AttendanceScreenProps = {
 
 type SelectableAttendanceStatus = Exclude<AttendanceStatus, "no_response">;
 
-type EnqueueResponsePayload = {
-  status?: string;
-  queue_id?: number;
-  event_id?: string;
-  event_resolution?: string;
-  error?: string;
-  message?: string;
-};
-
 const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
-const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
-const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
-const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
-
-function parseBooleanEnv(rawValue: string | undefined): boolean {
-  const normalized = (rawValue ?? "").trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
-}
-
-function resolveAttendanceWriteFunctionUrl(): string | null {
-  const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
-  if (explicitUrl) {
-    return explicitUrl;
-  }
-
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-  if (!supabaseUrl) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(supabaseUrl);
-    const projectRef = parsed.hostname.split(".")[0]?.trim();
-    if (!projectRef) {
-      return null;
-    }
-    return `https://${projectRef}.functions.supabase.co/${ATTENDANCE_WRITE_FUNCTION_NAME}`;
-  } catch {
-    return null;
-  }
-}
-
-function attendanceRatioFromStatus(status: SelectableAttendanceStatus): number {
-  if (status === "going") {
-    return 1;
-  }
-  if (status === "maybe") {
-    return 0.5;
-  }
-  return 0;
-}
-
-function extractEventDateFromStartsAt(startsAt: string): string | null {
-  const directMatch = startsAt.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (directMatch) {
-    return directMatch[1];
-  }
-
-  const parsedDate = new Date(startsAt);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return null;
-  }
-
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Warsaw",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(parsedDate);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  return `${year}-${month}-${day}`;
-}
-
-function extractEnqueueErrorMessage(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") {
-    return null;
-  }
-
-  const candidate = payload as Record<string, unknown>;
-  const message = typeof candidate.message === "string" ? candidate.message.trim() : "";
-  if (message) {
-    return message;
-  }
-
-  const error = typeof candidate.error === "string" ? candidate.error.trim() : "";
-  if (error) {
-    return error;
-  }
-
-  return null;
-}
 
 function sortGroupsByInstrument(left: SquadGroup, right: SquadGroup) {
   if (left.instrument === UNKNOWN_INSTRUMENT_LABEL) {
@@ -169,19 +70,10 @@ function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
 
 export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
   const [isDeclinedVisible, setIsDeclinedVisible] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState<AttendanceStatus>(event.attendanceSummary.userStatus);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitInfo, setSubmitInfo] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
-  const canWriteFromApp = Boolean(
-    ATTENDANCE_WRITE_UI_ENABLED &&
-      supabaseAuthClient &&
-      ATTENDANCE_WRITE_FUNCTION_URL,
-  );
+  const selectedStatus = event.attendanceSummary.userStatus;
 
   const options: Array<{ key: SelectableAttendanceStatus; label: string }> = [
     { key: "going", label: tr("Będę", "Going") },
@@ -189,128 +81,19 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
     { key: "not_going", label: tr("Nie będę", "Not going") },
   ];
 
-  useEffect(() => {
-    setSelectedStatus(event.attendanceSummary.userStatus);
-    setSubmitInfo(null);
-    setSubmitError(null);
-    setIsSubmitting(false);
-  }, [event.id, event.attendanceSummary.userStatus]);
-
-  async function handleAttendanceSelect(nextStatus: SelectableAttendanceStatus) {
-    if (isSubmitting) {
-      return;
-    }
-
-    if (!canWriteFromApp || !supabaseAuthClient || !ATTENDANCE_WRITE_FUNCTION_URL) {
-      setSubmitInfo(null);
-      setSubmitError(
-        tr(
-          "Zapis obecności nie jest jeszcze skonfigurowany w tej wersji aplikacji.",
-          "Attendance write path is not configured in this app build yet.",
-        ),
-      );
-      return;
-    }
-
-    const eventDate = extractEventDateFromStartsAt(event.startsAt);
-    if (!eventDate) {
-      setSubmitInfo(null);
-      setSubmitError(
-        tr(
-          "Nie udało się odczytać daty wydarzenia potrzebnej do zapisania obecności.",
-          "Could not parse event date required for attendance update.",
-        ),
-      );
-      return;
-    }
-
-    setIsSubmitting(true);
-    setSubmitInfo(null);
-    setSubmitError(null);
-
-    try {
-      const { data: sessionData, error: sessionError } = await supabaseAuthClient.auth.getSession();
-      if (sessionError) {
-        throw new Error(sessionError.message);
-      }
-
-      const accessToken = sessionData.session?.access_token;
-      if (!accessToken) {
-        throw new Error(
-          tr(
-            "Brak aktywnej sesji. Zaloguj się ponownie i spróbuj jeszcze raz.",
-            "No active session. Please sign in again and retry.",
-          ),
-        );
-      }
-
-      const enqueueResponse = await fetch(ATTENDANCE_WRITE_FUNCTION_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          mode: "enqueue",
-          eventId: event.id,
-          eventDate,
-          eventTitle: event.title,
-          attendanceRatio: attendanceRatioFromStatus(nextStatus),
-          attendanceStatus: nextStatus,
-          requestNote: `attendance-screen:${event.id}`,
-        }),
-      });
-
-      let payload: EnqueueResponsePayload | null = null;
-      try {
-        payload = await enqueueResponse.json() as EnqueueResponsePayload;
-      } catch {
-        payload = null;
-      }
-
-      if (!enqueueResponse.ok) {
-        const message = extractEnqueueErrorMessage(payload) ??
-          tr("Nie udało się dodać zmiany obecności do kolejki.", "Failed to enqueue attendance change.");
-        throw new Error(message);
-      }
-
-      setSelectedStatus(nextStatus);
-      const queueId = typeof payload?.queue_id === "number" ? payload.queue_id : null;
-      setSubmitInfo(
-        queueId != null
-          ? tr(`Zapis dodany do kolejki (#${queueId}).`, `Queued successfully (#${queueId}).`)
-          : tr("Zapis dodany do kolejki.", "Queued successfully."),
-      );
-    } catch (error) {
-      setSubmitError(
-        error instanceof Error && error.message
-          ? error.message
-          : tr("Nie udało się zapisać obecności.", "Could not save attendance."),
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   const responseSelector = (
     <View style={styles.responseSelectorWrap}>
       <View style={styles.responseSelector}>
         {options.map((option) => {
           const isActive = selectedStatus === option.key;
-          const isDisabled = isSubmitting || !canWriteFromApp;
 
           return (
-            <Pressable
+            <View
               key={option.key}
-              onPress={() => {
-                void handleAttendanceSelect(option.key);
-              }}
-              disabled={isDisabled}
               style={[
                 styles.responsePill,
                 isActive && styles.responsePillActive,
                 !isDesktop && styles.responsePillMobile,
-                isDisabled && canWriteFromApp && styles.responsePillDisabled,
               ]}
             >
               <Text
@@ -322,33 +105,19 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
                 {option.label}
               </Text>
               <Text style={styles.responsePillMeta}>
-                {!canWriteFromApp
-                  ? (isActive ? tr("Zaimportowane", "Imported") : tr("Tylko odczyt", "Read-only"))
-                  : (isSubmitting && isActive
-                    ? tr("Zapisywanie...", "Saving...")
-                    : (isActive ? tr("Wybrane", "Selected") : tr("Kliknij aby ustawić", "Tap to set")))}
+                {isActive ? tr("Zaimportowane RSVP", "Imported RSVP") : tr("Tylko podgląd", "Preview only")}
               </Text>
-            </Pressable>
+            </View>
           );
         })}
       </View>
 
-      {!canWriteFromApp ? (
-        <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
-          {ATTENDANCE_WRITE_UI_ENABLED
-            ? tr(
-                "Ta kompilacja działa w trybie podglądu. Włącz EXPO_PUBLIC_SUPABASE_URL i funkcję attendance_write_sheet_first, aby zapisywać obecność z panelu.",
-                "This build is in preview mode. Configure EXPO_PUBLIC_SUPABASE_URL and attendance_write_sheet_first to enable updates from the panel.",
-              )
-            : tr(
-                "Źródłem prawdy pozostaje arkusz obecności. Zmiany z panelu są obecnie wyłączone w tym buildzie.",
-                "Attendance sheet remains the source of truth. Panel writes are currently disabled in this build.",
-              )}
-        </Text>
-      ) : null}
-
-      {submitInfo ? <Text style={[styles.responseNotice, styles.responseNoticeSuccess]}>{submitInfo}</Text> : null}
-      {submitError ? <Text style={[styles.responseNotice, styles.responseNoticeError]}>{submitError}</Text> : null}
+      <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
+        {tr(
+          "To jest tylko deklaracja RSVP z wydarzenia. Faktyczną obecność wpisujesz osobno w panelu zarządu (Profil -> Rejestr faktycznej obecności).",
+          "This is RSVP declaration preview only. Actual attendance is recorded separately in the management panel (Profile -> Actual attendance register).",
+        )}
+      </Text>
     </View>
   );
 
@@ -369,44 +138,34 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
         <View style={styles.headerSplitDesktop}>
           <SurfaceCard variant="default" style={styles.headerPrimary}>
             <Text style={styles.cardEyebrow}>
-              {tr("Obecność i skład", "Attendance and roster")}
+              {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
             </Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
             <Text style={styles.cardSecondary}>
-              {canWriteFromApp
-                ? tr(
-                    "Zmiana odpowiedzi trafia do kolejki zapisu, aktualizuje arkusz obecności i uruchamia synchronizację do bazy.",
-                    "Response updates are queued, written to the attendance sheet, and then synchronized to the database.",
-                  )
-                : tr(
-                    "W tym buildzie zmiana odpowiedzi z panelu jest wyłączona. Dane pochodzą z ostatniej synchronizacji arkusza.",
-                    "Panel writes are disabled in this build. Data comes from the latest sheet sync.",
-                  )}
+              {tr(
+                "Ten ekran pokazuje deklaracje do wydarzenia oraz skład. Faktyczna obecność jest zatwierdzana osobno przez zarząd.",
+                "This screen shows event declarations and roster. Actual attendance is approved separately by management.",
+              )}
             </Text>
             <AttendanceSummaryStrip summary={event.attendanceSummary} />
           </SurfaceCard>
 
           <SurfaceCard variant="outline" style={styles.headerSecondary}>
-            <Text style={styles.cardEyebrow}>{tr("Twoja odpowiedź", "Your response")}</Text>
+            <Text style={styles.cardEyebrow}>{tr("Twoja deklaracja RSVP", "Your RSVP declaration")}</Text>
             {responseSelector}
           </SurfaceCard>
         </View>
       ) : (
         <SurfaceCard variant="default">
           <Text style={styles.cardEyebrow}>
-            {tr("Obecność i skład", "Attendance and roster")}
+            {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
           </Text>
           <Text style={styles.screenTitle}>{event.title}</Text>
           <Text style={styles.cardSecondary}>
-            {canWriteFromApp
-              ? tr(
-                  "Zmiana odpowiedzi jest kolejowana, zapisywana do arkusza i synchronizowana do bazy.",
-                  "Response updates are queued, written to the sheet, and synchronized to the database.",
-                )
-              : tr(
-                  "Widok tylko do odczytu z ostatniej synchronizacji arkusza.",
-                  "Read-only view from the latest sheet sync.",
-                )}
+            {tr(
+              "Widok deklaracji do wydarzenia. Faktyczna obecność jest odklikana osobno przez zarząd.",
+              "Event declaration preview. Actual attendance is marked separately by management.",
+            )}
           </Text>
 
           <View style={styles.mobileSummaryRow}>
@@ -415,7 +174,7 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
 
           <View style={styles.mobileResponseBlock}>
             <Text style={styles.mobileResponseTitle}>
-              {tr("Twoja odpowiedź", "Your response")}
+              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
             </Text>
             {responseSelector}
           </View>
@@ -431,12 +190,12 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
         <Text style={styles.sectionCopy}>
           {isDesktop
             ? tr(
-                "Obecność i skład są teraz pokazane w jednym, grupowanym układzie.",
-                "Attendance and squad composition now live in one grouped layout.",
+                "To podgląd składu oparty o deklaracje z wydarzenia, pomocny jako podpowiedź przed wpisem faktycznej obecności.",
+                "This roster is based on event declarations and works as a hint before actual attendance is recorded.",
               )
             : tr(
-                "Jeden grupowany widok zamiast oddzielnych stron obecności i składu.",
-                "One grouped roster instead of separate attendance and squad pages.",
+                "To podgląd oparty o deklaracje, nie zatwierdzona faktyczna obecność.",
+                "This preview is declaration-based, not approved actual attendance.",
               )}
         </Text>
       </View>
@@ -559,67 +318,52 @@ const styles = StyleSheet.create({
   },
   responseSelectorWrap: {
     gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.xs,
   },
   responseSelector: {
     flexDirection: "row",
+    gap: tokens.spacing.xs,
     flexWrap: "wrap",
-    gap: tokens.spacing.sm,
   },
   responsePill: {
-    minWidth: 118,
-    borderRadius: tokens.radii.lg,
+    flex: 1,
+    minWidth: 110,
+    borderRadius: tokens.radii.round,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    paddingHorizontal: tokens.spacing.md,
+    backgroundColor: tokens.colors.surfaceMuted,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surface,
     gap: 2,
   },
   responsePillMobile: {
-    flex: 1,
-  },
-  responsePillDisabled: {
-    opacity: 0.72,
+    minWidth: 94,
   },
   responsePillActive: {
-    borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
   },
   responsePillLabel: {
-    fontSize: tokens.typography.body,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
     fontWeight: "700",
-    color: tokens.colors.ink,
   },
   responsePillLabelActive: {
     color: tokens.colors.brand,
   },
   responsePillMeta: {
-    fontSize: tokens.typography.caption,
+    fontSize: 11,
     color: tokens.colors.muted,
   },
   responseNotice: {
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
     fontSize: tokens.typography.caption,
     lineHeight: 18,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
   },
   responseNoticeInfo: {
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    color: tokens.colors.muted,
-  },
-  responseNoticeSuccess: {
-    borderColor: tokens.colors.successInk,
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
-  },
-  responseNoticeError: {
-    borderColor: tokens.colors.dangerInk,
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
+    backgroundColor: tokens.colors.brandTint,
+    color: tokens.colors.brand,
   },
   sectionHeader: {
     gap: tokens.spacing.xs,
@@ -632,16 +376,16 @@ const styles = StyleSheet.create({
   },
   sectionCopy: {
     fontSize: tokens.typography.body,
-    lineHeight: 22,
+    lineHeight: 23,
     color: tokens.colors.muted,
   },
   declinedSection: {
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.md,
   },
   declinedToggle: {
+    borderRadius: tokens.radii.md,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.surface,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
@@ -659,5 +403,6 @@ const styles = StyleSheet.create({
   declinedToggleMeta: {
     fontSize: tokens.typography.caption,
     color: tokens.colors.muted,
+    fontWeight: "700",
   },
 });

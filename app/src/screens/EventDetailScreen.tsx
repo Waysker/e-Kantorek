@@ -78,7 +78,7 @@ export function EventDetailScreen({
             <View style={styles.cardActionRow}>
               <View style={styles.cardActionCopy}>
                 <Text style={styles.cardEyebrow}>
-                  {tr("Obecność i skład", "Attendance and roster")}
+                  {tr("Deklaracje RSVP i skład", "RSVP declarations and roster")}
                 </Text>
               </View>
               <Pressable onPress={onOpenAttendance} style={styles.inlineButton}>

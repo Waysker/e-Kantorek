@@ -7,11 +7,16 @@ export type AppRoute =
   | { name: "attendance"; eventId: string }
   | { name: "setlist"; eventId: string }
   | { name: "squad"; eventId: string }
+  | { name: "attendanceManager" }
   | { name: "attendanceSetup" }
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
-  if (route.name === "profile" || route.name === "attendanceSetup") {
+  if (
+    route.name === "profile" ||
+    route.name === "attendanceSetup" ||
+    route.name === "attendanceManager"
+  ) {
     return "profile";
   }
 

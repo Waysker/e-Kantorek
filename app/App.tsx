@@ -22,6 +22,7 @@ import { FeedScreen } from "./src/screens/FeedScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
 import { AttendanceSetupScreen } from "./src/screens/AttendanceSetupScreen";
+import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
@@ -458,6 +459,7 @@ export default function App() {
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
   const canManageAttendanceSetup =
     effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
+  const canManageActualAttendance = canManageAttendanceSetup;
 
   function openTab(tab: PrimaryTab) {
     if (tab === "feed") {
@@ -575,11 +577,26 @@ export default function App() {
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
             canManageAttendanceSetup={canManageAttendanceSetup}
+            canManageActualAttendance={canManageActualAttendance}
             onOpenAttendanceSetup={
               canManageAttendanceSetup
                 ? () => setRoute({ name: "attendanceSetup" })
                 : undefined
             }
+            onOpenAttendanceManager={
+              canManageActualAttendance
+                ? () => setRoute({ name: "attendanceManager" })
+                : undefined
+            }
+          />
+        );
+      case "attendanceManager":
+        return canManageActualAttendance ? (
+          <AttendanceManagerScreen onBack={() => setRoute({ name: "profile" })} />
+        ) : (
+          <MissingEventScreen
+            onBack={() => setRoute({ name: "profile" })}
+            title={tr("Brak uprawnień", "No permission")}
           />
         );
       case "attendanceSetup":

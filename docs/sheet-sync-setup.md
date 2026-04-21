@@ -140,9 +140,9 @@ Stale attendance cleanup:
 - write-mode run now prunes stale `attendance_entries` for events touched in the current sync
 - this means blanked cells in source sheets are reflected in Supabase for those events
 
-## Phase A write path: app -> queue -> Google Sheet -> sync
+## Phase A write path: management panel -> queue -> Google Sheet -> sync
 
-This enables user edits while Google Sheet remains source of truth.
+Google Sheet remains source of truth. Event RSVP screen stays read-only; actual attendance is written by leader/admin panel.
 
 ### 1. Apply migration
 
@@ -180,6 +180,7 @@ Set on project:
   - `ATTENDANCE_WRITE_PROCESS_BATCH_SIZE` (default `25`)
   - `ATTENDANCE_WRITE_MAX_ATTEMPTS` (default `5`)
   - `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK` (default `false`; when `false`, process mode fails if sync trigger cannot run)
+  - `ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES` (default `false`; keep disabled for management-only writes)
 
 `sheet_to_supabase_sync` still needs:
 
@@ -316,14 +317,14 @@ curl -sS -X POST \
 Expected: if at least one queue row is applied to Sheet, the worker run should also include a successful `sync_trigger`.  
 If `SHEET_TO_SUPABASE_SYNC_URL` is missing (and fallback flag is not enabled), process mode returns failed status by design.
 
-Enqueue mode (user access token, not worker token):
+Enqueue mode (leader/admin user access token, not worker token):
 
 ```bash
 curl -sS -X POST \
   "https://<project-ref>.functions.supabase.co/attendance_write_sheet_first" \
   -H "Authorization: Bearer <USER_SUPABASE_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"eventId":"<event_id>","attendanceRatio":0.75}'
+  -d '{"eventId":"<event_id>","memberId":"<member_id>","attendanceRatio":1,"source":"manager_panel"}'
 ```
 
 ### 7. Observe queue + worker

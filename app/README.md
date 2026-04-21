@@ -133,8 +133,10 @@ Cloud-ready mode:
 - Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
 - Supabase Edge Function write path:
   - `supabase/functions/attendance_write_sheet_first/index.ts`
-- Attendance response writes from app UI:
-  - gate switch: `EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED` (default disabled; enable only after sheet-first pipeline is deployed)
+- Actual attendance writes (leader/admin panel):
+  - member RSVP on event screen is read-only preview
+  - write path is used by dedicated management page (`Profil -> Rejestr faktycznej obecności`)
+  - gate switch: `EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED` (default disabled; enable after pipeline deploy)
   - optional explicit URL: `EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL`
   - if omitted, app derives function URL from `EXPO_PUBLIC_SUPABASE_URL`
 - Function CORS allowlist (for GitHub Pages / web app):
@@ -142,6 +144,8 @@ Cloud-ready mode:
 - Post-write DB sync policy:
   - default: `attendance_write_sheet_first` expects `SHEET_TO_SUPABASE_SYNC_URL` and marks worker run failed if sync trigger cannot run
   - optional fallback: set `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK=true` to allow relying only on scheduled `sheet_to_supabase_sync`
+  - self-service declaration writes are disabled by default; enable only if needed:
+    `ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES=true`
 
 Scheduling / trigger:
 

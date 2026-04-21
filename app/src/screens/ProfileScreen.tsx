@@ -39,7 +39,9 @@ export function ProfileScreen({
   signedInEmail,
   onSignOut,
   canManageAttendanceSetup,
+  canManageActualAttendance,
   onOpenAttendanceSetup,
+  onOpenAttendanceManager,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -47,7 +49,9 @@ export function ProfileScreen({
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
   canManageAttendanceSetup?: boolean;
+  canManageActualAttendance?: boolean;
   onOpenAttendanceSetup?: () => void;
+  onOpenAttendanceManager?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
@@ -104,6 +108,28 @@ export function ProfileScreen({
           <Pressable style={styles.manageButton} onPress={onOpenAttendanceSetup}>
             <Text style={styles.manageButtonLabel}>
               {tr("Otwórz konfigurację", "Open setup")}
+            </Text>
+          </Pressable>
+        </SurfaceCard>
+      ) : null}
+
+      {canManageActualAttendance && onOpenAttendanceManager ? (
+        <SurfaceCard variant="default">
+          <Text style={styles.cardEyebrow}>
+            {tr("Narzędzia zarządu", "Management tools")}
+          </Text>
+          <Text style={styles.cardTitle}>
+            {tr("Rejestr faktycznej obecności", "Actual attendance register")}
+          </Text>
+          <Text style={styles.cardBody}>
+            {tr(
+              "Oddzielny panel do odklikiwania kto realnie był obecny. Obejmuje mapowane wydarzenia oraz próby wtorek/czwartek.",
+              "Separate panel for marking who was actually present. Includes mapped events and Tuesday/Thursday rehearsals.",
+            )}
+          </Text>
+          <Pressable style={styles.manageButton} onPress={onOpenAttendanceManager}>
+            <Text style={styles.manageButtonLabel}>
+              {tr("Otwórz rejestr", "Open register")}
             </Text>
           </Pressable>
         </SurfaceCard>

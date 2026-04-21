@@ -6,6 +6,7 @@ type ProfileRow = {
   last_name: string;
   full_name: string;
   instrument: string;
+  role: string | null;
 };
 
 type MemberCandidate = {
@@ -94,6 +95,10 @@ const SHEET_TO_SUPABASE_SYNC_TOKEN = Deno.env.get("SHEET_TO_SUPABASE_SYNC_TOKEN"
 const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));
 const ALLOW_CRON_SYNC_FALLBACK = parseBooleanEnv(
   Deno.env.get("ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK"),
+  false,
+);
+const ALLOW_SELF_SERVICE_DECLARATION_WRITES = parseBooleanEnv(
+  Deno.env.get("ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES"),
   false,
 );
 
@@ -457,7 +462,7 @@ async function loadProfile(
 ): Promise<ProfileRow> {
   const { data, error } = await supabaseAdmin
     .from("profiles")
-    .select("id,first_name,last_name,full_name,instrument")
+    .select("id,first_name,last_name,full_name,instrument,role")
     .eq("id", profileId)
     .maybeSingle<ProfileRow>();
 
@@ -770,6 +775,7 @@ async function enqueueAttendanceChange(
     requestedByProfileId: string;
     requestedByLabel: string;
     requestNote: string | null;
+    source: string;
     sourceSheetId: string;
     sourceGid: string;
     sourceColumn: string;
@@ -785,7 +791,7 @@ async function enqueueAttendanceChange(
     requested_by_profile_id: payload.requestedByProfileId,
     requested_by_label: payload.requestedByLabel,
     request_note: payload.requestNote,
-    source: "app",
+    source: payload.source,
     source_sheet_id: payload.sourceSheetId,
     source_gid: payload.sourceGid,
     source_column: payload.sourceColumn,
@@ -854,6 +860,35 @@ async function enqueueAttendanceChange(
   }
 
   return updatedRow;
+}
+
+function normalizeProfileRole(rawRole: string | null): "member" | "leader" | "admin" {
+  const normalized = normalizeWhitespace(rawRole ?? "").toLowerCase();
+  if (normalized === "admin") {
+    return "admin";
+  }
+  if (normalized === "leader") {
+    return "leader";
+  }
+  return "member";
+}
+
+async function ensureMemberExists(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  memberId: string,
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("members")
+    .select("member_id")
+    .eq("member_id", memberId)
+    .maybeSingle<{ member_id: string }>();
+
+  if (error) {
+    throw new HttpError(500, "member_lookup_failed", error.message);
+  }
+  if (!data?.member_id) {
+    throw new HttpError(404, "member_not_found", `Member ${memberId} was not found.`);
+  }
 }
 
 async function maybeTriggerSheetSync(): Promise<{ triggered: boolean; ok: boolean; status?: number; message?: string }> {
@@ -939,7 +974,38 @@ async function handleEnqueueMode(
   const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
   const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
 
-  const memberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+  const explicitMemberId = normalizeWhitespace(body.memberId ?? body.member_id ?? "");
+  const targetMemberId = explicitMemberId || actorMemberId;
+  const profileRole = normalizeProfileRole(profile.role);
+  const hasManagerPrivileges = profileRole === "leader" || profileRole === "admin";
+  const isSelfWrite = targetMemberId === actorMemberId;
+
+  if (isSelfWrite && !ALLOW_SELF_SERVICE_DECLARATION_WRITES && !hasManagerPrivileges) {
+    throw new HttpError(
+      403,
+      "self_declaration_write_disabled",
+      "Self-service declaration writes are disabled. Use the management attendance panel.",
+    );
+  }
+
+  if (!isSelfWrite && !hasManagerPrivileges) {
+    throw new HttpError(
+      403,
+      "insufficient_role_for_target_member",
+      "Only leader/admin can set attendance for other members.",
+    );
+  }
+
+  if (targetMemberId !== actorMemberId) {
+    await ensureMemberExists(supabaseAdmin, targetMemberId);
+  }
+
+  const sourceRaw = normalizeWhitespace(body.source ?? "");
+  const source = sourceRaw
+    ? sourceRaw.toLowerCase().slice(0, 64)
+    : (hasManagerPrivileges ? "manager_panel" : "self_service");
+
   const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
     eventIdInput,
     eventDateInput,
@@ -947,18 +1013,19 @@ async function handleEnqueueMode(
   });
   const eventId = resolvedEvent.eventId;
   const coordinates = await resolveSourceCoordinates(supabaseAdmin, {
-    member_id: memberId,
+    member_id: targetMemberId,
     event_id: eventId,
   });
 
   const queueRow = await enqueueAttendanceChange(supabaseAdmin, {
-    memberId,
+    memberId: targetMemberId,
     eventId,
     attendanceRatio: ratio,
     requestedRawValue: rawValue,
     requestedByProfileId: profile.id,
     requestedByLabel: profile.full_name,
     requestNote,
+    source,
     sourceSheetId: coordinates.sourceSheetId,
     sourceGid: coordinates.sourceGid,
     sourceColumn: coordinates.sourceColumn,
@@ -971,7 +1038,11 @@ async function handleEnqueueMode(
     action: "attendance_write_enqueued",
     actor: `profile:${profile.id}`,
     payload: {
-      member_id: memberId,
+      actor_member_id: actorMemberId,
+      member_id: targetMemberId,
+      is_self_write: isSelfWrite,
+      profile_role: profileRole,
+      source,
       event_id: eventId,
       attendance_ratio: ratio,
       requested_event_id: eventIdInput || null,
@@ -990,7 +1061,11 @@ async function handleEnqueueMode(
   return jsonResponse({
     status: "queued",
     queue_id: queueRow.id,
-    member_id: memberId,
+    member_id: targetMemberId,
+    actor_member_id: actorMemberId,
+    is_self_write: isSelfWrite,
+    profile_role: profileRole,
+    source,
     requested_event_id: eventIdInput || null,
     event_id: eventId,
     event_resolution: resolvedEvent.resolution,
