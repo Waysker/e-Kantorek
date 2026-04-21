@@ -341,8 +341,8 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
                 "This build is in preview mode. Configure EXPO_PUBLIC_SUPABASE_URL and attendance_write_sheet_first to enable updates from the panel.",
               )
             : tr(
-                "Deklaracje obecności są obecnie synchronizowane z forum (źródło prawdy). Zmiany z panelu są wyłączone.",
-                "Attendance declarations are currently synced from the forum (source of truth). Panel writes are disabled.",
+                "Źródłem prawdy pozostaje arkusz obecności. Zmiany z panelu są obecnie wyłączone w tym buildzie.",
+                "Attendance sheet remains the source of truth. Panel writes are currently disabled in this build.",
               )}
         </Text>
       ) : null}
@@ -375,12 +375,12 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
             <Text style={styles.cardSecondary}>
               {canWriteFromApp
                 ? tr(
-                    "Zmiana odpowiedzi trafia do kolejki zapisu i jest synchronizowana z arkuszem obecności.",
-                    "Response updates are queued and synchronized with the attendance sheet.",
+                    "Zmiana odpowiedzi trafia do kolejki zapisu, aktualizuje arkusz obecności i uruchamia synchronizację do bazy.",
+                    "Response updates are queued, written to the attendance sheet, and then synchronized to the database.",
                   )
                 : tr(
-                    "Wersja tylko do odczytu z forum. Najważniejszy element to grupowanie sekcji poniżej.",
-                    "Read-only forum prototype. The important part in this phase is the grouped section roster below.",
+                    "W tym buildzie zmiana odpowiedzi z panelu jest wyłączona. Dane pochodzą z ostatniej synchronizacji arkusza.",
+                    "Panel writes are disabled in this build. Data comes from the latest sheet sync.",
                   )}
             </Text>
             <AttendanceSummaryStrip summary={event.attendanceSummary} />
@@ -400,12 +400,12 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
           <Text style={styles.cardSecondary}>
             {canWriteFromApp
               ? tr(
-                  "Zmiana odpowiedzi jest kolejowana i zapisywana do arkusza obecności.",
-                  "Response updates are queued and written to the attendance sheet.",
+                  "Zmiana odpowiedzi jest kolejowana, zapisywana do arkusza i synchronizowana do bazy.",
+                  "Response updates are queued, written to the sheet, and synchronized to the database.",
                 )
               : tr(
-                  "Dane na żywo z ankiety forum, tylko do odczytu.",
-                  "Live read-only import from the forum poll.",
+                  "Widok tylko do odczytu z ostatniej synchronizacji arkusza.",
+                  "Read-only view from the latest sheet sync.",
                 )}
           </Text>
 
