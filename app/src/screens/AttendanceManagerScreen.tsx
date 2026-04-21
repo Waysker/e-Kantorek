@@ -47,18 +47,20 @@ type EnqueueResponsePayload = {
   message?: string;
 };
 
+type CalendarCell = {
+  date: string;
+  inCurrentMonth: boolean;
+};
+
+type GroupSummary = {
+  present: number;
+  absent: number;
+  unknown: number;
+};
+
 const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
 const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
 const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
-const REHEARSAL_KEYWORDS = [
-  "proba",
-  "próba",
-  "rehearsal",
-  "wtorek",
-  "czwartek",
-  "tuesday",
-  "thursday",
-];
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
@@ -94,13 +96,6 @@ function normalizeWhitespace(value: unknown): string {
     .trim();
 }
 
-function normalizeSearchText(value: string): string {
-  return normalizeWhitespace(value)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-}
-
 function parseIsoDateAsLocalNoon(isoDate: string): Date {
   return new Date(`${isoDate}T12:00:00`);
 }
@@ -116,11 +111,48 @@ function weekdayMonToSun(date: Date): number {
   return date.getDay() === 0 ? 7 : date.getDay();
 }
 
-function isRehearsalLikeSession(session: SessionRow): boolean {
-  const haystack = normalizeSearchText(
-    [session.title, session.source_header, session.source_column].filter(Boolean).join(" "),
-  );
-  return REHEARSAL_KEYWORDS.some((keyword) => haystack.includes(keyword));
+function getMonthKeyFromIsoDate(isoDate: string): string {
+  return isoDate.slice(0, 7);
+}
+
+function parseMonthKey(monthKey: string): Date {
+  return new Date(`${monthKey}-01T12:00:00`);
+}
+
+function shiftMonthKey(monthKey: string, delta: number): string {
+  const date = parseMonthKey(monthKey);
+  date.setMonth(date.getMonth() + delta);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(monthKey: string): string {
+  const label = new Intl.DateTimeFormat("pl-PL", {
+    month: "long",
+    year: "numeric",
+  }).format(parseMonthKey(monthKey));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function buildCalendarCells(monthKey: string): CalendarCell[] {
+  const monthStart = parseMonthKey(monthKey);
+  const offsetToMonday = weekdayMonToSun(monthStart) - 1;
+  const gridStart = new Date(monthStart);
+  gridStart.setDate(gridStart.getDate() - offsetToMonday);
+
+  const cells: CalendarCell[] = [];
+  for (let index = 0; index < 42; index += 1) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    const isoDate = toIsoDateLocal(date);
+
+    cells.push({
+      date: isoDate,
+      inCurrentMonth: getMonthKeyFromIsoDate(isoDate) === monthKey,
+    });
+  }
+
+  return cells;
 }
 
 function markFromRatio(attendanceRatio: number | undefined): AttendanceMark {
@@ -211,6 +243,25 @@ function groupMembersByInstrument(members: MemberRow[]): Array<{ instrument: str
     .sort((left, right) => left.instrument.localeCompare(right.instrument, "pl"));
 }
 
+function summarizeGroupMarks(members: MemberRow[], entriesByMemberId: Record<string, number>): GroupSummary {
+  let present = 0;
+  let absent = 0;
+  let unknown = 0;
+
+  for (const member of members) {
+    const mark = markFromRatio(entriesByMemberId[member.member_id]);
+    if (mark === "present") {
+      present += 1;
+    } else if (mark === "absent") {
+      absent += 1;
+    } else {
+      unknown += 1;
+    }
+  }
+
+  return { present, absent, unknown };
+}
+
 export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
@@ -219,6 +270,9 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [entriesByMemberId, setEntriesByMemberId] = useState<Record<string, number>>({});
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDateLocal(new Date()));
+  const [visibleMonthKey, setVisibleMonthKey] = useState<string>(() => getMonthKeyFromIsoDate(toIsoDateLocal(new Date())));
+  const [expandedInstruments, setExpandedInstruments] = useState<Record<string, boolean>>({});
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
   const [isSavingByMemberId, setIsSavingByMemberId] = useState<Record<string, boolean>>({});
@@ -229,6 +283,20 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     ATTENDANCE_WRITE_UI_ENABLED &&
       supabaseAuthClient &&
       ATTENDANCE_WRITE_FUNCTION_URL,
+  );
+
+  const todayIso = useMemo(() => toIsoDateLocal(new Date()), []);
+  const weekdayLabels = useMemo(
+    () => [
+      tr("Pon", "Mon"),
+      tr("Wt", "Tue"),
+      tr("Śr", "Wed"),
+      tr("Czw", "Thu"),
+      tr("Pt", "Fri"),
+      tr("Sob", "Sat"),
+      tr("Niedz", "Sun"),
+    ],
+    [],
   );
 
   useEffect(() => {
@@ -280,9 +348,11 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
       if (loadedSessions.length > 0) {
         const defaultSession = chooseDefaultSession(loadedSessions);
-        setSelectedSessionId(defaultSession?.event_id ?? loadedSessions[0].event_id);
-      } else {
-        setSelectedSessionId(null);
+        if (defaultSession) {
+          setSelectedSessionId(defaultSession.event_id);
+          setSelectedDate(defaultSession.event_date);
+          setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
+        }
       }
 
       setIsBootLoading(false);
@@ -294,6 +364,49 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       isCancelled = true;
     };
   }, []);
+
+  const sessionsByDate = useMemo(() => {
+    const grouped = new Map<string, SessionRow[]>();
+    const sorted = [...sessions].sort((left, right) => {
+      const byDate = left.event_date.localeCompare(right.event_date);
+      if (byDate !== 0) {
+        return byDate;
+      }
+      return left.title.localeCompare(right.title, "pl");
+    });
+
+    for (const session of sorted) {
+      const bucket = grouped.get(session.event_date) ?? [];
+      bucket.push(session);
+      grouped.set(session.event_date, bucket);
+    }
+
+    return grouped;
+  }, [sessions]);
+
+  const expectedRehearsalSet = useMemo(() => {
+    return new Set(buildExpectedRehearsalDates(new Date(), 20, 20));
+  }, []);
+
+  const calendarCells = useMemo(() => buildCalendarCells(visibleMonthKey), [visibleMonthKey]);
+
+  const selectedDateSessions = useMemo(() => {
+    return sessionsByDate.get(selectedDate) ?? [];
+  }, [selectedDate, sessionsByDate]);
+
+  useEffect(() => {
+    const candidates = sessionsByDate.get(selectedDate) ?? [];
+    if (candidates.length === 0) {
+      if (selectedSessionId !== null) {
+        setSelectedSessionId(null);
+      }
+      return;
+    }
+
+    if (!selectedSessionId || !candidates.some((session) => session.event_id === selectedSessionId)) {
+      setSelectedSessionId(candidates[0].event_id);
+    }
+  }, [selectedDate, selectedSessionId, sessionsByDate]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -343,25 +456,15 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
   const memberGroups = useMemo(() => groupMembersByInstrument(members), [members]);
 
-  const mappedEventSessions = useMemo(() => sessions.slice(0, 80), [sessions]);
-
-  const rehearsalMappings = useMemo(() => {
-    const expectedDates = buildExpectedRehearsalDates(new Date());
-    const byDate = new Map<string, SessionRow[]>();
-    for (const session of sessions) {
-      const bucket = byDate.get(session.event_date) ?? [];
-      bucket.push(session);
-      byDate.set(session.event_date, bucket);
-    }
-
-    return expectedDates
-      .map((date) => {
-        const candidates = byDate.get(date) ?? [];
-        const preferred = candidates.find((session) => isRehearsalLikeSession(session)) ?? candidates[0] ?? null;
-        return { date, mappedSession: preferred };
-      })
-      .sort((left, right) => right.date.localeCompare(left.date));
-  }, [sessions]);
+  useEffect(() => {
+    setExpandedInstruments((current) => {
+      const next: Record<string, boolean> = {};
+      memberGroups.forEach((group, index) => {
+        next[group.instrument] = current[group.instrument] ?? index === 0;
+      });
+      return next;
+    });
+  }, [memberGroups]);
 
   async function handleSetAttendance(memberId: string, attendanceRatio: number) {
     if (!supabaseAuthClient || !ATTENDANCE_WRITE_FUNCTION_URL) {
@@ -492,156 +595,247 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       </SurfaceCard>
 
       <SurfaceCard variant="outline">
-        <Text style={styles.sectionTitle}>
-          {tr("Sesje z arkusza (mapowanie)", "Mapped sessions from sheet")}
+        <Text style={styles.sectionTitle}>{tr("Kalendarz sesji", "Session calendar")}</Text>
+        <Text style={styles.copy}>
+          {tr(
+            "Wybierz dzień z kalendarza, a poniżej sesję dla tego dnia. Liczba oznacza ile sesji jest w dacie; P oznacza planowaną próbę (wt/czw).",
+            "Pick a day from the calendar and then pick a session for that day. Number means how many sessions are on that date; R marks expected rehearsal days (Tue/Thu).",
+          )}
         </Text>
         {isBootLoading ? (
           <Text style={styles.copy}>{tr("Ładowanie sesji...", "Loading sessions...")}</Text>
-        ) : mappedEventSessions.length === 0 ? (
-          <Text style={styles.copy}>
-            {tr("Brak sesji w tabeli events. Najpierw uruchom sync.", "No sessions in events table. Run sync first.")}
-          </Text>
         ) : (
-          <View style={styles.chipGrid}>
-            {mappedEventSessions.map((session) => {
-              const isSelected = session.event_id === selectedSessionId;
-              return (
-                <Pressable
-                  key={session.event_id}
-                  onPress={() => setSelectedSessionId(session.event_id)}
-                  style={[styles.sessionChip, isSelected && styles.sessionChipActive]}
-                >
-                  <Text style={[styles.sessionChipDate, isSelected && styles.sessionChipDateActive]}>
-                    {formatDateLabel(`${session.event_date}T12:00:00`)}
-                  </Text>
-                  <Text style={[styles.sessionChipTitle, isSelected && styles.sessionChipTitleActive]}>
-                    {session.title}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-      </SurfaceCard>
-
-      <SurfaceCard variant="outline">
-        <Text style={styles.sectionTitle}>
-          {tr("Próby wtorek/czwartek (oczekiwane)", "Expected rehearsals (Tue/Thu)")}
-        </Text>
-        <Text style={styles.copy}>
-          {tr(
-            "Daty prób są generowane kalendarzowo (wt/czw) i mapowane do kolumn arkusza. Brak mapowania oznacza brak kolumny do odklikania.",
-            "Rehearsal dates are generated from calendar cadence (Tue/Thu) and mapped to sheet columns. Missing mapping means there is no column to click yet.",
-          )}
-        </Text>
-        <View style={styles.rehearsalGrid}>
-          {rehearsalMappings.map((item) => {
-            const isMapped = Boolean(item.mappedSession);
-            const isSelected = item.mappedSession?.event_id === selectedSessionId;
-
-            return (
+          <>
+            <View style={styles.monthHeader}>
               <Pressable
-                key={item.date}
-                disabled={!item.mappedSession}
-                onPress={() => setSelectedSessionId(item.mappedSession!.event_id)}
-                style={[
-                  styles.rehearsalChip,
-                  isMapped ? styles.rehearsalChipMapped : styles.rehearsalChipMissing,
-                  isSelected && styles.rehearsalChipActive,
-                ]}
+                onPress={() => setVisibleMonthKey((current) => shiftMonthKey(current, -1))}
+                style={styles.monthNavButton}
               >
-                <Text style={styles.rehearsalChipDate}>{formatDateLabel(`${item.date}T12:00:00`)}</Text>
-                <Text style={styles.rehearsalChipMeta}>
-                  {isMapped
-                    ? tr("zmapowane", "mapped")
-                    : tr("brak kolumny", "missing column")}
-                </Text>
+                <Text style={styles.monthNavButtonLabel}>{tr("Poprzedni", "Prev")}</Text>
               </Pressable>
-            );
-          })}
-        </View>
+              <Text style={styles.monthLabel}>{formatMonthLabel(visibleMonthKey)}</Text>
+              <Pressable
+                onPress={() => setVisibleMonthKey((current) => shiftMonthKey(current, 1))}
+                style={styles.monthNavButton}
+              >
+                <Text style={styles.monthNavButtonLabel}>{tr("Następny", "Next")}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.weekdayRow}>
+              {weekdayLabels.map((label) => (
+                <View key={label} style={styles.weekdayCell}>
+                  <Text style={styles.weekdayLabel}>{label}</Text>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {calendarCells.map((cell) => {
+                const sessionsForDate = sessionsByDate.get(cell.date) ?? [];
+                const hasSessions = sessionsForDate.length > 0;
+                const isSelected = cell.date === selectedDate;
+                const isToday = cell.date === todayIso;
+                const rehearsalExpected = expectedRehearsalSet.has(cell.date);
+                const rehearsalMissingMapping = rehearsalExpected && !hasSessions;
+
+                return (
+                  <Pressable
+                    key={cell.date}
+                    onPress={() => {
+                      setSelectedDate(cell.date);
+                      setVisibleMonthKey(getMonthKeyFromIsoDate(cell.date));
+                    }}
+                    style={[
+                      styles.dayCell,
+                      !cell.inCurrentMonth && styles.dayCellOutsideMonth,
+                      isSelected && styles.dayCellSelected,
+                      isToday && styles.dayCellToday,
+                      rehearsalMissingMapping && styles.dayCellGap,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayNumber,
+                        !cell.inCurrentMonth && styles.dayNumberOutsideMonth,
+                        isSelected && styles.dayNumberSelected,
+                      ]}
+                    >
+                      {String(Number(cell.date.slice(8, 10)))}
+                    </Text>
+
+                    <View style={styles.dayIndicators}>
+                      {hasSessions ? (
+                        <View style={[styles.dayPill, styles.dayPillEvents]}>
+                          <Text style={styles.dayPillLabel}>{sessionsForDate.length}</Text>
+                        </View>
+                      ) : null}
+                      {rehearsalExpected ? (
+                        <View
+                          style={[
+                            styles.dayPill,
+                            rehearsalMissingMapping ? styles.dayPillMissing : styles.dayPillRehearsal,
+                          ]}
+                        >
+                          <Text style={styles.dayPillLabel}>{tr("P", "R")}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text style={styles.legendText}>
+              {tr(
+                "Liczba = ilość sesji, P = plan próby wt/czw, czerwone P = brak mapowania kolumny na ten dzień.",
+                "Number = count of sessions, R = expected Tue/Thu rehearsal, red R = no mapped session for that day.",
+              )}
+            </Text>
+
+            <View style={styles.daySelectionBlock}>
+              <Text style={styles.daySelectionTitle}>
+                {tr("Wybrany dzień", "Selected day")}: {formatDateLabel(`${selectedDate}T12:00:00`)}
+              </Text>
+              {selectedDateSessions.length === 0 ? (
+                <Text style={[styles.notice, styles.noticeError]}>
+                  {tr(
+                    "Brak zmapowanej sesji dla tej daty. Najpierw dodaj/uzupełnij mapowanie w arkuszu i uruchom sync.",
+                    "No mapped session for this date. Add/fix mapping in sheet and run sync first.",
+                  )}
+                </Text>
+              ) : (
+                <View style={styles.sessionList}>
+                  {selectedDateSessions.map((session) => {
+                    const isSelected = session.event_id === selectedSessionId;
+                    const sourceMeta = normalizeWhitespace([session.source_header, session.source_column].filter(Boolean).join(" / "));
+
+                    return (
+                      <Pressable
+                        key={session.event_id}
+                        onPress={() => setSelectedSessionId(session.event_id)}
+                        style={[styles.sessionListItem, isSelected && styles.sessionListItemActive]}
+                      >
+                        <Text style={[styles.sessionListItemTitle, isSelected && styles.sessionListItemTitleActive]}>
+                          {session.title}
+                        </Text>
+                        <Text style={styles.sessionListItemMeta}>
+                          {sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          </>
+        )}
       </SurfaceCard>
 
       <SurfaceCard variant="default">
         <Text style={styles.sectionTitle}>{tr("Odklikiwanie obecności", "Mark attendance")}</Text>
         {selectedSession ? (
           <Text style={styles.copy}>
-            {tr("Wybrana sesja", "Selected session")}: {formatDateLabel(`${selectedSession.event_date}T12:00:00`)}
+            {tr("Aktywna sesja", "Active session")}: {formatDateLabel(`${selectedSession.event_date}T12:00:00`)}
             {" - "}
             {selectedSession.title}
           </Text>
         ) : (
-          <Text style={styles.copy}>{tr("Wybierz sesję powyżej.", "Choose a session above.")}</Text>
+          <Text style={styles.copy}>{tr("Wybierz sesję z kalendarza powyżej.", "Pick a session from calendar above.")}</Text>
         )}
         {isEntriesLoading ? (
           <Text style={styles.copy}>{tr("Ładowanie wpisów...", "Loading entries...")}</Text>
         ) : null}
       </SurfaceCard>
 
-      {memberGroups.map((group) => (
-        <SurfaceCard key={group.instrument} variant="outline">
-          <Text style={styles.instrumentTitle}>{group.instrument}</Text>
-          <View style={styles.memberRows}>
-            {group.members.map((member) => {
-              const ratio = entriesByMemberId[member.member_id];
-              const mark = markFromRatio(ratio);
-              const isSaving = Boolean(isSavingByMemberId[member.member_id]);
+      {memberGroups.map((group) => {
+        const isExpanded = Boolean(expandedInstruments[group.instrument]);
+        const summary = summarizeGroupMarks(group.members, entriesByMemberId);
 
-              return (
-                <View key={member.member_id} style={styles.memberRow}>
-                  <View style={styles.memberTextCol}>
-                    <Text style={styles.memberName}>{member.full_name}</Text>
-                    <Text
-                      style={[
-                        styles.memberMeta,
-                        mark === "present"
-                          ? styles.memberMetaPresent
-                          : mark === "absent"
-                            ? styles.memberMetaAbsent
-                            : null,
-                      ]}
-                    >
-                      {formatMarkLabel(mark)}
-                      {ratio != null ? ` (${Math.round(ratio * 100)}%)` : ""}
-                    </Text>
-                  </View>
+        return (
+          <SurfaceCard key={group.instrument} variant="outline">
+            <Pressable
+              onPress={() => {
+                setExpandedInstruments((current) => ({
+                  ...current,
+                  [group.instrument]: !current[group.instrument],
+                }));
+              }}
+              style={styles.instrumentHeader}
+            >
+              <View style={styles.instrumentHeaderTextCol}>
+                <Text style={styles.instrumentTitle}>{group.instrument}</Text>
+                <Text style={styles.instrumentSummary}>
+                  {tr("Ob", "P")}: {summary.present} · {tr("Nie", "A")}: {summary.absent} · {tr("Brak", "Unk")}: {summary.unknown}
+                </Text>
+              </View>
+              <Text style={styles.instrumentToggleLabel}>{isExpanded ? tr("Ukryj", "Hide") : tr("Pokaż", "Show")}</Text>
+            </Pressable>
 
-                  <View style={styles.memberActions}>
-                    <Pressable
-                      disabled={!canWrite || !selectedSession || isSaving}
-                      onPress={() => {
-                        void handleSetAttendance(member.member_id, 1);
-                      }}
-                      style={[
-                        styles.actionButton,
-                        mark === "present" && styles.actionButtonPresentActive,
-                      ]}
-                    >
-                      <Text style={[styles.actionButtonLabel, mark === "present" && styles.actionButtonLabelOn]}>
-                        {tr("Obecny", "Present")}
-                      </Text>
-                    </Pressable>
-                    <Pressable
-                      disabled={!canWrite || !selectedSession || isSaving}
-                      onPress={() => {
-                        void handleSetAttendance(member.member_id, 0);
-                      }}
-                      style={[
-                        styles.actionButton,
-                        mark === "absent" && styles.actionButtonAbsentActive,
-                      ]}
-                    >
-                      <Text style={[styles.actionButtonLabel, mark === "absent" && styles.actionButtonLabelOn]}>
-                        {tr("Nieobecny", "Absent")}
-                      </Text>
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </SurfaceCard>
-      ))}
+            {isExpanded ? (
+              <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
+                {group.members.map((member) => {
+                  const ratio = entriesByMemberId[member.member_id];
+                  const mark = markFromRatio(ratio);
+                  const isSaving = Boolean(isSavingByMemberId[member.member_id]);
+
+                  return (
+                    <View key={member.member_id} style={[styles.memberRow, isDesktop && styles.memberRowDesktop]}>
+                      <View style={styles.memberTextCol}>
+                        <Text numberOfLines={1} style={styles.memberName}>{member.full_name}</Text>
+                        <Text
+                          style={[
+                            styles.memberMeta,
+                            mark === "present"
+                              ? styles.memberMetaPresent
+                              : mark === "absent"
+                                ? styles.memberMetaAbsent
+                                : null,
+                          ]}
+                        >
+                          {formatMarkLabel(mark)}
+                          {ratio != null ? ` (${Math.round(ratio * 100)}%)` : ""}
+                        </Text>
+                      </View>
+
+                      <View style={styles.memberActions}>
+                        <Pressable
+                          disabled={!canWrite || !selectedSession || isSaving}
+                          onPress={() => {
+                            void handleSetAttendance(member.member_id, 1);
+                          }}
+                          style={[
+                            styles.actionButton,
+                            mark === "present" && styles.actionButtonPresentActive,
+                          ]}
+                        >
+                          <Text style={[styles.actionButtonLabel, mark === "present" && styles.actionButtonLabelOn]}>
+                            {tr("Obecny", "Present")}
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          disabled={!canWrite || !selectedSession || isSaving}
+                          onPress={() => {
+                            void handleSetAttendance(member.member_id, 0);
+                          }}
+                          style={[
+                            styles.actionButton,
+                            mark === "absent" && styles.actionButtonAbsentActive,
+                          ]}
+                        >
+                          <Text style={[styles.actionButtonLabel, mark === "absent" && styles.actionButtonLabelOn]}>
+                            {tr("Nieobecny", "Absent")}
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+          </SurfaceCard>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -708,80 +902,170 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
   },
-  chipGrid: {
-    marginTop: tokens.spacing.sm,
+  monthHeader: {
+    marginTop: tokens.spacing.md,
     flexDirection: "row",
-    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: tokens.spacing.sm,
   },
-  sessionChip: {
-    minWidth: 170,
-    maxWidth: 250,
+  monthNavButton: {
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.round,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+    backgroundColor: tokens.colors.surface,
+  },
+  monthNavButtonLabel: {
+    color: tokens.colors.muted,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  monthLabel: {
+    flex: 1,
+    textAlign: "center",
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.body,
+    fontWeight: "700",
+  },
+  weekdayRow: {
+    marginTop: tokens.spacing.sm,
+    flexDirection: "row",
+  },
+  weekdayCell: {
+    width: "14.2857%",
+    alignItems: "center",
+  },
+  weekdayLabel: {
+    fontSize: 11,
+    color: tokens.colors.muted,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  calendarGrid: {
+    marginTop: tokens.spacing.xs,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    overflow: "hidden",
+    backgroundColor: tokens.colors.surface,
+  },
+  dayCell: {
+    width: "14.2857%",
+    minHeight: 72,
+    borderWidth: 0.5,
+    borderColor: tokens.colors.border,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    justifyContent: "space-between",
+    backgroundColor: tokens.colors.surface,
+  },
+  dayCellOutsideMonth: {
+    backgroundColor: tokens.colors.surfaceMuted,
+    opacity: 0.55,
+  },
+  dayCellToday: {
+    borderColor: tokens.colors.brand,
+  },
+  dayCellSelected: {
+    backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
+  },
+  dayCellGap: {
+    backgroundColor: tokens.colors.dangerSurface,
+  },
+  dayNumber: {
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  dayNumberOutsideMonth: {
+    color: tokens.colors.muted,
+  },
+  dayNumberSelected: {
+    color: tokens.colors.brand,
+  },
+  dayIndicators: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 2,
+  },
+  dayPill: {
+    borderRadius: tokens.radii.round,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  dayPillEvents: {
+    backgroundColor: tokens.colors.brandTint,
+  },
+  dayPillRehearsal: {
+    backgroundColor: tokens.colors.successSurface,
+  },
+  dayPillMissing: {
+    backgroundColor: tokens.colors.dangerSurface,
+  },
+  dayPillLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: tokens.colors.ink,
+  },
+  legendText: {
+    marginTop: tokens.spacing.xs,
+    fontSize: 11,
+    lineHeight: 16,
+    color: tokens.colors.muted,
+  },
+  daySelectionBlock: {
+    marginTop: tokens.spacing.sm,
+    gap: tokens.spacing.xs,
+  },
+  daySelectionTitle: {
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.body,
+    fontWeight: "700",
+  },
+  sessionList: {
+    gap: tokens.spacing.xs,
+  },
+  sessionListItem: {
     borderWidth: 1,
     borderColor: tokens.colors.border,
     borderRadius: tokens.radii.md,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
     backgroundColor: tokens.colors.surface,
-    gap: 2,
   },
-  sessionChipActive: {
+  sessionListItemActive: {
     borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
   },
-  sessionChipDate: {
+  sessionListItemTitle: {
+    color: tokens.colors.ink,
     fontSize: tokens.typography.caption,
     fontWeight: "700",
-    color: tokens.colors.muted,
   },
-  sessionChipDateActive: {
+  sessionListItemTitleActive: {
     color: tokens.colors.brand,
   },
-  sessionChipTitle: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.ink,
-    lineHeight: 16,
-  },
-  sessionChipTitleActive: {
-    fontWeight: "700",
-  },
-  rehearsalGrid: {
-    marginTop: tokens.spacing.sm,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.spacing.sm,
-  },
-  rehearsalChip: {
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
-    borderWidth: 1,
-    gap: 2,
-  },
-  rehearsalChipMapped: {
-    borderColor: tokens.colors.successInk,
-    backgroundColor: tokens.colors.successSurface,
-  },
-  rehearsalChipMissing: {
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surfaceMuted,
-    opacity: 0.9,
-  },
-  rehearsalChipActive: {
-    borderColor: tokens.colors.brand,
-    shadowColor: "#000000",
-    shadowOpacity: 0.07,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  rehearsalChipDate: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    color: tokens.colors.ink,
-  },
-  rehearsalChipMeta: {
-    fontSize: 11,
+  sessionListItemMeta: {
+    marginTop: 2,
     color: tokens.colors.muted,
+    fontSize: 11,
+  },
+  instrumentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.xs,
+  },
+  instrumentHeaderTextCol: {
+    flex: 1,
+    gap: 2,
   },
   instrumentTitle: {
     fontSize: tokens.typography.caption,
@@ -789,21 +1073,41 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     color: tokens.colors.muted,
     fontWeight: "700",
-    marginBottom: tokens.spacing.sm,
+  },
+  instrumentSummary: {
+    fontSize: 11,
+    color: tokens.colors.muted,
+    fontWeight: "700",
+  },
+  instrumentToggleLabel: {
+    color: tokens.colors.brand,
+    fontWeight: "700",
+    fontSize: tokens.typography.caption,
   },
   memberRows: {
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.xs,
+  },
+  memberRowsDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   memberRow: {
     borderWidth: 1,
     borderColor: tokens.colors.border,
     borderRadius: tokens.radii.md,
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
     backgroundColor: tokens.colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: tokens.spacing.sm,
   },
+  memberRowDesktop: {
+    width: "49%",
+  },
   memberTextCol: {
+    flex: 1,
     gap: 2,
   },
   memberName: {
@@ -812,7 +1116,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   memberMeta: {
-    fontSize: tokens.typography.caption,
+    fontSize: 11,
     color: tokens.colors.muted,
     fontWeight: "700",
   },
@@ -828,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
+    paddingVertical: 6,
     borderRadius: tokens.radii.round,
     borderWidth: 1,
     borderColor: tokens.colors.border,
