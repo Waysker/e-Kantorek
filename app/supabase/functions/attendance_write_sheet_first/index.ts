@@ -97,10 +97,6 @@ const ALLOW_CRON_SYNC_FALLBACK = parseBooleanEnv(
   Deno.env.get("ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK"),
   false,
 );
-const ALLOW_SELF_SERVICE_DECLARATION_WRITES = parseBooleanEnv(
-  Deno.env.get("ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES"),
-  false,
-);
 
 const DEFAULT_PROCESS_BATCH_SIZE = parseIntegerEnv("ATTENDANCE_WRITE_PROCESS_BATCH_SIZE", 25, 1, 200);
 const DEFAULT_MAX_ATTEMPTS = parseIntegerEnv("ATTENDANCE_WRITE_MAX_ATTEMPTS", 5, 1, 50);
@@ -981,19 +977,11 @@ async function handleEnqueueMode(
   const hasManagerPrivileges = profileRole === "leader" || profileRole === "admin";
   const isSelfWrite = targetMemberId === actorMemberId;
 
-  if (isSelfWrite && !ALLOW_SELF_SERVICE_DECLARATION_WRITES && !hasManagerPrivileges) {
+  if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
-      "self_declaration_write_disabled",
-      "Self-service declaration writes are disabled. Use the management attendance panel.",
-    );
-  }
-
-  if (!isSelfWrite && !hasManagerPrivileges) {
-    throw new HttpError(
-      403,
-      "insufficient_role_for_target_member",
-      "Only leader/admin can set attendance for other members.",
+      "management_only_write_path",
+      "Only leader/admin can use this write path.",
     );
   }
 
@@ -1004,7 +992,7 @@ async function handleEnqueueMode(
   const sourceRaw = normalizeWhitespace(body.source ?? "");
   const source = sourceRaw
     ? sourceRaw.toLowerCase().slice(0, 64)
-    : (hasManagerPrivileges ? "manager_panel" : "self_service");
+    : "manager_panel";
 
   const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
     eventIdInput,

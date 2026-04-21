@@ -144,8 +144,7 @@ Cloud-ready mode:
 - Post-write DB sync policy:
   - default: `attendance_write_sheet_first` expects `SHEET_TO_SUPABASE_SYNC_URL` and marks worker run failed if sync trigger cannot run
   - optional fallback: set `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK=true` to allow relying only on scheduled `sheet_to_supabase_sync`
-  - self-service declaration writes are disabled by default; enable only if needed:
-    `ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES=true`
+  - write path is management-only (`leader/admin`)
 
 Scheduling / trigger:
 

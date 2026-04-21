@@ -180,7 +180,6 @@ Set on project:
   - `ATTENDANCE_WRITE_PROCESS_BATCH_SIZE` (default `25`)
   - `ATTENDANCE_WRITE_MAX_ATTEMPTS` (default `5`)
   - `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK` (default `false`; when `false`, process mode fails if sync trigger cannot run)
-  - `ATTENDANCE_ALLOW_SELF_SERVICE_DECLARATION_WRITES` (default `false`; keep disabled for management-only writes)
 
 `sheet_to_supabase_sync` still needs:
 
