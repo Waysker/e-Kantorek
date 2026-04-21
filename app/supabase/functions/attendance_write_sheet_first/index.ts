@@ -92,6 +92,10 @@ const APPS_SCRIPT_WEBHOOK_TOKEN =
 const SHEET_TO_SUPABASE_SYNC_URL = Deno.env.get("SHEET_TO_SUPABASE_SYNC_URL");
 const SHEET_TO_SUPABASE_SYNC_TOKEN = Deno.env.get("SHEET_TO_SUPABASE_SYNC_TOKEN");
 const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));
+const ALLOW_CRON_SYNC_FALLBACK = parseBooleanEnv(
+  Deno.env.get("ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK"),
+  false,
+);
 
 const DEFAULT_PROCESS_BATCH_SIZE = parseIntegerEnv("ATTENDANCE_WRITE_PROCESS_BATCH_SIZE", 25, 1, 200);
 const DEFAULT_MAX_ATTEMPTS = parseIntegerEnv("ATTENDANCE_WRITE_MAX_ATTEMPTS", 5, 1, 50);
@@ -106,6 +110,21 @@ function parseIntegerEnv(name: string, fallback: number, min: number, max: numbe
     return fallback;
   }
   return Math.min(Math.max(parsed, min), max);
+}
+
+function parseBooleanEnv(rawValue: string | undefined, fallback: boolean): boolean {
+  const normalized = normalizeWhitespace(rawValue ?? "").toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
 }
 
 function parseCorsAllowedOrigins(rawValue: string | undefined): string[] {
@@ -839,7 +858,19 @@ async function enqueueAttendanceChange(
 
 async function maybeTriggerSheetSync(): Promise<{ triggered: boolean; ok: boolean; status?: number; message?: string }> {
   if (!SHEET_TO_SUPABASE_SYNC_URL) {
-    return { triggered: false, ok: true, message: "SHEET_TO_SUPABASE_SYNC_URL not set." };
+    if (ALLOW_CRON_SYNC_FALLBACK) {
+      return {
+        triggered: false,
+        ok: true,
+        message: "SHEET_TO_SUPABASE_SYNC_URL not set; relying on scheduled sheet_to_supabase_sync.",
+      };
+    }
+    return {
+      triggered: false,
+      ok: false,
+      message:
+        "SHEET_TO_SUPABASE_SYNC_URL not set. Configure it or set ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK=true.",
+    };
   }
 
   const headers: Record<string, string> = {
@@ -1090,7 +1121,10 @@ async function handleProcessMode(
       }
     }
 
-    const syncTrigger = appliedCount > 0 ? await maybeTriggerSheetSync() : { triggered: false, ok: true };
+    const syncTrigger = appliedCount > 0
+      ? await maybeTriggerSheetSync()
+      : { triggered: false, ok: true, message: "No applied queue rows." };
+    const syncTriggerFailed = appliedCount > 0 && !syncTrigger.ok;
 
     const summary: Record<string, unknown> = {
       trigger,
@@ -1100,10 +1134,19 @@ async function handleProcessMode(
       dead_letter_count: deadLetterCount,
       max_attempts: maxAttempts,
       max_items: maxItems,
+      allow_cron_sync_fallback: ALLOW_CRON_SYNC_FALLBACK,
       sync_trigger: syncTrigger,
     };
 
-    const finalStatus: "success" | "failed" = failedCount > 0 ? "failed" : "success";
+    const finalStatus: "success" | "failed" = failedCount > 0 || syncTriggerFailed ? "failed" : "success";
+    const finalErrorSegments: string[] = [];
+    if (failedCount > 0) {
+      finalErrorSegments.push(`Queue item failures: ${failedCount}`);
+    }
+    if (syncTriggerFailed) {
+      finalErrorSegments.push("Sheet write applied but DB sync trigger failed.");
+    }
+    const finalErrorMessage = finalErrorSegments.length > 0 ? finalErrorSegments.join(" ") : null;
 
     const { error: finishError } = await supabaseAdmin
       .from("sync_runs")
@@ -1111,7 +1154,7 @@ async function handleProcessMode(
         status: finalStatus,
         finished_at: new Date().toISOString(),
         summary,
-        error_message: failedCount > 0 ? `Queue item failures: ${failedCount}` : null,
+        error_message: finalErrorMessage,
       })
       .eq("id", runId);
 

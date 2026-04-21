@@ -179,6 +179,7 @@ Set on project:
 - optional:
   - `ATTENDANCE_WRITE_PROCESS_BATCH_SIZE` (default `25`)
   - `ATTENDANCE_WRITE_MAX_ATTEMPTS` (default `5`)
+  - `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK` (default `false`; when `false`, process mode fails if sync trigger cannot run)
 
 `sheet_to_supabase_sync` still needs:
 
@@ -311,6 +312,9 @@ curl -sS -X POST \
   -H "Content-Type: application/json" \
   -d '{"mode":"process","trigger":"manual","maxItems":10}'
 ```
+
+Expected: if at least one queue row is applied to Sheet, the worker run should also include a successful `sync_trigger`.  
+If `SHEET_TO_SUPABASE_SYNC_URL` is missing (and fallback flag is not enabled), process mode returns failed status by design.
 
 Enqueue mode (user access token, not worker token):
 
