@@ -19,6 +19,9 @@ type MemberCandidate = {
 
 type EventSourceRow = {
   event_id: string;
+  title: string;
+  event_date: string;
+  source_header: string | null;
   source_sheet_id: string | null;
   source_gid: string | null;
   source_column: string | null;
@@ -62,6 +65,11 @@ type SourceCoordinates = {
   cellRef: string;
 };
 
+type SheetSource = {
+  sheetId: string;
+  gid: string;
+};
+
 class HttpError extends Error {
   status: number;
   code: string;
@@ -90,6 +98,8 @@ const APPS_SCRIPT_WEBHOOK_URL =
 const APPS_SCRIPT_WEBHOOK_TOKEN =
   Deno.env.get("ATTENDANCE_APPS_SCRIPT_WEBHOOK_TOKEN") ??
   Deno.env.get("APPS_SCRIPT_WEBHOOK_TOKEN");
+const DEFAULT_ATTENDANCE_SHEET_ID = normalizeWhitespace(Deno.env.get("ATTENDANCE_SHEET_ID") ?? "");
+const DEFAULT_ATTENDANCE_SHEET_GID = normalizeWhitespace(Deno.env.get("ATTENDANCE_SHEET_GID") ?? "");
 const SHEET_TO_SUPABASE_SYNC_URL = Deno.env.get("SHEET_TO_SUPABASE_SYNC_URL");
 const SHEET_TO_SUPABASE_SYNC_TOKEN = Deno.env.get("SHEET_TO_SUPABASE_SYNC_TOKEN");
 const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));
@@ -207,6 +217,15 @@ function normalizeMatchText(value: unknown): string {
     .trim();
 }
 
+function slugify(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
 function parseEventDateInput(value: unknown): string | null {
   const normalized = normalizeWhitespace(value ?? "");
   if (!normalized) {
@@ -287,13 +306,7 @@ function columnRefToIndex(columnRef: string): number {
   return index - 1;
 }
 
-async function writeAttendanceViaAppsScript(params: {
-  sheetId: string;
-  gid: string;
-  columnRef: string;
-  rowNumber: number;
-  attendanceRatio: number;
-}): Promise<void> {
+async function callAppsScriptWebhook(payload: Record<string, unknown>): Promise<string> {
   if (!APPS_SCRIPT_WEBHOOK_URL) {
     throw new HttpError(
       500,
@@ -301,28 +314,6 @@ async function writeAttendanceViaAppsScript(params: {
       "ATTENDANCE_APPS_SCRIPT_WEBHOOK_URL (or APPS_SCRIPT_WEBHOOK_URL) is required for process mode.",
     );
   }
-
-  if (!Number.isFinite(Number(params.gid))) {
-    throw new HttpError(422, "invalid_source_gid", `Invalid gid value: ${params.gid}`);
-  }
-
-  const normalizedColumnRef = toColumnRef(columnRefToIndex(params.columnRef));
-  const normalizedRow = Math.trunc(params.rowNumber);
-  if (!Number.isInteger(normalizedRow) || normalizedRow <= 0) {
-    throw new HttpError(422, "invalid_source_row", `Invalid row number: ${params.rowNumber}`);
-  }
-
-  const cellRef = `${normalizedColumnRef}${normalizedRow}`;
-  const webhookPayload = {
-    action: "set_attendance_cell",
-    sheetId: params.sheetId,
-    gid: String(params.gid),
-    columnRef: normalizedColumnRef,
-    rowNumber: normalizedRow,
-    cellRef,
-    attendanceRatio: Number(params.attendanceRatio.toFixed(4)),
-    webhookToken: APPS_SCRIPT_WEBHOOK_TOKEN ?? null,
-  };
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -335,7 +326,10 @@ async function writeAttendanceViaAppsScript(params: {
   const response = await fetch(APPS_SCRIPT_WEBHOOK_URL, {
     method: "POST",
     headers,
-    body: JSON.stringify(webhookPayload),
+    body: JSON.stringify({
+      ...payload,
+      webhookToken: APPS_SCRIPT_WEBHOOK_TOKEN ?? null,
+    }),
     redirect: "follow",
   });
 
@@ -348,7 +342,144 @@ async function writeAttendanceViaAppsScript(params: {
     );
   }
 
-  const responseText = await response.text();
+  return await response.text();
+}
+
+function extractWebhookErrorMessage(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const asRecord = payload as Record<string, unknown>;
+  const error = normalizeWhitespace(asRecord.error ?? "");
+  if (error) {
+    return error;
+  }
+  const message = normalizeWhitespace(asRecord.message ?? "");
+  if (message) {
+    return message;
+  }
+  return null;
+}
+
+function parseWebhookColumnRef(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const asRecord = payload as Record<string, unknown>;
+  const rawColumn = normalizeWhitespace(asRecord.columnRef ?? asRecord.column_ref ?? asRecord.source_column ?? "");
+  if (!rawColumn) {
+    return null;
+  }
+  return toColumnRef(columnRefToIndex(rawColumn));
+}
+
+async function ensureAttendanceColumnViaAppsScript(params: {
+  sheetId: string;
+  gid: string;
+  eventDate: string;
+  eventTitle: string;
+  sourceHeader: string | null;
+}): Promise<{ columnRef: string; header: string | null }> {
+  if (!Number.isFinite(Number(params.gid))) {
+    throw new HttpError(422, "invalid_source_gid", `Invalid gid value: ${params.gid}`);
+  }
+
+  const preferredSourceHeaderBase = normalizeWhitespace(params.sourceHeader ?? "");
+  const preferredSourceHeader = preferredSourceHeaderBase
+    ? preferredSourceHeaderBase.includes(params.eventDate)
+      ? preferredSourceHeaderBase
+      : `${params.eventDate} ${preferredSourceHeaderBase}`.trim()
+    : `${params.eventDate} ${normalizeWhitespace(params.eventTitle)}`.trim();
+
+  const responseText = await callAppsScriptWebhook({
+    action: "ensure_attendance_column",
+    sheetId: params.sheetId,
+    gid: String(params.gid),
+    eventDate: params.eventDate,
+    eventTitle: params.eventTitle,
+    sourceHeader: preferredSourceHeader,
+  });
+
+  if (!responseText) {
+    throw new HttpError(
+      502,
+      "apps_script_ensure_column_invalid_response",
+      "Apps Script ensure_attendance_column returned an empty response.",
+    );
+  }
+
+  try {
+    const parsed = JSON.parse(responseText) as {
+      ok?: boolean;
+      error?: string;
+      message?: string;
+      header?: string;
+      source_header?: string;
+      columnRef?: string;
+      column_ref?: string;
+      source_column?: string;
+    };
+    if (parsed.ok === false) {
+      throw new HttpError(
+        502,
+        "apps_script_write_failed",
+        `Apps Script responded with failure: ${extractWebhookErrorMessage(parsed) ?? "unknown_error"}`,
+      );
+    }
+    const columnRef = parseWebhookColumnRef(parsed);
+    if (!columnRef) {
+      throw new HttpError(
+        502,
+        "apps_script_ensure_column_invalid_response",
+        "Apps Script ensure_attendance_column did not return columnRef.",
+      );
+    }
+    const responseHeader = normalizeWhitespace(parsed.header ?? parsed.source_header ?? "");
+    return {
+      columnRef,
+      header: responseHeader || null,
+    };
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw error;
+    }
+
+    throw new HttpError(
+      502,
+      "apps_script_ensure_column_invalid_response",
+      `Could not parse Apps Script ensure_attendance_column response: ${responseText.slice(0, 500)}`,
+    );
+  }
+}
+
+async function writeAttendanceViaAppsScript(params: {
+  sheetId: string;
+  gid: string;
+  columnRef: string;
+  rowNumber: number;
+  attendanceRatio: number;
+}): Promise<void> {
+  if (!Number.isFinite(Number(params.gid))) {
+    throw new HttpError(422, "invalid_source_gid", `Invalid gid value: ${params.gid}`);
+  }
+
+  const normalizedColumnRef = toColumnRef(columnRefToIndex(params.columnRef));
+  const normalizedRow = Math.trunc(params.rowNumber);
+  if (!Number.isInteger(normalizedRow) || normalizedRow <= 0) {
+    throw new HttpError(422, "invalid_source_row", `Invalid row number: ${params.rowNumber}`);
+  }
+
+  const cellRef = `${normalizedColumnRef}${normalizedRow}`;
+  const responseText = await callAppsScriptWebhook({
+    action: "set_attendance_cell",
+    sheetId: params.sheetId,
+    gid: String(params.gid),
+    columnRef: normalizedColumnRef,
+    rowNumber: normalizedRow,
+    cellRef,
+    attendanceRatio: Number(params.attendanceRatio.toFixed(4)),
+  });
+
   if (!responseText) {
     return;
   }
@@ -363,7 +494,7 @@ async function writeAttendanceViaAppsScript(params: {
       throw new HttpError(
         502,
         "apps_script_write_failed",
-        `Apps Script responded with failure: ${parsed.error ?? parsed.message ?? "unknown_error"}`,
+        `Apps Script responded with failure: ${extractWebhookErrorMessage(parsed) ?? "unknown_error"}`,
       );
     }
   } catch (error) {
@@ -575,7 +706,7 @@ async function resolveEventSource(
 ): Promise<EventSourceRow> {
   const { data, error } = await supabaseAdmin
     .from("events")
-    .select("event_id,source_sheet_id,source_gid,source_column")
+    .select("event_id,title,event_date,source_header,source_sheet_id,source_gid,source_column")
     .eq("event_id", eventId)
     .maybeSingle<EventSourceRow>();
 
@@ -590,6 +721,138 @@ async function resolveEventSource(
   return data;
 }
 
+async function resolveDefaultSheetSource(
+  supabaseAdmin: ReturnType<typeof createClient>,
+): Promise<SheetSource | null> {
+  if (DEFAULT_ATTENDANCE_SHEET_ID && DEFAULT_ATTENDANCE_SHEET_GID && /^\d+$/.test(DEFAULT_ATTENDANCE_SHEET_GID)) {
+    return {
+      sheetId: DEFAULT_ATTENDANCE_SHEET_ID,
+      gid: DEFAULT_ATTENDANCE_SHEET_GID,
+    };
+  }
+
+  const { data: fromEvents, error: fromEventsError } = await supabaseAdmin
+    .from("events")
+    .select("source_sheet_id,source_gid")
+    .not("source_sheet_id", "is", null)
+    .not("source_gid", "is", null)
+    .order("source_updated_at", { ascending: false, nullsFirst: false })
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .order("event_date", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ source_sheet_id: string | null; source_gid: string | null }>();
+
+  if (fromEventsError) {
+    throw new HttpError(500, "default_sheet_source_lookup_failed", fromEventsError.message);
+  }
+
+  const eventsSheetId = normalizeWhitespace(fromEvents?.source_sheet_id ?? "");
+  const eventsGid = normalizeWhitespace(fromEvents?.source_gid ?? "");
+  if (eventsSheetId && eventsGid && /^\d+$/.test(eventsGid)) {
+    return {
+      sheetId: eventsSheetId,
+      gid: eventsGid,
+    };
+  }
+
+  const { data: fromRows, error: fromRowsError } = await supabaseAdmin
+    .from("sheet_member_rows")
+    .select("source_sheet_id,source_gid")
+    .order("source_updated_at", { ascending: false, nullsFirst: false })
+    .order("updated_at", { ascending: false, nullsFirst: false })
+    .limit(1)
+    .maybeSingle<{ source_sheet_id: string; source_gid: string }>();
+
+  if (fromRowsError) {
+    throw new HttpError(500, "default_sheet_source_lookup_failed", fromRowsError.message);
+  }
+
+  const rowsSheetId = normalizeWhitespace(fromRows?.source_sheet_id ?? "");
+  const rowsGid = normalizeWhitespace(fromRows?.source_gid ?? "");
+  if (rowsSheetId && rowsGid && /^\d+$/.test(rowsGid)) {
+    return {
+      sheetId: rowsSheetId,
+      gid: rowsGid,
+    };
+  }
+
+  return null;
+}
+
+function buildFallbackEventTitle(eventDate: string): string {
+  return `Proba ${eventDate}`;
+}
+
+function buildSheetStyleEventId(eventDate: string, eventTitle: string): string {
+  const suffix = slugify(eventTitle || "event");
+  return `evt-${eventDate}-${suffix || "event"}`;
+}
+
+async function createPlaceholderEvent(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  payload: {
+    eventDate: string;
+    eventTitleInput: string;
+  },
+): Promise<string> {
+  const eventTitle = normalizeWhitespace(payload.eventTitleInput) || buildFallbackEventTitle(payload.eventDate);
+  const sourceHeader = `${payload.eventDate} ${eventTitle}`.trim();
+  const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin);
+  if (!fallbackSource) {
+    throw new HttpError(
+      422,
+      "missing_default_sheet_source",
+      "Cannot create a placeholder event because no sheet source is configured. Set ATTENDANCE_SHEET_ID + ATTENDANCE_SHEET_GID or sync at least one mapped event first.",
+      { event_date: payload.eventDate, event_title: eventTitle },
+    );
+  }
+
+  const baseEventId = buildSheetStyleEventId(payload.eventDate, eventTitle);
+  let candidateEventId = baseEventId;
+  let suffix = 2;
+  while (true) {
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from("events")
+      .select("event_id")
+      .eq("event_id", candidateEventId)
+      .maybeSingle<{ event_id: string }>();
+
+    if (existingError) {
+      throw new HttpError(500, "event_lookup_failed", existingError.message);
+    }
+
+    if (!existing?.event_id) {
+      break;
+    }
+
+    candidateEventId = `${baseEventId}-${suffix}`;
+    suffix += 1;
+  }
+
+  const { error: insertError } = await supabaseAdmin
+    .from("events")
+    .insert({
+      event_id: candidateEventId,
+      title: eventTitle,
+      event_date: payload.eventDate,
+      source_header: sourceHeader,
+      source_sheet_id: fallbackSource.sheetId,
+      source_gid: fallbackSource.gid,
+      source_column: null,
+      source_updated_at: new Date().toISOString(),
+    });
+
+  if (insertError) {
+    throw new HttpError(500, "event_create_failed", insertError.message, {
+      event_id: candidateEventId,
+      event_date: payload.eventDate,
+      event_title: eventTitle,
+    });
+  }
+
+  return candidateEventId;
+}
+
 async function resolveCanonicalEventId(
   supabaseAdmin: ReturnType<typeof createClient>,
   payload: {
@@ -597,7 +860,7 @@ async function resolveCanonicalEventId(
     eventDateInput: string | null;
     eventTitleInput: string;
   },
-): Promise<{ eventId: string; resolution: "direct_event_id" | "date_unique" | "date_title_match" }> {
+): Promise<{ eventId: string; resolution: "direct_event_id" | "date_unique" | "date_title_match" | "created_placeholder" }> {
   if (payload.eventIdInput) {
     const { data: exactMatch, error: exactMatchError } = await supabaseAdmin
       .from("events")
@@ -634,15 +897,11 @@ async function resolveCanonicalEventId(
 
   const candidates = dateMatches ?? [];
   if (candidates.length === 0) {
-    throw new HttpError(
-      404,
-      "event_not_found_for_date",
-      `No canonical event found for eventDate ${payload.eventDateInput}.`,
-      {
-        requested_event_id: payload.eventIdInput || null,
-        requested_event_title: payload.eventTitleInput || null,
-      },
-    );
+    const createdEventId = await createPlaceholderEvent(supabaseAdmin, {
+      eventDate: payload.eventDateInput,
+      eventTitleInput: payload.eventTitleInput,
+    });
+    return { eventId: createdEventId, resolution: "created_placeholder" };
   }
 
   if (candidates.length === 1) {
@@ -705,17 +964,51 @@ async function resolveSourceCoordinates(
 ): Promise<SourceCoordinates> {
   const eventSource = await resolveEventSource(supabaseAdmin, queueRow.event_id);
 
-  const sourceSheetId = normalizeWhitespace(queueRow.source_sheet_id ?? eventSource.source_sheet_id ?? "");
-  const sourceGid = normalizeWhitespace(queueRow.source_gid ?? eventSource.source_gid ?? "");
-  const sourceColumn = toUpperLetters(queueRow.source_column ?? eventSource.source_column ?? "");
+  let sourceSheetId = normalizeWhitespace(queueRow.source_sheet_id ?? eventSource.source_sheet_id ?? "");
+  let sourceGid = normalizeWhitespace(queueRow.source_gid ?? eventSource.source_gid ?? "");
+  if (!sourceSheetId || !sourceGid) {
+    const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin);
+    sourceSheetId = sourceSheetId || fallbackSource?.sheetId || "";
+    sourceGid = sourceGid || fallbackSource?.gid || "";
+  }
 
-  if (!sourceSheetId || !sourceGid || !sourceColumn) {
+  if (!sourceSheetId || !sourceGid) {
     throw new HttpError(
       422,
-      "event_source_mapping_missing",
-      "Event is missing source sheet coordinates. Re-run sheet_to_supabase_sync after migration 013.",
+      "event_source_sheet_missing",
+      "Event is missing source sheet coordinates and no default sheet source is available.",
       { event_id: queueRow.event_id },
     );
+  }
+
+  let sourceColumn = toUpperLetters(queueRow.source_column ?? eventSource.source_column ?? "");
+  if (!sourceColumn) {
+    const ensuredColumn = await ensureAttendanceColumnViaAppsScript({
+      sheetId: sourceSheetId,
+      gid: sourceGid,
+      eventDate: eventSource.event_date,
+      eventTitle: eventSource.title,
+      sourceHeader: eventSource.source_header,
+    });
+    sourceColumn = ensuredColumn.columnRef;
+
+    const resolvedSourceHeader = normalizeWhitespace(ensuredColumn.header ?? eventSource.source_header ?? eventSource.title);
+    const { error: eventUpdateError } = await supabaseAdmin
+      .from("events")
+      .update({
+        source_sheet_id: sourceSheetId,
+        source_gid: sourceGid,
+        source_column: sourceColumn,
+        source_header: resolvedSourceHeader || eventSource.title,
+        source_updated_at: new Date().toISOString(),
+      })
+      .eq("event_id", eventSource.event_id);
+
+    if (eventUpdateError) {
+      throw new HttpError(500, "event_source_update_failed", eventUpdateError.message, {
+        event_id: eventSource.event_id,
+      });
+    }
   }
 
   let sourceRowNumber = queueRow.source_row_number ?? null;
@@ -749,8 +1042,7 @@ async function resolveSourceCoordinates(
     );
   }
 
-  const normalizedColumnIndex = columnRefToIndex(sourceColumn);
-  const normalizedColumnRef = toColumnRef(normalizedColumnIndex);
+  const normalizedColumnRef = toColumnRef(columnRefToIndex(sourceColumn));
 
   return {
     sourceSheetId,
@@ -772,10 +1064,10 @@ async function enqueueAttendanceChange(
     requestedByLabel: string;
     requestNote: string | null;
     source: string;
-    sourceSheetId: string;
-    sourceGid: string;
-    sourceColumn: string;
-    sourceRowNumber: number;
+    sourceSheetId?: string | null;
+    sourceGid?: string | null;
+    sourceColumn?: string | null;
+    sourceRowNumber?: number | null;
   },
 ): Promise<QueueRow> {
   const insertPayload = {
@@ -788,10 +1080,10 @@ async function enqueueAttendanceChange(
     requested_by_label: payload.requestedByLabel,
     request_note: payload.requestNote,
     source: payload.source,
-    source_sheet_id: payload.sourceSheetId,
-    source_gid: payload.sourceGid,
-    source_column: payload.sourceColumn,
-    source_row_number: payload.sourceRowNumber,
+    source_sheet_id: payload.sourceSheetId ?? null,
+    source_gid: payload.sourceGid ?? null,
+    source_column: payload.sourceColumn ?? null,
+    source_row_number: payload.sourceRowNumber ?? null,
     last_error: null,
     processed_at: null,
     claimed_at: null,
@@ -1000,10 +1292,10 @@ async function handleEnqueueMode(
     eventTitleInput,
   });
   const eventId = resolvedEvent.eventId;
-  const coordinates = await resolveSourceCoordinates(supabaseAdmin, {
-    member_id: targetMemberId,
-    event_id: eventId,
-  });
+  const eventSourceSnapshot = await resolveEventSource(supabaseAdmin, eventId);
+  const sourceSheetId = normalizeWhitespace(eventSourceSnapshot.source_sheet_id ?? "") || null;
+  const sourceGid = normalizeWhitespace(eventSourceSnapshot.source_gid ?? "") || null;
+  const sourceColumn = normalizeWhitespace(eventSourceSnapshot.source_column ?? "") || null;
 
   const queueRow = await enqueueAttendanceChange(supabaseAdmin, {
     memberId: targetMemberId,
@@ -1014,10 +1306,9 @@ async function handleEnqueueMode(
     requestedByLabel: profile.full_name,
     requestNote,
     source,
-    sourceSheetId: coordinates.sourceSheetId,
-    sourceGid: coordinates.sourceGid,
-    sourceColumn: coordinates.sourceColumn,
-    sourceRowNumber: coordinates.sourceRowNumber,
+    sourceSheetId,
+    sourceGid,
+    sourceColumn,
   });
 
   await supabaseAdmin.from("change_journal").insert({
@@ -1038,11 +1329,11 @@ async function handleEnqueueMode(
       requested_event_title: eventTitleInput || null,
       resolved_event_id: eventId,
       event_resolution: resolvedEvent.resolution,
-      source_sheet_id: coordinates.sourceSheetId,
-      source_gid: coordinates.sourceGid,
-      source_column: coordinates.sourceColumn,
-      source_row_number: coordinates.sourceRowNumber,
-      cell_ref: coordinates.cellRef,
+      source_sheet_id: sourceSheetId,
+      source_gid: sourceGid,
+      source_column: sourceColumn,
+      source_row_number: null,
+      cell_ref: null,
     },
   });
 
@@ -1058,8 +1349,8 @@ async function handleEnqueueMode(
     event_id: eventId,
     event_resolution: resolvedEvent.resolution,
     attendance_ratio: ratio,
-    source_ref: `${coordinates.sourceSheetId}:${coordinates.sourceGid}`,
-    cell_ref: coordinates.cellRef,
+    source_ref: sourceSheetId && sourceGid ? `${sourceSheetId}:${sourceGid}` : null,
+    cell_ref: null,
   });
 }
 

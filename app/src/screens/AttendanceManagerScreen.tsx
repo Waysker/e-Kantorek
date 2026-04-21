@@ -33,6 +33,16 @@ type SessionRow = {
   source_column: string | null;
 };
 
+type ManagerSession = {
+  key: string;
+  event_id: string | null;
+  title: string;
+  event_date: string;
+  source_header: string | null;
+  source_column: string | null;
+  isVirtual: boolean;
+};
+
 type AttendanceEntryRow = {
   member_id: string;
   attendance_ratio: number;
@@ -43,8 +53,29 @@ type AttendanceMark = "present" | "absent" | "unknown";
 type EnqueueResponsePayload = {
   status?: string;
   queue_id?: number;
+  event_id?: string;
+  event_resolution?: string;
   error?: string;
   message?: string;
+};
+
+type SnapshotAttendanceParticipant = {
+  fullName?: string;
+};
+
+type SnapshotAttendanceGroup = {
+  status?: string;
+  participants?: SnapshotAttendanceParticipant[];
+};
+
+type SnapshotEventDetail = {
+  title?: string;
+  startsAt?: string;
+  attendanceGroups?: SnapshotAttendanceGroup[];
+};
+
+type ForumSnapshotPayload = {
+  eventDetailsById?: Record<string, SnapshotEventDetail>;
 };
 
 type CalendarCell = {
@@ -61,6 +92,7 @@ type GroupSummary = {
 const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
 const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
 const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
+const REHEARSAL_KEYWORDS = ["proba", "próba", "rehearsal", "wtorek", "czwartek", "tuesday", "thursday"];
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
@@ -96,8 +128,43 @@ function normalizeWhitespace(value: unknown): string {
     .trim();
 }
 
+function normalizeSearchText(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function normalizePersonName(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function parseIsoDateAsLocalNoon(isoDate: string): Date {
   return new Date(`${isoDate}T12:00:00`);
+}
+
+function parseDateOnly(value: string | undefined): string | null {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  const exact = normalized.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (exact) {
+    return exact[1];
+  }
+
+  const fromIso = normalized.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (fromIso) {
+    return fromIso[1];
+  }
+
+  return null;
 }
 
 function toIsoDateLocal(date: Date): string {
@@ -153,6 +220,11 @@ function buildCalendarCells(monthKey: string): CalendarCell[] {
   }
 
   return cells;
+}
+
+function isRehearsalLikeSession(session: SessionRow): boolean {
+  const haystack = normalizeSearchText([session.title, session.source_header, session.source_column].filter(Boolean).join(" "));
+  return REHEARSAL_KEYWORDS.some((keyword) => haystack.includes(keyword));
 }
 
 function markFromRatio(attendanceRatio: number | undefined): AttendanceMark {
@@ -262,17 +334,82 @@ function summarizeGroupMarks(members: MemberRow[], entriesByMemberId: Record<str
   return { present, absent, unknown };
 }
 
+function extractSnapshotEventDetails(payload: ForumSnapshotPayload | null): SnapshotEventDetail[] {
+  if (!payload || typeof payload !== "object" || !payload.eventDetailsById) {
+    return [];
+  }
+
+  const values = Object.values(payload.eventDetailsById);
+  return values.filter((item) => item && typeof item === "object");
+}
+
+function scoreSnapshotTitleMatch(sessionTitle: string, eventTitle: string): number {
+  const normalizedSessionTitle = normalizePersonName(sessionTitle);
+  const normalizedEventTitle = normalizePersonName(eventTitle);
+  if (!normalizedSessionTitle || !normalizedEventTitle) {
+    return 0;
+  }
+
+  let score = 0;
+  if (normalizedSessionTitle === normalizedEventTitle) {
+    score += 1000;
+  }
+  if (normalizedEventTitle.includes(normalizedSessionTitle)) {
+    score += 250;
+  }
+  if (normalizedSessionTitle.includes(normalizedEventTitle)) {
+    score += 150;
+  }
+
+  const leftTokens = normalizedSessionTitle.split(" ").filter((token) => token.length >= 3);
+  const rightTokens = new Set(normalizedEventTitle.split(" ").filter((token) => token.length >= 3));
+  const overlap = leftTokens.filter((token) => rightTokens.has(token)).length;
+  score += overlap * 25;
+
+  return score;
+}
+
+function findMatchingSnapshotEvent(
+  session: ManagerSession,
+  snapshotEvents: SnapshotEventDetail[],
+): SnapshotEventDetail | null {
+  const dateMatches = snapshotEvents.filter((event) => parseDateOnly(event.startsAt) === session.event_date);
+  if (dateMatches.length === 0) {
+    return null;
+  }
+
+  if (dateMatches.length === 1) {
+    return dateMatches[0];
+  }
+
+  const ranked = dateMatches
+    .map((event) => ({
+      event,
+      score: scoreSnapshotTitleMatch(session.title, normalizeWhitespace(event.title ?? "")),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const best = ranked[0];
+  const second = ranked[1];
+  const scoreGap = second ? best.score - second.score : best.score;
+  if (best.score <= 0 || scoreGap <= 0) {
+    return null;
+  }
+
+  return best.event;
+}
+
 export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
 
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [snapshotPayload, setSnapshotPayload] = useState<ForumSnapshotPayload | null>(null);
   const [entriesByMemberId, setEntriesByMemberId] = useState<Record<string, number>>({});
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSessionKey, setSelectedSessionKey] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDateLocal(new Date()));
   const [visibleMonthKey, setVisibleMonthKey] = useState<string>(() => getMonthKeyFromIsoDate(toIsoDateLocal(new Date())));
-  const [expandedInstruments, setExpandedInstruments] = useState<Record<string, boolean>>({});
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
   const [isSavingByMemberId, setIsSavingByMemberId] = useState<Record<string, boolean>>({});
@@ -312,7 +449,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       setIsBootLoading(true);
       setErrorMessage(null);
 
-      const [sessionsResult, membersResult] = await Promise.all([
+      const [sessionsResult, membersResult, snapshotResult] = await Promise.all([
         supabaseAuthClient
           .from("events")
           .select("event_id,title,event_date,source_header,source_column")
@@ -324,6 +461,11 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           .eq("is_active", true)
           .order("instrument", { ascending: true })
           .order("full_name", { ascending: true }),
+        supabaseAuthClient
+          .from("forum_snapshot_cache")
+          .select("payload")
+          .eq("snapshot_key", "forum")
+          .maybeSingle<{ payload: ForumSnapshotPayload }>(),
       ]);
 
       if (isCancelled) {
@@ -345,11 +487,12 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       const loadedMembers = (membersResult.data ?? []) as MemberRow[];
       setSessions(loadedSessions);
       setMembers(loadedMembers);
+      setSnapshotPayload(snapshotResult.data?.payload ?? null);
 
       if (loadedSessions.length > 0) {
         const defaultSession = chooseDefaultSession(loadedSessions);
         if (defaultSession) {
-          setSelectedSessionId(defaultSession.event_id);
+          setSelectedSessionKey(defaultSession.event_id);
           setSelectedDate(defaultSession.event_date);
           setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
         }
@@ -390,29 +533,67 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
   const calendarCells = useMemo(() => buildCalendarCells(visibleMonthKey), [visibleMonthKey]);
 
-  const selectedDateSessions = useMemo(() => {
-    return sessionsByDate.get(selectedDate) ?? [];
-  }, [selectedDate, sessionsByDate]);
+  const selectedDateSessions = useMemo<ManagerSession[]>(() => {
+    const realSessions = (sessionsByDate.get(selectedDate) ?? []).map((session) => ({
+      key: session.event_id,
+      event_id: session.event_id,
+      title: session.title,
+      event_date: session.event_date,
+      source_header: session.source_header,
+      source_column: session.source_column,
+      isVirtual: false,
+    }));
+
+    const shouldOfferVirtualRehearsal = expectedRehearsalSet.has(selectedDate) &&
+      !realSessions.some((session) => isRehearsalLikeSession({
+        event_id: session.key,
+        title: session.title,
+        event_date: session.event_date,
+        source_header: session.source_header,
+        source_column: session.source_column,
+      }));
+
+    if (!shouldOfferVirtualRehearsal) {
+      return realSessions;
+    }
+
+    return [
+      ...realSessions,
+      {
+        key: `virtual-rehearsal-${selectedDate}`,
+        event_id: null,
+        title: tr(`Próba ${selectedDate}`, `Rehearsal ${selectedDate}`),
+        event_date: selectedDate,
+        source_header: tr(`Próba ${selectedDate}`, `Rehearsal ${selectedDate}`),
+        source_column: null,
+        isVirtual: true,
+      },
+    ];
+  }, [expectedRehearsalSet, selectedDate, sessionsByDate]);
 
   useEffect(() => {
-    const candidates = sessionsByDate.get(selectedDate) ?? [];
-    if (candidates.length === 0) {
-      if (selectedSessionId !== null) {
-        setSelectedSessionId(null);
-      }
+    if (selectedDateSessions.length === 0) {
+      setSelectedSessionKey(null);
       return;
     }
 
-    if (!selectedSessionId || !candidates.some((session) => session.event_id === selectedSessionId)) {
-      setSelectedSessionId(candidates[0].event_id);
+    if (!selectedSessionKey || !selectedDateSessions.some((session) => session.key === selectedSessionKey)) {
+      setSelectedSessionKey(selectedDateSessions[0].key);
     }
-  }, [selectedDate, selectedSessionId, sessionsByDate]);
+  }, [selectedDateSessions, selectedSessionKey]);
+
+  const selectedSession = useMemo(
+    () => selectedDateSessions.find((session) => session.key === selectedSessionKey) ?? null,
+    [selectedDateSessions, selectedSessionKey],
+  );
+
+  const selectedCanonicalEventId = selectedSession?.event_id ?? null;
 
   useEffect(() => {
     let isCancelled = false;
 
     async function loadEntries() {
-      if (!supabaseAuthClient || !selectedSessionId) {
+      if (!supabaseAuthClient || !selectedCanonicalEventId) {
         setEntriesByMemberId({});
         return;
       }
@@ -422,7 +603,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       const { data, error } = await supabaseAuthClient
         .from("attendance_entries")
         .select("member_id,attendance_ratio")
-        .eq("event_id", selectedSessionId);
+        .eq("event_id", selectedCanonicalEventId);
 
       if (isCancelled) {
         return;
@@ -447,24 +628,50 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     return () => {
       isCancelled = true;
     };
-  }, [selectedSessionId]);
-
-  const selectedSession = useMemo(
-    () => sessions.find((session) => session.event_id === selectedSessionId) ?? null,
-    [sessions, selectedSessionId],
-  );
+  }, [selectedCanonicalEventId]);
 
   const memberGroups = useMemo(() => groupMembersByInstrument(members), [members]);
 
-  useEffect(() => {
-    setExpandedInstruments((current) => {
-      const next: Record<string, boolean> = {};
-      memberGroups.forEach((group, index) => {
-        next[group.instrument] = current[group.instrument] ?? index === 0;
-      });
-      return next;
-    });
-  }, [memberGroups]);
+  const memberIdByNormalizedName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const member of members) {
+      const normalizedName = normalizePersonName(member.full_name);
+      if (normalizedName && !map.has(normalizedName)) {
+        map.set(normalizedName, member.member_id);
+      }
+    }
+    return map;
+  }, [members]);
+
+  const snapshotEvents = useMemo(() => extractSnapshotEventDetails(snapshotPayload), [snapshotPayload]);
+
+  const rsvpHintMemberIds = useMemo(() => {
+    const hinted = new Set<string>();
+    if (!selectedSession || selectedSession.isVirtual || snapshotEvents.length === 0) {
+      return hinted;
+    }
+
+    const matchedSnapshotEvent = findMatchingSnapshotEvent(selectedSession, snapshotEvents);
+    if (!matchedSnapshotEvent) {
+      return hinted;
+    }
+
+    for (const group of matchedSnapshotEvent.attendanceGroups ?? []) {
+      const normalizedStatus = normalizeSearchText(group.status ?? "");
+      if (normalizedStatus !== "going" && normalizedStatus !== "maybe") {
+        continue;
+      }
+
+      for (const participant of group.participants ?? []) {
+        const memberId = memberIdByNormalizedName.get(normalizePersonName(participant.fullName ?? ""));
+        if (memberId) {
+          hinted.add(memberId);
+        }
+      }
+    }
+
+    return hinted;
+  }, [memberIdByNormalizedName, selectedSession, snapshotEvents]);
 
   async function handleSetAttendance(memberId: string, attendanceRatio: number) {
     if (!supabaseAuthClient || !ATTENDANCE_WRITE_FUNCTION_URL) {
@@ -510,13 +717,13 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         },
         body: JSON.stringify({
           mode: "enqueue",
-          eventId: selectedSession.event_id,
+          eventId: selectedSession.event_id ?? selectedSession.key,
           eventDate: selectedSession.event_date,
           eventTitle: selectedSession.title,
           memberId,
           attendanceRatio,
           source: "manager_panel",
-          requestNote: `manager-attendance:${selectedSession.event_id}:${memberId}`,
+          requestNote: `manager-attendance:${selectedSession.key}:${memberId}`,
         }),
       });
 
@@ -538,12 +745,40 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         );
       }
 
+      const resolvedEventId = normalizeWhitespace(payload?.event_id ?? "");
+      if (selectedSession.isVirtual && resolvedEventId) {
+        setSessions((current) => {
+          if (current.some((row) => row.event_id === resolvedEventId)) {
+            return current;
+          }
+
+          return [
+            {
+              event_id: resolvedEventId,
+              title: selectedSession.title,
+              event_date: selectedSession.event_date,
+              source_header: selectedSession.source_header,
+              source_column: null,
+            },
+            ...current,
+          ];
+        });
+        setSelectedSessionKey(resolvedEventId);
+      }
+
       setEntriesByMemberId((current) => ({ ...current, [memberId]: attendanceRatio }));
       const queueId = typeof payload?.queue_id === "number" ? payload.queue_id : null;
+      const placeholderHint = payload?.event_resolution === "created_placeholder"
+        ? tr(
+          " Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
+          " Working session was created and column will be prepared on write.",
+        )
+        : "";
+
       setInfoMessage(
         queueId != null
-          ? tr(`Zmiana dodana do kolejki (#${queueId}).`, `Queued successfully (#${queueId}).`)
-          : tr("Zmiana dodana do kolejki.", "Queued successfully."),
+          ? tr(`Zmiana dodana do kolejki (#${queueId}).`, `Queued successfully (#${queueId}).`) + placeholderHint
+          : tr("Zmiana dodana do kolejki.", "Queued successfully.") + placeholderHint,
       );
     } catch (error) {
       setErrorMessage(
@@ -637,7 +872,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                 const isSelected = cell.date === selectedDate;
                 const isToday = cell.date === todayIso;
                 const rehearsalExpected = expectedRehearsalSet.has(cell.date);
-                const rehearsalMissingMapping = rehearsalExpected && !hasSessions;
+                const rehearsalMissingMapping = rehearsalExpected && !sessionsForDate.some((session) => isRehearsalLikeSession(session));
 
                 return (
                   <Pressable
@@ -689,7 +924,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
             <Text style={styles.legendText}>
               {tr(
                 "Liczba = ilość sesji, P = plan próby wt/czw, czerwone P = brak mapowania kolumny na ten dzień.",
-                "Number = count of sessions, R = expected Tue/Thu rehearsal, red R = no mapped session for that day.",
+                "Number = count of sessions, R = expected Tue/Thu rehearsal, red R = no mapped rehearsal column for that day.",
               )}
             </Text>
 
@@ -700,27 +935,36 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               {selectedDateSessions.length === 0 ? (
                 <Text style={[styles.notice, styles.noticeError]}>
                   {tr(
-                    "Brak zmapowanej sesji dla tej daty. Najpierw dodaj/uzupełnij mapowanie w arkuszu i uruchom sync.",
-                    "No mapped session for this date. Add/fix mapping in sheet and run sync first.",
+                    "Brak sesji dla tej daty.",
+                    "No sessions for this date.",
                   )}
                 </Text>
               ) : (
                 <View style={styles.sessionList}>
                   {selectedDateSessions.map((session) => {
-                    const isSelected = session.event_id === selectedSessionId;
+                    const isSelected = session.key === selectedSessionKey;
                     const sourceMeta = normalizeWhitespace([session.source_header, session.source_column].filter(Boolean).join(" / "));
 
                     return (
                       <Pressable
-                        key={session.event_id}
-                        onPress={() => setSelectedSessionId(session.event_id)}
-                        style={[styles.sessionListItem, isSelected && styles.sessionListItemActive]}
+                        key={session.key}
+                        onPress={() => setSelectedSessionKey(session.key)}
+                        style={[
+                          styles.sessionListItem,
+                          session.isVirtual && styles.sessionListItemVirtual,
+                          isSelected && styles.sessionListItemActive,
+                        ]}
                       >
                         <Text style={[styles.sessionListItemTitle, isSelected && styles.sessionListItemTitleActive]}>
                           {session.title}
                         </Text>
                         <Text style={styles.sessionListItemMeta}>
-                          {sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
+                          {session.isVirtual
+                            ? tr(
+                              "Próba bez kolumny w arkuszu: pierwszy zapis utworzy kolumnę automatycznie.",
+                              "Rehearsal without sheet column: first write will create the column automatically.",
+                            )
+                            : sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
                         </Text>
                       </Pressable>
                     );
@@ -739,100 +983,110 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
             {tr("Aktywna sesja", "Active session")}: {formatDateLabel(`${selectedSession.event_date}T12:00:00`)}
             {" - "}
             {selectedSession.title}
+            {selectedSession.isVirtual ? tr(" (utworzy nową kolumnę)", " (will create a new column)") : ""}
           </Text>
         ) : (
           <Text style={styles.copy}>{tr("Wybierz sesję z kalendarza powyżej.", "Pick a session from calendar above.")}</Text>
         )}
+        {!selectedSession?.isVirtual && rsvpHintMemberIds.size > 0 ? (
+          <Text style={styles.copy}>
+            {tr(
+              `Lekko podświetlono ${rsvpHintMemberIds.size} osób z deklaracją RSVP (podpowiedź).`,
+              `${rsvpHintMemberIds.size} RSVP-declared members are softly highlighted (hint).`,
+            )}
+          </Text>
+        ) : null}
         {isEntriesLoading ? (
           <Text style={styles.copy}>{tr("Ładowanie wpisów...", "Loading entries...")}</Text>
         ) : null}
       </SurfaceCard>
 
       {memberGroups.map((group) => {
-        const isExpanded = Boolean(expandedInstruments[group.instrument]);
         const summary = summarizeGroupMarks(group.members, entriesByMemberId);
 
         return (
           <SurfaceCard key={group.instrument} variant="outline">
-            <Pressable
-              onPress={() => {
-                setExpandedInstruments((current) => ({
-                  ...current,
-                  [group.instrument]: !current[group.instrument],
-                }));
-              }}
-              style={styles.instrumentHeader}
-            >
+            <View style={styles.instrumentHeader}>
               <View style={styles.instrumentHeaderTextCol}>
                 <Text style={styles.instrumentTitle}>{group.instrument}</Text>
                 <Text style={styles.instrumentSummary}>
                   {tr("Ob", "P")}: {summary.present} · {tr("Nie", "A")}: {summary.absent} · {tr("Brak", "Unk")}: {summary.unknown}
                 </Text>
               </View>
-              <Text style={styles.instrumentToggleLabel}>{isExpanded ? tr("Ukryj", "Hide") : tr("Pokaż", "Show")}</Text>
-            </Pressable>
+            </View>
 
-            {isExpanded ? (
-              <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
-                {group.members.map((member) => {
-                  const ratio = entriesByMemberId[member.member_id];
-                  const mark = markFromRatio(ratio);
-                  const isSaving = Boolean(isSavingByMemberId[member.member_id]);
+            <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
+              {group.members.map((member) => {
+                const ratio = entriesByMemberId[member.member_id];
+                const mark = markFromRatio(ratio);
+                const isSaving = Boolean(isSavingByMemberId[member.member_id]);
+                const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
 
-                  return (
-                    <View key={member.member_id} style={[styles.memberRow, isDesktop && styles.memberRowDesktop]}>
-                      <View style={styles.memberTextCol}>
+                return (
+                  <View
+                    key={member.member_id}
+                    style={[
+                      styles.memberRow,
+                      isDesktop && styles.memberRowDesktop,
+                      isRsvpHinted && styles.memberRowHinted,
+                    ]}
+                  >
+                    <View style={styles.memberTextCol}>
+                      <View style={styles.memberNameRow}>
                         <Text numberOfLines={1} style={styles.memberName}>{member.full_name}</Text>
-                        <Text
-                          style={[
-                            styles.memberMeta,
-                            mark === "present"
-                              ? styles.memberMetaPresent
-                              : mark === "absent"
-                                ? styles.memberMetaAbsent
-                                : null,
-                          ]}
-                        >
-                          {formatMarkLabel(mark)}
-                          {ratio != null ? ` (${Math.round(ratio * 100)}%)` : ""}
-                        </Text>
+                        {isRsvpHinted ? (
+                          <Text style={styles.memberHintBadge}>{tr("RSVP", "RSVP")}</Text>
+                        ) : null}
                       </View>
-
-                      <View style={styles.memberActions}>
-                        <Pressable
-                          disabled={!canWrite || !selectedSession || isSaving}
-                          onPress={() => {
-                            void handleSetAttendance(member.member_id, 1);
-                          }}
-                          style={[
-                            styles.actionButton,
-                            mark === "present" && styles.actionButtonPresentActive,
-                          ]}
-                        >
-                          <Text style={[styles.actionButtonLabel, mark === "present" && styles.actionButtonLabelOn]}>
-                            {tr("Obecny", "Present")}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          disabled={!canWrite || !selectedSession || isSaving}
-                          onPress={() => {
-                            void handleSetAttendance(member.member_id, 0);
-                          }}
-                          style={[
-                            styles.actionButton,
-                            mark === "absent" && styles.actionButtonAbsentActive,
-                          ]}
-                        >
-                          <Text style={[styles.actionButtonLabel, mark === "absent" && styles.actionButtonLabelOn]}>
-                            {tr("Nieobecny", "Absent")}
-                          </Text>
-                        </Pressable>
-                      </View>
+                      <Text
+                        style={[
+                          styles.memberMeta,
+                          mark === "present"
+                            ? styles.memberMetaPresent
+                            : mark === "absent"
+                              ? styles.memberMetaAbsent
+                              : null,
+                        ]}
+                      >
+                        {formatMarkLabel(mark)}
+                        {ratio != null ? ` (${Math.round(ratio * 100)}%)` : ""}
+                      </Text>
                     </View>
-                  );
-                })}
-              </View>
-            ) : null}
+
+                    <View style={styles.memberActions}>
+                      <Pressable
+                        disabled={!canWrite || !selectedSession || isSaving}
+                        onPress={() => {
+                          void handleSetAttendance(member.member_id, 1);
+                        }}
+                        style={[
+                          styles.actionButton,
+                          mark === "present" && styles.actionButtonPresentActive,
+                        ]}
+                      >
+                        <Text style={[styles.actionButtonLabel, mark === "present" && styles.actionButtonLabelOn]}>
+                          {tr("Obecny", "Present")}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        disabled={!canWrite || !selectedSession || isSaving}
+                        onPress={() => {
+                          void handleSetAttendance(member.member_id, 0);
+                        }}
+                        style={[
+                          styles.actionButton,
+                          mark === "absent" && styles.actionButtonAbsentActive,
+                        ]}
+                      >
+                        <Text style={[styles.actionButtonLabel, mark === "absent" && styles.actionButtonLabelOn]}>
+                          {tr("Nieobecny", "Absent")}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
           </SurfaceCard>
         );
       })}
@@ -1039,6 +1293,11 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.xs,
     backgroundColor: tokens.colors.surface,
   },
+  sessionListItemVirtual: {
+    borderStyle: "dashed",
+    borderColor: tokens.colors.brand,
+    backgroundColor: tokens.colors.brandTint,
+  },
   sessionListItemActive: {
     borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
@@ -1079,11 +1338,6 @@ const styles = StyleSheet.create({
     color: tokens.colors.muted,
     fontWeight: "700",
   },
-  instrumentToggleLabel: {
-    color: tokens.colors.brand,
-    fontWeight: "700",
-    fontSize: tokens.typography.caption,
-  },
   memberRows: {
     gap: tokens.spacing.xs,
   },
@@ -1103,6 +1357,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: tokens.spacing.sm,
   },
+  memberRowHinted: {
+    backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
+  },
   memberRowDesktop: {
     width: "49%",
   },
@@ -1110,9 +1368,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
+  memberNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   memberName: {
+    flexShrink: 1,
     fontSize: tokens.typography.body,
     color: tokens.colors.ink,
+    fontWeight: "700",
+  },
+  memberHintBadge: {
+    fontSize: 10,
+    color: tokens.colors.brand,
+    borderWidth: 1,
+    borderColor: tokens.colors.brand,
+    borderRadius: tokens.radii.round,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
     fontWeight: "700",
   },
   memberMeta: {

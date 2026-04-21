@@ -177,6 +177,7 @@ Set on project:
 - `SHEET_TO_SUPABASE_SYNC_URL` (full URL to `sheet_to_supabase_sync`)
 - `SHEET_TO_SUPABASE_SYNC_TOKEN` (same token used by sync function)
 - optional:
+  - `ATTENDANCE_SHEET_ID` + `ATTENDANCE_SHEET_GID` (fallback tab for auto-created rehearsal columns when date has no mapped column yet)
   - `ATTENDANCE_WRITE_PROCESS_BATCH_SIZE` (default `25`)
   - `ATTENDANCE_WRITE_MAX_ATTEMPTS` (default `5`)
   - `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK` (default `false`; when `false`, process mode fails if sync trigger cannot run)
@@ -191,6 +192,65 @@ Set on project:
 Create a script in Google Apps Script attached to the workbook and deploy as Web App.
 
 ```javascript
+function columnRefToNumber(columnRef) {
+  var normalized = String(columnRef || "").toUpperCase();
+  var col = 0;
+  for (var i = 0; i < normalized.length; i++) {
+    col = col * 26 + (normalized.charCodeAt(i) - 64);
+  }
+  return col;
+}
+
+function numberToColumnRef(columnNumber) {
+  var n = Number(columnNumber || 0);
+  var label = "";
+  while (n > 0) {
+    var remainder = (n - 1) % 26;
+    label = String.fromCharCode(65 + remainder) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
+function normalizeIsoDate(raw) {
+  var value = String(raw || "").trim();
+  var exact = value.match(/^(\d{4}-\d{2}-\d{2})$/);
+  if (exact) return exact[1];
+  var fromIso = value.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (fromIso) return fromIso[1];
+  return "";
+}
+
+function findColumnByDateToken(sheet, eventDate) {
+  var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
+  for (var i = 4; i < headerRow.length; i++) {
+    var header = String(headerRow[i] || "").trim();
+    if (!header) continue;
+    if (header.indexOf(eventDate) >= 0) {
+      return { columnNumber: i + 1, header: header, created: false };
+    }
+  }
+  return null;
+}
+
+function ensureAttendanceColumn(sheet, eventDate, eventTitle, sourceHeader) {
+  var existing = findColumnByDateToken(sheet, eventDate);
+  if (existing) {
+    return existing;
+  }
+
+  var lastColumn = Math.max(sheet.getLastColumn(), 4);
+  var newColumn = lastColumn + 1;
+  var header = String(sourceHeader || "").trim();
+  if (!header) {
+    var suffix = String(eventTitle || "").trim();
+    header = suffix ? (eventDate + " " + suffix) : eventDate;
+  }
+
+  sheet.getRange(1, newColumn).setValue(header);
+  return { columnNumber: newColumn, header: header, created: true };
+}
+
 function doPost(e) {
   try {
     var token = PropertiesService.getScriptProperties().getProperty("WEBHOOK_TOKEN");
@@ -203,13 +263,11 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    var action = String(body.action || "").trim();
     var sheetId = String(body.sheetId || "");
     var gid = String(body.gid || "");
-    var rowNumber = Number(body.rowNumber || 0);
-    var columnRef = String(body.columnRef || "").toUpperCase();
-    var attendanceRatio = Number(body.attendanceRatio);
 
-    if (!sheetId || !gid || !rowNumber || !columnRef || isNaN(attendanceRatio)) {
+    if (!action || !sheetId || !gid) {
       return ContentService
         .createTextOutput(JSON.stringify({ ok: false, error: "invalid_payload" }))
         .setMimeType(ContentService.MimeType.JSON);
@@ -225,16 +283,65 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var col = 0;
-    for (var i = 0; i < columnRef.length; i++) {
-      col = col * 26 + (columnRef.charCodeAt(i) - 64);
+    if (action === "ensure_attendance_column") {
+      var eventDate = normalizeIsoDate(body.eventDate || body.event_date);
+      if (!eventDate) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ ok: false, error: "invalid_event_date" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+
+      var eventTitle = String(body.eventTitle || body.event_title || "");
+      var sourceHeader = String(body.sourceHeader || body.source_header || "");
+      var ensured = ensureAttendanceColumn(targetSheet, eventDate, eventTitle, sourceHeader);
+      SpreadsheetApp.flush();
+
+      return ContentService
+        .createTextOutput(JSON.stringify({
+          ok: true,
+          action: action,
+          columnRef: numberToColumnRef(ensured.columnNumber),
+          header: ensured.header,
+          created: ensured.created
+        }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
-    targetSheet.getRange(rowNumber, col).setValue(attendanceRatio);
+    if (action !== "set_attendance_cell") {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: "unsupported_action" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var rowNumber = Number(body.rowNumber || 0);
+    var attendanceRatio = Number(body.attendanceRatio);
+    var eventDateHint = normalizeIsoDate(body.eventDate || body.event_date);
+    var eventTitleHint = String(body.eventTitle || body.event_title || "");
+    var sourceHeaderHint = String(body.sourceHeader || body.source_header || "");
+    var columnRefRaw = String(body.columnRef || "").toUpperCase();
+
+    if (!rowNumber || isNaN(attendanceRatio)) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: "invalid_payload" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var columnNumber = columnRefRaw ? columnRefToNumber(columnRefRaw) : 0;
+    if (!columnNumber && eventDateHint) {
+      columnNumber = ensureAttendanceColumn(targetSheet, eventDateHint, eventTitleHint, sourceHeaderHint).columnNumber;
+    }
+
+    if (!columnNumber) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: false, error: "missing_column_ref" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    targetSheet.getRange(rowNumber, columnNumber).setValue(attendanceRatio);
     SpreadsheetApp.flush();
 
     return ContentService
-      .createTextOutput(JSON.stringify({ ok: true }))
+      .createTextOutput(JSON.stringify({ ok: true, action: action, columnRef: numberToColumnRef(columnNumber) }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService
@@ -262,7 +369,7 @@ Manual webhook test note:
 ```bash
 curl -iL 'https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec' \
   -H 'Content-Type: application/json' \
-  -d '{"webhookToken":"<TOKEN>","sheetId":"<SHEET_ID>","gid":"<GID>","columnRef":"E","rowNumber":6,"attendanceRatio":0.5}'
+  -d '{"webhookToken":"<TOKEN>","action":"set_attendance_cell","sheetId":"<SHEET_ID>","gid":"<GID>","columnRef":"E","rowNumber":6,"attendanceRatio":0.5}'
 ```
 
 ### 4. Ensure event/member source mappings are populated
