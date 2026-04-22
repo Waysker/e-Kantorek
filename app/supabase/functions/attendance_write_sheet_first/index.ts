@@ -1429,6 +1429,37 @@ async function ensureMemberExists(
   }
 }
 
+async function ensureMembersExist(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  memberIds: string[],
+): Promise<void> {
+  const uniqueMemberIds = Array.from(new Set(memberIds.map((id) => normalizeWhitespace(id)).filter(Boolean)));
+  if (uniqueMemberIds.length === 0) {
+    throw new HttpError(422, "missing_member_id", "At least one memberId is required.");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("members")
+    .select("member_id")
+    .in("member_id", uniqueMemberIds)
+    .returns<Array<{ member_id: string }>>();
+
+  if (error) {
+    throw new HttpError(500, "member_lookup_failed", error.message);
+  }
+
+  const found = new Set((data ?? []).map((row) => row.member_id));
+  const missing = uniqueMemberIds.filter((memberId) => !found.has(memberId));
+  if (missing.length > 0) {
+    throw new HttpError(
+      404,
+      "member_not_found",
+      `Some members were not found: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? "..." : ""}`,
+      { missing_member_ids: missing },
+    );
+  }
+}
+
 async function maybeTriggerSheetSync(): Promise<{ triggered: boolean; ok: boolean; status?: number; message?: string }> {
   if (!SHEET_TO_SUPABASE_SYNC_URL) {
     if (ALLOW_CRON_SYNC_FALLBACK) {
@@ -1599,6 +1630,169 @@ async function handleEnqueueMode(
     event_id: eventId,
     event_resolution: resolvedEvent.resolution,
     attendance_ratio: ratio,
+    source_ref: sourceSheetId && sourceGid ? `${sourceSheetId}:${sourceGid}` : null,
+    cell_ref: null,
+  });
+}
+
+async function handleEnqueueBatchMode(
+  request: Request,
+  body: Record<string, unknown>,
+  supabaseAdmin: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accessToken = parseBearerToken(request.headers.get("authorization"));
+  if (!accessToken) {
+    throw new HttpError(401, "unauthorized", "Missing Bearer access token.");
+  }
+
+  const user = await resolveUserFromToken(accessToken);
+  const profile = await loadProfile(supabaseAdmin, user.id);
+
+  const profileRole = normalizeProfileRole(profile.role);
+  const hasManagerPrivileges = profileRole === "leader" || profileRole === "admin";
+  if (!hasManagerPrivileges) {
+    throw new HttpError(
+      403,
+      "management_only_write_path",
+      "Only leader/admin can use this write path.",
+    );
+  }
+
+  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+
+  const eventIdInput = normalizeWhitespace(body.eventId ?? body.event_id ?? "");
+  const eventDateInput = parseEventDateInput(body.eventDate ?? body.event_date ?? body.startsAt ?? body.starts_at);
+  const eventTitleInput = normalizeWhitespace(body.eventTitle ?? body.event_title ?? body.title ?? "");
+  if (!eventIdInput && !eventDateInput) {
+    throw new HttpError(422, "missing_event_id_or_date", "Provide eventId or eventDate.");
+  }
+
+  const rawChanges = Array.isArray(body.changes)
+    ? body.changes
+    : Array.isArray(body.items)
+    ? body.items
+    : [];
+
+  if (rawChanges.length === 0) {
+    throw new HttpError(422, "missing_changes", "Provide non-empty changes array.");
+  }
+  if (rawChanges.length > 500) {
+    throw new HttpError(422, "too_many_changes", "Batch size exceeds limit (500).");
+  }
+
+  const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
+  const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
+  const sourceRaw = normalizeWhitespace(body.source ?? "");
+  const source = sourceRaw
+    ? sourceRaw.toLowerCase().slice(0, 64)
+    : "manager_panel";
+
+  const parsedChanges: Array<{
+    memberId: string;
+    attendanceRatio: number;
+    requestedRawValue: string;
+    requestNote: string | null;
+  }> = [];
+
+  for (let index = 0; index < rawChanges.length; index += 1) {
+    const rawChange = rawChanges[index];
+    if (!rawChange || typeof rawChange !== "object") {
+      throw new HttpError(
+        422,
+        "invalid_change_item",
+        `changes[${index}] must be an object.`,
+      );
+    }
+    const change = rawChange as Record<string, unknown>;
+    const memberId = normalizeWhitespace(change.memberId ?? change.member_id ?? "");
+    if (!memberId) {
+      throw new HttpError(
+        422,
+        "missing_member_id",
+        `changes[${index}].memberId is required.`,
+      );
+    }
+
+    const ratioInput = change.attendanceRatio ?? change.attendance_ratio ?? change.value ?? change.attendanceValue;
+    const { ratio, rawValue } = parseAttendanceRatioInput(ratioInput);
+
+    const itemNoteRaw = normalizeWhitespace(change.requestNote ?? change.note ?? "");
+    const itemNote = itemNoteRaw ? itemNoteRaw.slice(0, 500) : null;
+
+    parsedChanges.push({
+      memberId,
+      attendanceRatio: ratio,
+      requestedRawValue: rawValue,
+      requestNote: itemNote ?? requestNote,
+    });
+  }
+
+  await ensureMembersExist(supabaseAdmin, parsedChanges.map((change) => change.memberId));
+
+  const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
+    eventIdInput,
+    eventDateInput,
+    eventTitleInput,
+  });
+  const eventId = resolvedEvent.eventId;
+  const eventSourceSnapshot = await resolveEventSource(supabaseAdmin, eventId);
+  const sourceSheetId = normalizeWhitespace(eventSourceSnapshot.source_sheet_id ?? "") || null;
+  const sourceGid = normalizeWhitespace(eventSourceSnapshot.source_gid ?? "") || null;
+  const sourceColumn = normalizeWhitespace(eventSourceSnapshot.source_column ?? "") || null;
+
+  const queueRows: QueueRow[] = [];
+  for (const change of parsedChanges) {
+    const queueRow = await enqueueAttendanceChange(supabaseAdmin, {
+      memberId: change.memberId,
+      eventId,
+      attendanceRatio: change.attendanceRatio,
+      requestedRawValue: change.requestedRawValue,
+      requestedByProfileId: profile.id,
+      requestedByLabel: profile.full_name,
+      requestNote: change.requestNote,
+      source,
+      sourceSheetId,
+      sourceGid,
+      sourceColumn,
+    });
+    queueRows.push(queueRow);
+  }
+
+  await supabaseAdmin.from("change_journal").insert({
+    entity_type: "attendance_change_queue",
+    entity_id: `batch:${eventId}:${new Date().toISOString()}`,
+    action: "attendance_write_enqueued_batch",
+    actor: `profile:${profile.id}`,
+    payload: {
+      actor_member_id: actorMemberId,
+      profile_role: profileRole,
+      source,
+      event_id: eventId,
+      requested_event_id: eventIdInput || null,
+      requested_event_date: eventDateInput,
+      requested_event_title: eventTitleInput || null,
+      resolved_event_id: eventId,
+      event_resolution: resolvedEvent.resolution,
+      source_sheet_id: sourceSheetId,
+      source_gid: sourceGid,
+      source_column: sourceColumn,
+      change_count: parsedChanges.length,
+      member_ids: parsedChanges.map((change) => change.memberId),
+      queue_ids: queueRows.map((row) => row.id),
+    },
+  });
+
+  return jsonResponse({
+    status: "queued",
+    queued_count: queueRows.length,
+    queue_ids: queueRows.map((row) => row.id),
+    member_ids: parsedChanges.map((change) => change.memberId),
+    actor_member_id: actorMemberId,
+    profile_role: profileRole,
+    source,
+    requested_event_id: eventIdInput || null,
+    event_id: eventId,
+    event_resolution: resolvedEvent.resolution,
     source_ref: sourceSheetId && sourceGid ? `${sourceSheetId}:${sourceGid}` : null,
     cell_ref: null,
   });
@@ -1825,6 +2019,10 @@ Deno.serve(async (request) => {
 
     if (mode === "process") {
       return withCors(await handleProcessMode(request, body, supabaseAdmin), request);
+    }
+
+    if (mode === "enqueue_batch") {
+      return withCors(await handleEnqueueBatchMode(request, body, supabaseAdmin), request);
     }
 
     return withCors(await handleEnqueueMode(request, body, supabaseAdmin), request);

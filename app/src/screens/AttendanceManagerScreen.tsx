@@ -53,6 +53,8 @@ type AttendanceMark = "present" | "absent" | "unknown";
 type EnqueueResponsePayload = {
   status?: string;
   queue_id?: number;
+  queued_count?: number;
+  queue_ids?: number[];
   event_id?: string;
   event_resolution?: string;
   error?: string;
@@ -407,12 +409,13 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [snapshotPayload, setSnapshotPayload] = useState<ForumSnapshotPayload | null>(null);
   const [entriesByMemberId, setEntriesByMemberId] = useState<Record<string, number>>({});
+  const [pendingAttendanceByMemberId, setPendingAttendanceByMemberId] = useState<Record<string, number>>({});
   const [selectedSessionKey, setSelectedSessionKey] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDateLocal(new Date()));
   const [visibleMonthKey, setVisibleMonthKey] = useState<string>(() => getMonthKeyFromIsoDate(toIsoDateLocal(new Date())));
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [isEntriesLoading, setIsEntriesLoading] = useState(false);
-  const [isSavingByMemberId, setIsSavingByMemberId] = useState<Record<string, boolean>>({});
+  const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -587,6 +590,10 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     [selectedDateSessions, selectedSessionKey],
   );
 
+  useEffect(() => {
+    setPendingAttendanceByMemberId({});
+  }, [selectedSessionKey]);
+
   const selectedCanonicalEventId = selectedSession?.event_id ?? null;
 
   useEffect(() => {
@@ -629,6 +636,16 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       isCancelled = true;
     };
   }, [selectedCanonicalEventId]);
+
+  const mergedEntriesByMemberId = useMemo(
+    () => ({ ...entriesByMemberId, ...pendingAttendanceByMemberId }),
+    [entriesByMemberId, pendingAttendanceByMemberId],
+  );
+
+  const pendingChangesCount = useMemo(
+    () => Object.keys(pendingAttendanceByMemberId).length,
+    [pendingAttendanceByMemberId],
+  );
 
   const memberGroups = useMemo(() => groupMembersByInstrument(members), [members]);
 
@@ -673,7 +690,26 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     return hinted;
   }, [memberIdByNormalizedName, selectedSession, snapshotEvents]);
 
-  async function handleSetAttendance(memberId: string, attendanceRatio: number) {
+  function handleSetAttendance(memberId: string, attendanceRatio: number) {
+    if (!selectedSession) {
+      setErrorMessage(tr("Najpierw wybierz sesję.", "Select a session first."));
+      return;
+    }
+
+    setInfoMessage(null);
+    setErrorMessage(null);
+    setPendingAttendanceByMemberId((current) => ({
+      ...current,
+      [memberId]: attendanceRatio,
+    }));
+  }
+
+  function handleClearPendingChanges() {
+    setPendingAttendanceByMemberId({});
+    setInfoMessage(null);
+  }
+
+  async function handleSavePendingChanges() {
     if (!supabaseAuthClient || !ATTENDANCE_WRITE_FUNCTION_URL) {
       setErrorMessage(
         tr(
@@ -689,9 +725,18 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       return;
     }
 
+    const changes = Object.entries(pendingAttendanceByMemberId).map(([memberId, attendanceRatio]) => ({
+      memberId,
+      attendanceRatio,
+    }));
+    if (changes.length === 0) {
+      setInfoMessage(tr("Brak zmian do zapisania.", "No pending changes to save."));
+      return;
+    }
+
     setInfoMessage(null);
     setErrorMessage(null);
-    setIsSavingByMemberId((current) => ({ ...current, [memberId]: true }));
+    setIsBatchSaving(true);
 
     try {
       const { data: sessionData, error: sessionError } = await supabaseAuthClient.auth.getSession();
@@ -716,14 +761,13 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          mode: "enqueue",
+          mode: "enqueue_batch",
           eventId: selectedSession.event_id ?? selectedSession.key,
           eventDate: selectedSession.event_date,
           eventTitle: selectedSession.title,
-          memberId,
-          attendanceRatio,
           source: "manager_panel",
-          requestNote: `manager-attendance:${selectedSession.key}:${memberId}`,
+          requestNote: `manager-attendance-batch:${selectedSession.key}`,
+          changes,
         }),
       });
 
@@ -739,8 +783,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         throw new Error(
           details ||
             tr(
-              "Nie udało się dodać zmiany obecności do kolejki.",
-              "Failed to enqueue attendance change.",
+              "Nie udało się dodać zmian obecności do kolejki.",
+              "Failed to enqueue attendance changes.",
             ),
         );
       }
@@ -766,8 +810,10 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         setSelectedSessionKey(resolvedEventId);
       }
 
-      setEntriesByMemberId((current) => ({ ...current, [memberId]: attendanceRatio }));
-      const queueId = typeof payload?.queue_id === "number" ? payload.queue_id : null;
+      setEntriesByMemberId((current) => ({ ...current, ...pendingAttendanceByMemberId }));
+      setPendingAttendanceByMemberId({});
+
+      const queuedCount = typeof payload?.queued_count === "number" ? payload.queued_count : changes.length;
       const placeholderHint = payload?.event_resolution === "created_placeholder"
         ? tr(
           " Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
@@ -776,9 +822,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         : "";
 
       setInfoMessage(
-        queueId != null
-          ? tr(`Zmiana dodana do kolejki (#${queueId}).`, `Queued successfully (#${queueId}).`) + placeholderHint
-          : tr("Zmiana dodana do kolejki.", "Queued successfully.") + placeholderHint,
+        tr(`Zmieniono i zakolejkowano ${queuedCount} wpisów.`, `${queuedCount} changes queued.`) + placeholderHint,
       );
     } catch (error) {
       setErrorMessage(
@@ -787,7 +831,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           : tr("Nie udało się zapisać obecności.", "Failed to save attendance."),
       );
     } finally {
-      setIsSavingByMemberId((current) => ({ ...current, [memberId]: false }));
+      setIsBatchSaving(false);
     }
   }
 
@@ -996,13 +1040,49 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
             )}
           </Text>
         ) : null}
+        {pendingChangesCount > 0 ? (
+          <Text style={styles.copy}>
+            {tr(
+              `Masz ${pendingChangesCount} zmian roboczych. Kliknij "Zapisz zmiany", gdy skończysz odklikiwanie.`,
+              `${pendingChangesCount} staged changes. Click "Save changes" when done.`,
+            )}
+          </Text>
+        ) : null}
         {isEntriesLoading ? (
           <Text style={styles.copy}>{tr("Ładowanie wpisów...", "Loading entries...")}</Text>
         ) : null}
+        <View style={styles.batchActionsRow}>
+          <Pressable
+            disabled={!canWrite || !selectedSession || pendingChangesCount === 0 || isBatchSaving}
+            onPress={() => {
+              void handleSavePendingChanges();
+            }}
+            style={[
+              styles.batchPrimaryButton,
+              (!canWrite || !selectedSession || pendingChangesCount === 0 || isBatchSaving) && styles.batchButtonDisabled,
+            ]}
+          >
+            <Text style={styles.batchPrimaryButtonLabel}>
+              {isBatchSaving
+                ? tr("Zapisywanie...", "Saving...")
+                : tr(`Zapisz zmiany (${pendingChangesCount})`, `Save changes (${pendingChangesCount})`)}
+            </Text>
+          </Pressable>
+          <Pressable
+            disabled={pendingChangesCount === 0 || isBatchSaving}
+            onPress={handleClearPendingChanges}
+            style={[
+              styles.batchSecondaryButton,
+              (pendingChangesCount === 0 || isBatchSaving) && styles.batchButtonDisabled,
+            ]}
+          >
+            <Text style={styles.batchSecondaryButtonLabel}>{tr("Wyczyść", "Clear")}</Text>
+          </Pressable>
+        </View>
       </SurfaceCard>
 
       {memberGroups.map((group) => {
-        const summary = summarizeGroupMarks(group.members, entriesByMemberId);
+        const summary = summarizeGroupMarks(group.members, mergedEntriesByMemberId);
 
         return (
           <SurfaceCard key={group.instrument} variant="outline">
@@ -1017,10 +1097,10 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
             <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
               {group.members.map((member) => {
-                const ratio = entriesByMemberId[member.member_id];
+                const ratio = mergedEntriesByMemberId[member.member_id];
                 const mark = markFromRatio(ratio);
-                const isSaving = Boolean(isSavingByMemberId[member.member_id]);
                 const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
+                const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
 
                 return (
                   <View
@@ -1029,6 +1109,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                       styles.memberRow,
                       isDesktop && styles.memberRowDesktop,
                       isRsvpHinted && styles.memberRowHinted,
+                      hasPendingOverride && styles.memberRowPending,
                     ]}
                   >
                     <View style={styles.memberTextCol}>
@@ -1050,14 +1131,15 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                       >
                         {formatMarkLabel(mark)}
                         {ratio != null ? ` (${Math.round(ratio * 100)}%)` : ""}
+                        {hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
                       </Text>
                     </View>
 
                     <View style={styles.memberActions}>
                       <Pressable
-                        disabled={!canWrite || !selectedSession || isSaving}
+                        disabled={!canWrite || !selectedSession || isBatchSaving}
                         onPress={() => {
-                          void handleSetAttendance(member.member_id, 1);
+                          handleSetAttendance(member.member_id, 1);
                         }}
                         style={[
                           styles.actionButton,
@@ -1069,9 +1151,9 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                         </Text>
                       </Pressable>
                       <Pressable
-                        disabled={!canWrite || !selectedSession || isSaving}
+                        disabled={!canWrite || !selectedSession || isBatchSaving}
                         onPress={() => {
-                          void handleSetAttendance(member.member_id, 0);
+                          handleSetAttendance(member.member_id, 0);
                         }}
                         style={[
                           styles.actionButton,
@@ -1338,6 +1420,43 @@ const styles = StyleSheet.create({
     color: tokens.colors.muted,
     fontWeight: "700",
   },
+  batchActionsRow: {
+    marginTop: tokens.spacing.sm,
+    flexDirection: "row",
+    gap: tokens.spacing.xs,
+  },
+  batchPrimaryButton: {
+    flex: 1,
+    borderRadius: tokens.radii.round,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    backgroundColor: tokens.colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  batchPrimaryButtonLabel: {
+    color: tokens.colors.surface,
+    fontWeight: "700",
+    fontSize: tokens.typography.caption,
+  },
+  batchSecondaryButton: {
+    borderRadius: tokens.radii.round,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    backgroundColor: tokens.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  batchSecondaryButtonLabel: {
+    color: tokens.colors.muted,
+    fontWeight: "700",
+    fontSize: tokens.typography.caption,
+  },
+  batchButtonDisabled: {
+    opacity: 0.45,
+  },
   memberRows: {
     gap: tokens.spacing.xs,
   },
@@ -1359,6 +1478,9 @@ const styles = StyleSheet.create({
   },
   memberRowHinted: {
     backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
+  },
+  memberRowPending: {
     borderColor: tokens.colors.brand,
   },
   memberRowDesktop: {
