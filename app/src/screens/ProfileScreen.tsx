@@ -38,9 +38,7 @@ export function ProfileScreen({
   dataSourceGeneratedAt,
   signedInEmail,
   onSignOut,
-  canManageAttendanceSetup,
   canManageActualAttendance,
-  onOpenAttendanceSetup,
   onOpenAttendanceManager,
 }: {
   currentUser: UserProfile;
@@ -48,9 +46,7 @@ export function ProfileScreen({
   dataSourceGeneratedAt: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
-  canManageAttendanceSetup?: boolean;
   canManageActualAttendance?: boolean;
-  onOpenAttendanceSetup?: () => void;
   onOpenAttendanceManager?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
@@ -90,28 +86,6 @@ export function ProfileScreen({
           </Pressable>
         ) : null}
       </SurfaceCard>
-
-      {canManageAttendanceSetup && onOpenAttendanceSetup ? (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia lidera", "Leader tools")}
-          </Text>
-          <Text style={styles.cardTitle}>
-            {tr("Konfiguracja obecności", "Attendance setup")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Załaduj kopię arkusza obecności i opublikuj ją do Supabase. Ten PoC zasila też mapowanie instrumentów dla importu forum.",
-              "Upload the attendance workbook copy and publish it to Supabase. This PoC also refreshes instrument mapping for forum import.",
-            )}
-          </Text>
-          <Pressable style={styles.manageButton} onPress={onOpenAttendanceSetup}>
-            <Text style={styles.manageButtonLabel}>
-              {tr("Otwórz konfigurację", "Open setup")}
-            </Text>
-          </Pressable>
-        </SurfaceCard>
-      ) : null}
 
       {canManageActualAttendance && onOpenAttendanceManager ? (
         <SurfaceCard variant="default">

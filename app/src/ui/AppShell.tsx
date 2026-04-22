@@ -24,7 +24,6 @@ type AppShellProps = {
 };
 
 const tabs: { key: PrimaryTab; label: string }[] = [
-  { key: "feed", label: tr("Aktualności", "Feed") },
   { key: "events", label: tr("Wydarzenia", "Events") },
   { key: "profile", label: tr("Profil", "Profile") },
 ];

@@ -10,7 +10,6 @@ import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
   EventDetail,
   EventListItem,
-  FeedPost,
   UserProfile,
 } from "./src/domain/models";
 import type { AppRoute, PrimaryTab } from "./src/navigation/routes";
@@ -18,10 +17,8 @@ import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
 import { EventsScreen } from "./src/screens/EventsScreen";
-import { FeedScreen } from "./src/screens/FeedScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
-import { AttendanceSetupScreen } from "./src/screens/AttendanceSetupScreen";
 import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
@@ -35,7 +32,6 @@ const repositories = createPrototypeRepositories();
 
 type LoadedData = {
   currentUser: UserProfile;
-  feedPosts: FeedPost[];
   events: EventListItem[];
   eventDetailsById: Record<string, EventDetail>;
   dataSourceLabel: string;
@@ -67,6 +63,23 @@ type ProfileRow = {
 };
 
 type AuthView = "sign_in" | "register";
+const ROOT_ROUTE: AppRoute = { name: "events" };
+
+function isSameRoute(left: AppRoute, right: AppRoute): boolean {
+  if (left.name !== right.name) {
+    return false;
+  }
+
+  if (!("eventId" in left) && !("eventId" in right)) {
+    return true;
+  }
+
+  if ("eventId" in left && "eventId" in right) {
+    return left.eventId === right.eventId;
+  }
+
+  return false;
+}
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>({ status: "checking" });
@@ -75,9 +88,33 @@ export default function App() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("sign_in");
   const [state, setState] = useState<AppState>({ status: "loading" });
-  const [route, setRoute] = useState<AppRoute>({ name: "feed" });
+  const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
+  const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
   const authenticatedUserId =
     authState.status === "signed_in" ? authState.session.user.id : null;
+
+  function pushRoute(nextRoute: AppRoute) {
+    setRouteStack((current) => {
+      const activeRoute = current[current.length - 1];
+      if (activeRoute && isSameRoute(activeRoute, nextRoute)) {
+        return current;
+      }
+      return [...current, nextRoute];
+    });
+  }
+
+  function resetToRoute(nextRoute: AppRoute) {
+    setRouteStack([nextRoute]);
+  }
+
+  function goBack(fallbackRoute: AppRoute = ROOT_ROUTE) {
+    setRouteStack((current) => {
+      if (current.length <= 1) {
+        return [fallbackRoute];
+      }
+      return current.slice(0, -1);
+    });
+  }
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured || !supabaseAuthClient) {
@@ -153,9 +190,8 @@ export default function App() {
 
     async function load() {
       try {
-        const [currentUser, feedPosts, events, profileResult] = await Promise.all([
+        const [currentUser, events, profileResult] = await Promise.all([
           repositories.users.getCurrentUser(),
-          repositories.feed.listFeedPosts(),
           repositories.events.listEvents(),
           supabaseAuthClient
             ? supabaseAuthClient
@@ -184,7 +220,6 @@ export default function App() {
             status: "ready",
             data: {
               currentUser,
-              feedPosts,
               events,
               eventDetailsById: Object.fromEntries(
                   eventDetails.map((event) => [event.id, event]),
@@ -314,7 +349,7 @@ export default function App() {
       return;
     }
 
-    setRoute({ name: "feed" });
+    resetToRoute(ROOT_ROUTE);
     setState({ status: "loading" });
     setAuthView("sign_in");
   }
@@ -420,7 +455,6 @@ export default function App() {
 
   const {
     currentUser,
-    feedPosts,
     events,
     eventDetailsById,
     dataSourceLabel,
@@ -457,46 +491,32 @@ export default function App() {
   const activeTab = routeToTab(route);
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
-  const canManageAttendanceSetup =
+  const canManageAttendance =
     effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
-  const canManageActualAttendance = canManageAttendanceSetup;
 
   function openTab(tab: PrimaryTab) {
-    if (tab === "feed") {
-      setRoute({ name: "feed" });
-      return;
-    }
-
     if (tab === "events") {
-      setRoute({ name: "events" });
+      resetToRoute({ name: "events" });
       return;
     }
 
-    setRoute({ name: "profile" });
+    resetToRoute({ name: "profile" });
   }
 
   function renderScreen() {
     switch (route.name) {
-      case "feed":
-        return (
-          <FeedScreen
-            currentUser={effectiveCurrentUser}
-            feedPosts={feedPosts}
-            onOpenEvents={() => setRoute({ name: "events" })}
-          />
-        );
       case "events":
         return (
           <EventsScreen
             events={events}
-            onOpenEvent={(eventId) => setRoute({ name: "eventDetail", eventId })}
+            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
           />
         );
       case "eventDetail":
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Nie znaleziono wydarzenia", "Event not found")}
             />
           );
@@ -505,12 +525,12 @@ export default function App() {
         return (
           <EventDetailScreen
             event={selectedEvent}
-            onBack={() => setRoute({ name: "events" })}
+            onBack={() => goBack({ name: "events" })}
             onOpenAttendance={() =>
-              setRoute({ name: "attendance", eventId: selectedEvent.id })
+              pushRoute({ name: "attendance", eventId: selectedEvent.id })
             }
             onOpenSetlist={() =>
-              setRoute({ name: "setlist", eventId: selectedEvent.id })
+              pushRoute({ name: "setlist", eventId: selectedEvent.id })
             }
           />
         );
@@ -518,7 +538,7 @@ export default function App() {
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak danych obecności", "Attendance unavailable")}
             />
           );
@@ -527,16 +547,14 @@ export default function App() {
         return (
           <AttendanceScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "setlist":
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak setlisty", "Setlist unavailable")}
             />
           );
@@ -545,16 +563,14 @@ export default function App() {
         return (
           <SetlistScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "squad":
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak składu", "Squad unavailable")}
             />
           );
@@ -563,9 +579,7 @@ export default function App() {
         return (
           <SquadScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "profile":
@@ -576,38 +590,20 @@ export default function App() {
             dataSourceGeneratedAt={dataSourceGeneratedAt}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
-            canManageAttendanceSetup={canManageAttendanceSetup}
-            canManageActualAttendance={canManageActualAttendance}
-            onOpenAttendanceSetup={
-              canManageAttendanceSetup
-                ? () => setRoute({ name: "attendanceSetup" })
-                : undefined
-            }
+            canManageActualAttendance={canManageAttendance}
             onOpenAttendanceManager={
-              canManageActualAttendance
-                ? () => setRoute({ name: "attendanceManager" })
+              canManageAttendance
+                ? () => pushRoute({ name: "attendanceManager" })
                 : undefined
             }
           />
         );
       case "attendanceManager":
-        return canManageActualAttendance ? (
-          <AttendanceManagerScreen onBack={() => setRoute({ name: "profile" })} />
+        return canManageAttendance ? (
+          <AttendanceManagerScreen onBack={() => goBack({ name: "profile" })} />
         ) : (
           <MissingEventScreen
-            onBack={() => setRoute({ name: "profile" })}
-            title={tr("Brak uprawnień", "No permission")}
-          />
-        );
-      case "attendanceSetup":
-        return canManageAttendanceSetup ? (
-          <AttendanceSetupScreen
-            currentUser={effectiveCurrentUser}
-            onBack={() => setRoute({ name: "profile" })}
-          />
-        ) : (
-          <MissingEventScreen
-            onBack={() => setRoute({ name: "profile" })}
+            onBack={() => goBack({ name: "profile" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
