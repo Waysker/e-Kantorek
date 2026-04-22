@@ -94,11 +94,22 @@ type GroupSummary = {
   points100: number;
 };
 
+type SectionGridItem = {
+  key: string;
+  label: string;
+  group: { instrument: string; members: MemberRow[] } | null;
+};
+
 const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
 const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
 const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
 const REHEARSAL_KEYWORDS = ["proba", "próba", "rehearsal", "wtorek", "czwartek", "tuesday", "thursday"];
 const ATTENDANCE_RATIO_EPSILON = 0.001;
+const REHEARSAL_SECTION_ROWS = [
+  ["Flety", "Oboje", "Klarnety"],
+  ["Gitary", "Eufonia", "Fagoty", "Saksofony", "Waltornie"],
+  ["Perkusja", "Tuby", "Puzony", "Trąbki"],
+] as const;
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
@@ -139,6 +150,10 @@ function normalizeSearchText(value: unknown): string {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
+}
+
+function normalizeInstrumentKey(value: unknown): string {
+  return normalizeSearchText(value).replace(/\s+/g, " ").trim();
 }
 
 function normalizePersonName(value: unknown): string {
@@ -451,6 +466,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
   const canWrite = Boolean(
     ATTENDANCE_WRITE_UI_ENABLED &&
@@ -693,6 +709,68 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   );
 
   const memberGroups = useMemo(() => groupMembersByInstrument(members), [members]);
+  const sectionGridRows = useMemo<SectionGridItem[][]>(() => {
+    const groupByKey = new Map<string, { instrument: string; members: MemberRow[] }>();
+    for (const group of memberGroups) {
+      groupByKey.set(normalizeInstrumentKey(group.instrument), group);
+    }
+
+    const usedKeys = new Set<string>();
+    const rows: SectionGridItem[][] = REHEARSAL_SECTION_ROWS.map((row) =>
+      row.map((label) => {
+        const key = normalizeInstrumentKey(label);
+        const group = groupByKey.get(key) ?? null;
+        if (group) {
+          usedKeys.add(key);
+        }
+        return {
+          key,
+          label,
+          group,
+        };
+      }),
+    );
+
+    const extraGroups = memberGroups.filter((group) => !usedKeys.has(normalizeInstrumentKey(group.instrument)));
+    if (extraGroups.length > 0) {
+      rows.push(
+        extraGroups.map((group) => ({
+          key: normalizeInstrumentKey(group.instrument),
+          label: group.instrument,
+          group,
+        })),
+      );
+    }
+
+    return rows;
+  }, [memberGroups]);
+  const sectionByKey = useMemo(() => {
+    const map = new Map<string, SectionGridItem>();
+    for (const row of sectionGridRows) {
+      for (const item of row) {
+        map.set(item.key, item);
+      }
+    }
+    return map;
+  }, [sectionGridRows]);
+  const selectedSection = useMemo(
+    () => (selectedSectionKey ? sectionByKey.get(selectedSectionKey) ?? null : null),
+    [sectionByKey, selectedSectionKey],
+  );
+  const selectedSectionMembers = selectedSection?.group?.members ?? [];
+  const selectedSectionSummary = useMemo(
+    () => summarizeGroupMarks(selectedSectionMembers, mergedEntriesByMemberId),
+    [mergedEntriesByMemberId, selectedSectionMembers],
+  );
+
+  useEffect(() => {
+    if (!selectedSectionKey) {
+      return;
+    }
+    if (!sectionByKey.has(selectedSectionKey)) {
+      setSelectedSectionKey(null);
+    }
+  }, [sectionByKey, selectedSectionKey]);
 
   const memberIdByNormalizedName = useMemo(() => {
     const map = new Map<string, string>();
@@ -1126,83 +1204,136 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         </View>
       </SurfaceCard>
 
-      {memberGroups.map((group) => {
-        const summary = summarizeGroupMarks(group.members, mergedEntriesByMemberId);
+      <SurfaceCard variant="outline">
+        {!selectedSection ? (
+          <>
+            <Text style={styles.sectionTitle}>
+              {tr("Sekcje według ustawienia na próbie", "Sections by rehearsal seating")}
+            </Text>
+            <Text style={styles.copy}>
+              {tr(
+                "Wybierz sekcję, aby odklikać obecność jej muzyków. Licznik pokazuje odklikane osoby (wartość > 0) względem składu sekcji.",
+                "Pick a section to mark attendance for its players. Counter shows marked players (value > 0) against section size.",
+              )}
+            </Text>
 
-        return (
-          <SurfaceCard key={group.instrument} variant="outline">
+            <View style={styles.sectionGrid}>
+              {sectionGridRows.map((row, rowIndex) => (
+                <View key={`section-row-${rowIndex}`} style={styles.sectionGridRow}>
+                  {row.map((item) => {
+                    const sectionMembers = item.group?.members ?? [];
+                    const summary = summarizeGroupMarks(sectionMembers, mergedEntriesByMemberId);
+                    const totalMembers = sectionMembers.length;
+                    const markedMembers = Math.max(totalMembers - summary.points000, 0);
+
+                    return (
+                      <Pressable
+                        key={item.key}
+                        onPress={() => setSelectedSectionKey(item.key)}
+                        style={[
+                          styles.sectionTile,
+                          !item.group && styles.sectionTileEmpty,
+                        ]}
+                      >
+                        <Text style={styles.sectionTileLabel}>{item.label}</Text>
+                        <Text style={styles.sectionTileMeta}>
+                          {totalMembers > 0
+                            ? tr(`${markedMembers}/${totalMembers} odklikane`, `${markedMembers}/${totalMembers} marked`)
+                            : tr("Brak składu", "No members")}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))}
+            </View>
+          </>
+        ) : (
+          <>
             <View style={styles.instrumentHeader}>
               <View style={styles.instrumentHeaderTextCol}>
-                <Text style={styles.instrumentTitle}>{group.instrument}</Text>
+                <Pressable onPress={() => setSelectedSectionKey(null)} style={styles.sectionBackButton}>
+                  <Text style={styles.sectionBackButtonLabel}>{tr("← Wróć do sekcji", "← Back to sections")}</Text>
+                </Pressable>
+                <Text style={styles.sectionDetailTitle}>{selectedSection.label}</Text>
                 <Text style={styles.instrumentSummary}>
-                  {`1.00: ${summary.points100} · 0.75: ${summary.points075} · 0.50: ${summary.points050} · 0.25: ${summary.points025} · 0.00: ${summary.points000}`}
+                  {`1.00: ${selectedSectionSummary.points100} · 0.75: ${selectedSectionSummary.points075} · 0.50: ${selectedSectionSummary.points050} · 0.25: ${selectedSectionSummary.points025} · 0.00: ${selectedSectionSummary.points000}`}
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
-              {group.members.map((member) => {
-                const ratio = mergedEntriesByMemberId[member.member_id];
-                const mark = markFromRatio(ratio);
-                const nextRatio = getNextAttendanceRatio(ratio);
-                const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
-                const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
-                const isTileDisabled = !canWrite || !selectedSession || isBatchSaving;
+            {selectedSectionMembers.length === 0 ? (
+              <Text style={styles.copy}>
+                {tr(
+                  "Ta sekcja nie ma jeszcze przypisanych muzyków w aktywnym składzie.",
+                  "This section has no active members assigned yet.",
+                )}
+              </Text>
+            ) : (
+              <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
+                {selectedSectionMembers.map((member) => {
+                  const ratio = mergedEntriesByMemberId[member.member_id];
+                  const mark = markFromRatio(ratio);
+                  const nextRatio = getNextAttendanceRatio(ratio);
+                  const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
+                  const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
+                  const isTileDisabled = !canWrite || !selectedSession || isBatchSaving;
 
-                return (
-                  <Pressable
-                    key={member.member_id}
-                    disabled={isTileDisabled}
-                    onPress={() => {
-                      handleSetAttendance(member.member_id, nextRatio);
-                    }}
-                    style={[
-                      styles.memberRow,
-                      isDesktop && styles.memberRowDesktop,
-                      isDesktop && { width: desktopTileWidth },
-                      isRsvpHinted && styles.memberRowHinted,
-                      hasPendingOverride && styles.memberRowPending,
-                      isTileDisabled && styles.memberRowDisabled,
-                    ]}
-                  >
-                    <View style={styles.memberTextCol}>
-                      <View style={styles.memberNameRow}>
-                        <Text numberOfLines={1} style={styles.memberName}>{member.full_name}</Text>
-                        {isRsvpHinted ? (
-                          <Text style={styles.memberHintBadge}>{tr("RSVP", "RSVP")}</Text>
-                        ) : null}
-                      </View>
-                      <Text
-                        style={[
-                          styles.memberMeta,
-                          mark === 1
-                            ? styles.memberMetaPresent
-                            : mark === 0
-                              ? styles.memberMetaAbsent
-                              : null,
-                        ]}
-                      >
-                        {formatMarkLabel(mark)}
-                        {hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
-                      </Text>
-                    </View>
-
-                    <View
+                  return (
+                    <Pressable
+                      key={member.member_id}
+                      disabled={isTileDisabled}
+                      onPress={() => {
+                        handleSetAttendance(member.member_id, nextRatio);
+                      }}
                       style={[
-                        styles.cycleButton,
-                        styles.cycleButtonActive,
-                        mark === 1 ? styles.cycleButtonActiveStrong : null,
+                        styles.memberRow,
+                        isDesktop && styles.memberRowDesktop,
+                        isDesktop && { width: desktopTileWidth },
+                        isRsvpHinted && styles.memberRowHinted,
+                        hasPendingOverride && styles.memberRowPending,
+                        isTileDisabled && styles.memberRowDisabled,
                       ]}
                     >
-                      <Text style={styles.cycleButtonLabel}>{formatAttendanceValue(mark)}</Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </SurfaceCard>
-        );
-      })}
+                      <View style={styles.memberTextCol}>
+                        <View style={styles.memberNameRow}>
+                          <Text numberOfLines={1} style={styles.memberName}>{member.full_name}</Text>
+                          {isRsvpHinted ? (
+                            <Text style={styles.memberHintBadge}>{tr("RSVP", "RSVP")}</Text>
+                          ) : null}
+                        </View>
+                        <Text
+                          style={[
+                            styles.memberMeta,
+                            mark === 1
+                              ? styles.memberMetaPresent
+                              : mark === 0
+                                ? styles.memberMetaAbsent
+                                : null,
+                          ]}
+                        >
+                          {formatMarkLabel(mark)}
+                          {hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.cycleButton,
+                          styles.cycleButtonActive,
+                          mark === 1 ? styles.cycleButtonActiveStrong : null,
+                        ]}
+                      >
+                        <Text style={styles.cycleButtonLabel}>{formatAttendanceValue(mark)}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          </>
+        )}
+      </SurfaceCard>
     </ScrollView>
   );
 }
@@ -1428,6 +1559,41 @@ const styles = StyleSheet.create({
     color: tokens.colors.muted,
     fontSize: 11,
   },
+  sectionGrid: {
+    marginTop: tokens.spacing.sm,
+    gap: tokens.spacing.xs,
+  },
+  sectionGridRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: tokens.spacing.xs,
+  },
+  sectionTile: {
+    flex: 1,
+    minHeight: 84,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.sm,
+    backgroundColor: tokens.colors.surface,
+    justifyContent: "space-between",
+    gap: tokens.spacing.xs,
+  },
+  sectionTileEmpty: {
+    opacity: 0.65,
+    backgroundColor: tokens.colors.surfaceMuted,
+  },
+  sectionTileLabel: {
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  sectionTileMeta: {
+    color: tokens.colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+  },
   instrumentHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1449,6 +1615,20 @@ const styles = StyleSheet.create({
   instrumentSummary: {
     fontSize: 11,
     color: tokens.colors.muted,
+    fontWeight: "700",
+  },
+  sectionBackButton: {
+    alignSelf: "flex-start",
+    marginBottom: 2,
+  },
+  sectionBackButtonLabel: {
+    color: tokens.colors.brand,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  sectionDetailTitle: {
+    fontSize: tokens.typography.body,
+    color: tokens.colors.ink,
     fontWeight: "700",
   },
   batchActionsRow: {
