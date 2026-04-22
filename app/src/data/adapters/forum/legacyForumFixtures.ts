@@ -38,13 +38,13 @@ export const legacyForumMembers: LegacyForumMemberRow[] = [
     member_id: "member-lead",
     full_name: "Lead Member",
     role_code: "leader",
-    instrument_label: "Trabki",
+    instrument_label: "Trąbki",
   },
   {
     member_id: "member-a",
     full_name: "Member A",
     role_code: "member",
-    instrument_label: "Trabki",
+    instrument_label: "Trąbki",
   },
   {
     member_id: "member-admin",

@@ -125,6 +125,33 @@ const INCLUDE_HIDDEN_DISCOVERED_SHEETS =
 const FUNCTION_AUTH_TOKEN = Deno.env.get("SHEET_SYNC_FUNCTION_AUTH_TOKEN");
 const DRY_RUN_ONLY = (Deno.env.get("SHEET_SYNC_DRY_RUN_ONLY") ?? "true").toLowerCase() !== "false";
 const DEFAULT_DRY_RUN = (Deno.env.get("SHEET_SYNC_DEFAULT_DRY_RUN") ?? "true").toLowerCase() !== "false";
+const CANONICAL_INSTRUMENT_LABEL_BY_KEY: Record<string, string> = {
+  flet: "Flety",
+  flety: "Flety",
+  oboj: "Oboje",
+  oboje: "Oboje",
+  klarnet: "Klarnety",
+  klarnety: "Klarnety",
+  fagot: "Fagoty",
+  fagoty: "Fagoty",
+  saksofon: "Saksofony",
+  saksofony: "Saksofony",
+  waltornia: "Waltornie",
+  waltornie: "Waltornie",
+  trabka: "Trąbki",
+  trabki: "Trąbki",
+  puzon: "Puzony",
+  puzony: "Puzony",
+  tuba: "Tuby",
+  tuby: "Tuby",
+  eufonia: "Eufonia",
+  eufonie: "Eufonia",
+  perkusja: "Perkusja",
+  gitara: "Gitary",
+  gitary: "Gitary",
+  bas: "Gitary",
+  basy: "Gitary",
+};
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -139,6 +166,27 @@ function normalizeWhitespace(value: unknown): string {
   return String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeInstrumentKey(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function canonicalizeInstrumentLabel(
+  value: unknown,
+  fallbackLabel = "Unknown",
+): string {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return fallbackLabel;
+  }
+
+  return CANONICAL_INSTRUMENT_LABEL_BY_KEY[normalizeInstrumentKey(normalized)] ?? normalized;
 }
 
 function slugify(value: string): string {
@@ -922,7 +970,7 @@ function buildPreflight(
     const row = rows[rowIndex] ?? [];
     const sectionCell = normalizeWhitespace(row[0] ?? "");
     if (sectionCell) {
-      currentInstrument = sectionCell;
+      currentInstrument = canonicalizeInstrumentLabel(sectionCell, "Unknown");
     }
 
     const positionRaw = normalizeWhitespace(row[1] ?? "");
@@ -952,7 +1000,7 @@ function buildPreflight(
       });
     }
 
-    const instrument = currentInstrument || "Unknown";
+    const instrument = canonicalizeInstrumentLabel(currentInstrument, "Unknown");
     const memberBaseId = `member-${slugify(`${lastName}-${firstName}-${instrument}`) || `row-${rowIndex + 1}`}`;
     let memberId = memberBaseId;
     if (usedMemberIds.has(memberId)) {

@@ -217,6 +217,47 @@ function normalizeMatchText(value: unknown): string {
     .trim();
 }
 
+const CANONICAL_INSTRUMENT_LABEL_BY_KEY: Record<string, string> = {
+  flet: "Flety",
+  flety: "Flety",
+  oboj: "Oboje",
+  oboje: "Oboje",
+  klarnet: "Klarnety",
+  klarnety: "Klarnety",
+  fagot: "Fagoty",
+  fagoty: "Fagoty",
+  saksofon: "Saksofony",
+  saksofony: "Saksofony",
+  waltornia: "Waltornie",
+  waltornie: "Waltornie",
+  trabka: "Trąbki",
+  trabki: "Trąbki",
+  puzon: "Puzony",
+  puzony: "Puzony",
+  tuba: "Tuby",
+  tuby: "Tuby",
+  eufonia: "Eufonia",
+  eufonie: "Eufonia",
+  perkusja: "Perkusja",
+  gitara: "Gitary",
+  gitary: "Gitary",
+  bas: "Gitary",
+  basy: "Gitary",
+};
+
+function normalizeInstrumentKey(value: unknown): string {
+  return normalizeMatchText(value);
+}
+
+function canonicalizeInstrumentLabel(value: unknown): string {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return "";
+  }
+
+  return CANONICAL_INSTRUMENT_LABEL_BY_KEY[normalizeInstrumentKey(normalized)] ?? normalized;
+}
+
 function slugify(value: unknown): string {
   return normalizeWhitespace(value)
     .normalize("NFD")
@@ -785,8 +826,8 @@ async function resolveMemberIdForProfile(
   }
 
   const instrumentMatch = candidates.filter((candidate) =>
-    normalizeWhitespace(candidate.instrument).toLowerCase() ===
-      normalizeWhitespace(profile.instrument).toLowerCase()
+    normalizeInstrumentKey(canonicalizeInstrumentLabel(candidate.instrument)) ===
+      normalizeInstrumentKey(canonicalizeInstrumentLabel(profile.instrument))
   );
   const narrowed = instrumentMatch.length > 0 ? instrumentMatch : candidates;
 

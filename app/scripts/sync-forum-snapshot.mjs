@@ -29,6 +29,33 @@ const DEFAULT_CONFIG = {
 const FALLBACK_EVENT_HOUR = 19;
 const FALLBACK_EVENT_MINUTE = 0;
 const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
+const CANONICAL_INSTRUMENT_LABEL_BY_KEY = {
+  flet: "Flety",
+  flety: "Flety",
+  oboj: "Oboje",
+  oboje: "Oboje",
+  klarnet: "Klarnety",
+  klarnety: "Klarnety",
+  fagot: "Fagoty",
+  fagoty: "Fagoty",
+  saksofon: "Saksofony",
+  saksofony: "Saksofony",
+  waltornia: "Waltornie",
+  waltornie: "Waltornie",
+  trabka: "Trąbki",
+  trabki: "Trąbki",
+  puzon: "Puzony",
+  puzony: "Puzony",
+  tuba: "Tuby",
+  tuby: "Tuby",
+  eufonia: "Eufonia",
+  eufonie: "Eufonia",
+  perkusja: "Perkusja",
+  gitara: "Gitary",
+  gitary: "Gitary",
+  bas: "Gitary",
+  basy: "Gitary",
+};
 
 class CookieJar {
   constructor() {
@@ -95,6 +122,22 @@ function normalizeMultilineText(value) {
 
 function stripDiacritics(value) {
   return value.normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+function normalizeInstrumentKey(value) {
+  return stripDiacritics(normalizeWhitespace(value))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function canonicalizeInstrumentLabel(value, fallbackLabel = UNKNOWN_INSTRUMENT_LABEL) {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return fallbackLabel;
+  }
+
+  return CANONICAL_INSTRUMENT_LABEL_BY_KEY[normalizeInstrumentKey(normalized)] ?? normalized;
 }
 
 function sanitizeFileName(value) {
@@ -710,7 +753,11 @@ function normalizeInstrumentValue(value) {
   }
 
   const trimmed = repairPolishMojibake(value).trim();
-  return trimmed && trimmed !== "-" ? trimmed : undefined;
+  if (!trimmed || trimmed === "-") {
+    return undefined;
+  }
+
+  return canonicalizeInstrumentLabel(trimmed);
 }
 
 function getOverrideValue(map, key) {

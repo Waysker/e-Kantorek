@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
+import { canonicalizeInstrumentLabel, normalizeInstrumentKey } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { SurfaceCard } from "../ui/SurfaceCard";
@@ -150,10 +151,6 @@ function normalizeSearchText(value: unknown): string {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
-}
-
-function normalizeInstrumentKey(value: unknown): string {
-  return normalizeSearchText(value).replace(/\s+/g, " ").trim();
 }
 
 function normalizePersonName(value: unknown): string {
@@ -345,7 +342,7 @@ function extractResponseErrorMessage(payload: unknown): string | null {
 function groupMembersByInstrument(members: MemberRow[]): Array<{ instrument: string; members: MemberRow[] }> {
   const grouped = new Map<string, MemberRow[]>();
   for (const member of members) {
-    const instrument = normalizeWhitespace(member.instrument) || tr("Nieprzypisany", "Unassigned");
+    const instrument = canonicalizeInstrumentLabel(member.instrument, tr("Nieprzypisany", "Unassigned"));
     const bucket = grouped.get(instrument) ?? [];
     bucket.push(member);
     grouped.set(instrument, bucket);
@@ -715,14 +712,10 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       groupByKey.set(normalizeInstrumentKey(group.instrument), group);
     }
 
-    const usedKeys = new Set<string>();
     const rows: SectionGridItem[][] = REHEARSAL_SECTION_ROWS.map((row) =>
       row.map((label) => {
         const key = normalizeInstrumentKey(label);
         const group = groupByKey.get(key) ?? null;
-        if (group) {
-          usedKeys.add(key);
-        }
         return {
           key,
           label,
@@ -730,17 +723,6 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         };
       }),
     );
-
-    const extraGroups = memberGroups.filter((group) => !usedKeys.has(normalizeInstrumentKey(group.instrument)));
-    if (extraGroups.length > 0) {
-      rows.push(
-        extraGroups.map((group) => ({
-          key: normalizeInstrumentKey(group.instrument),
-          label: group.instrument,
-          group,
-        })),
-      );
-    }
 
     return rows;
   }, [memberGroups]);

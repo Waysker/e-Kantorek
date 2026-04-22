@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import type { AttendanceStatus, EventDetail, SquadGroup } from "../domain/models";
+import { canonicalizeInstrumentLabel, UNKNOWN_INSTRUMENT_LABEL } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { AttendanceSummaryStrip } from "../ui/AttendanceSummaryStrip";
@@ -21,8 +22,6 @@ type AttendanceScreenProps = {
 };
 
 type SelectableAttendanceStatus = Exclude<AttendanceStatus, "no_response">;
-
-const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
 
 function sortGroupsByInstrument(left: SquadGroup, right: SquadGroup) {
   if (left.instrument === UNKNOWN_INSTRUMENT_LABEL) {
@@ -43,7 +42,7 @@ function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
     }
 
     for (const participant of responseGroup.participants) {
-      const instrument = participant.primaryInstrument ?? UNKNOWN_INSTRUMENT_LABEL;
+      const instrument = canonicalizeInstrumentLabel(participant.primaryInstrument, UNKNOWN_INSTRUMENT_LABEL);
       const group = grouped.get(instrument) ?? {
         instrument,
         confirmedMembers: [],
