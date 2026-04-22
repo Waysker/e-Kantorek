@@ -266,6 +266,20 @@ function formatMarkLabel(mark: AttendanceMark, rawRatio: number | undefined): st
   return tr(`${mark.toFixed(2)} pkt`, `${mark.toFixed(2)} pts`);
 }
 
+function getNextAttendanceRatio(currentRatio: number | undefined): AttendancePointOption {
+  const currentMark = markFromRatio(currentRatio);
+  if (currentMark === "unknown") {
+    return ATTENDANCE_POINT_OPTIONS[0];
+  }
+
+  const currentIndex = ATTENDANCE_POINT_OPTIONS.findIndex((option) => option === currentMark);
+  if (currentIndex < 0) {
+    return ATTENDANCE_POINT_OPTIONS[0];
+  }
+
+  return ATTENDANCE_POINT_OPTIONS[(currentIndex + 1) % ATTENDANCE_POINT_OPTIONS.length];
+}
+
 function buildExpectedRehearsalDates(now: Date, pastWeeks = 8, futureWeeks = 6): string[] {
   const start = new Date(now);
   start.setDate(start.getDate() - pastWeeks * 7);
@@ -464,6 +478,18 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     ],
     [],
   );
+  const desktopTileWidth = useMemo(() => {
+    if (!isDesktop) {
+      return "100%";
+    }
+    if (width >= 1900) {
+      return "24%";
+    }
+    if (width >= 1500) {
+      return "32%";
+    }
+    return "49%";
+  }, [isDesktop, width]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1125,6 +1151,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               {group.members.map((member) => {
                 const ratio = mergedEntriesByMemberId[member.member_id];
                 const mark = markFromRatio(ratio);
+                const nextRatio = getNextAttendanceRatio(ratio);
                 const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
                 const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
 
@@ -1134,6 +1161,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                     style={[
                       styles.memberRow,
                       isDesktop && styles.memberRowDesktop,
+                      isDesktop && { width: desktopTileWidth },
                       isRsvpHinted && styles.memberRowHinted,
                       hasPendingOverride && styles.memberRowPending,
                     ]}
@@ -1160,34 +1188,19 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                       </Text>
                     </View>
 
-                    <View style={styles.memberActions}>
-                      {ATTENDANCE_POINT_OPTIONS.map((option) => {
-                        const isActive = isSameAttendanceRatio(ratio, option);
-
-                        return (
-                          <Pressable
-                            key={`${member.member_id}-${option}`}
-                            disabled={!canWrite || !selectedSession || isBatchSaving}
-                            onPress={() => {
-                              handleSetAttendance(member.member_id, option);
-                            }}
-                            style={[
-                              styles.actionButton,
-                              isActive && styles.actionButtonPointActive,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.actionButtonLabel,
-                                isActive && styles.actionButtonLabelOn,
-                              ]}
-                            >
-                              {option.toFixed(2)}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
+                    <Pressable
+                      disabled={!canWrite || !selectedSession || isBatchSaving}
+                      onPress={() => {
+                        handleSetAttendance(member.member_id, nextRatio);
+                      }}
+                      style={[
+                        styles.cycleButton,
+                        mark !== "unknown" && styles.cycleButtonActive,
+                      ]}
+                    >
+                      <Text style={styles.cycleButtonLabel}>{nextRatio.toFixed(2)}</Text>
+                      <Text style={styles.cycleButtonMeta}>{tr("następna", "next")}</Text>
+                    </Pressable>
                   </View>
                 );
               })}
@@ -1210,7 +1223,7 @@ const styles = StyleSheet.create({
   desktopContent: {
     alignSelf: "center",
     width: "100%",
-    maxWidth: 1260,
+    maxWidth: 1800,
   },
   backLink: {
     marginBottom: tokens.spacing.xs,
@@ -1481,23 +1494,24 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   memberRows: {
-    gap: tokens.spacing.xs,
+    gap: 6,
   },
   memberRowsDesktop: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: 8,
   },
   memberRow: {
     borderWidth: 1,
     borderColor: tokens.colors.border,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     backgroundColor: tokens.colors.surface,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: tokens.spacing.sm,
+    gap: 8,
   },
   memberRowHinted: {
     backgroundColor: tokens.colors.brandTint,
@@ -1507,7 +1521,7 @@ const styles = StyleSheet.create({
     borderColor: tokens.colors.brand,
   },
   memberRowDesktop: {
-    width: "49%",
+    minHeight: 54,
   },
   memberTextCol: {
     flex: 1,
@@ -1545,28 +1559,29 @@ const styles = StyleSheet.create({
   memberMetaAbsent: {
     color: tokens.colors.dangerInk,
   },
-  memberActions: {
-    flexDirection: "row",
-    gap: tokens.spacing.xs,
-  },
-  actionButton: {
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
+  cycleButton: {
+    minWidth: 66,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: tokens.radii.round,
     borderWidth: 1,
     borderColor: tokens.colors.border,
     backgroundColor: tokens.colors.surface,
+    alignItems: "center",
   },
-  actionButtonPointActive: {
+  cycleButtonActive: {
     borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
   },
-  actionButtonLabel: {
+  cycleButtonLabel: {
     fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
+    color: tokens.colors.ink,
     fontWeight: "700",
   },
-  actionButtonLabelOn: {
-    color: tokens.colors.ink,
+  cycleButtonMeta: {
+    marginTop: 1,
+    fontSize: 10,
+    color: tokens.colors.muted,
+    fontWeight: "700",
   },
 });
