@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
-import { startTransition, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { startTransition, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 
@@ -64,6 +64,7 @@ type ProfileRow = {
 
 type AuthView = "sign_in" | "register";
 const ROOT_ROUTE: AppRoute = { name: "events" };
+const HISTORY_STATE_MARKER = "__oragh_route_stack__";
 
 function isSameRoute(left: AppRoute, right: AppRoute): boolean {
   if (left.name !== right.name) {
@@ -81,6 +82,62 @@ function isSameRoute(left: AppRoute, right: AppRoute): boolean {
   return false;
 }
 
+function isValidAppRoute(value: unknown): value is AppRoute {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { name?: unknown; eventId?: unknown };
+  if (typeof candidate.name !== "string") {
+    return false;
+  }
+
+  if (
+    candidate.name === "events" ||
+    candidate.name === "profile" ||
+    candidate.name === "attendanceManager"
+  ) {
+    return true;
+  }
+
+  if (
+    candidate.name === "eventDetail" ||
+    candidate.name === "attendance" ||
+    candidate.name === "setlist" ||
+    candidate.name === "squad"
+  ) {
+    return typeof candidate.eventId === "string" && candidate.eventId.trim().length > 0;
+  }
+
+  return false;
+}
+
+function parseRouteStackFromHistoryState(state: unknown): AppRoute[] | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const stackValue = (state as Record<string, unknown>)[HISTORY_STATE_MARKER];
+  if (!Array.isArray(stackValue) || stackValue.length === 0) {
+    return null;
+  }
+
+  const parsedStack = stackValue.filter((entry): entry is AppRoute => isValidAppRoute(entry));
+  if (parsedStack.length !== stackValue.length) {
+    return null;
+  }
+
+  return parsedStack;
+}
+
+function areRouteStacksEqual(left: AppRoute[], right: AppRoute[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((route, index) => isSameRoute(route, right[index]));
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>({ status: "checking" });
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
@@ -90,6 +147,8 @@ export default function App() {
   const [state, setState] = useState<AppState>({ status: "loading" });
   const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
   const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
+  const browserHistoryRestoreRef = useRef(false);
+  const isWeb = Platform.OS === "web";
   const authenticatedUserId =
     authState.status === "signed_in" ? authState.session.user.id : null;
 
@@ -115,6 +174,60 @@ export default function App() {
       return current.slice(0, -1);
     });
   }
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined") {
+      return;
+    }
+
+    const existingStack = parseRouteStackFromHistoryState(window.history.state);
+    if (existingStack && existingStack.length > 0) {
+      browserHistoryRestoreRef.current = true;
+      setRouteStack(existingStack);
+    } else {
+      window.history.replaceState({ [HISTORY_STATE_MARKER]: [ROOT_ROUTE] }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const stackFromState = parseRouteStackFromHistoryState(event.state);
+      if (!stackFromState || stackFromState.length === 0) {
+        return;
+      }
+
+      browserHistoryRestoreRef.current = true;
+      setRouteStack(stackFromState);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isWeb]);
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined") {
+      return;
+    }
+
+    if (browserHistoryRestoreRef.current) {
+      browserHistoryRestoreRef.current = false;
+      return;
+    }
+
+    const currentStack = parseRouteStackFromHistoryState(window.history.state);
+    if (currentStack && areRouteStacksEqual(currentStack, routeStack)) {
+      return;
+    }
+
+    const nextState = { [HISTORY_STATE_MARKER]: routeStack };
+    if (!window.history.state || parseRouteStackFromHistoryState(window.history.state) === null) {
+      window.history.replaceState(nextState, "");
+      return;
+    }
+
+    window.history.pushState(nextState, "");
+  }, [isWeb, routeStack]);
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured || !supabaseAuthClient) {

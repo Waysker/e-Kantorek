@@ -48,9 +48,8 @@ type AttendanceEntryRow = {
   attendance_ratio: number;
 };
 
-const ATTENDANCE_POINT_OPTIONS = [0.25, 0.5, 0.75, 1] as const;
-type AttendancePointOption = (typeof ATTENDANCE_POINT_OPTIONS)[number];
-type AttendanceMark = AttendancePointOption | "unknown";
+const ATTENDANCE_CYCLE_SEQUENCE = [0, 1, 0.75, 0.5, 0.25] as const;
+type AttendanceRatioValue = (typeof ATTENDANCE_CYCLE_SEQUENCE)[number];
 
 type EnqueueResponsePayload = {
   status?: string;
@@ -88,11 +87,11 @@ type CalendarCell = {
 };
 
 type GroupSummary = {
+  points000: number;
   points025: number;
   points050: number;
   points075: number;
   points100: number;
-  unknown: number;
 };
 
 const ATTENDANCE_WRITE_FUNCTION_NAME = "attendance_write_sheet_first";
@@ -241,43 +240,37 @@ function isSameAttendanceRatio(left: number | undefined, right: number): boolean
   return Math.abs(left - right) <= ATTENDANCE_RATIO_EPSILON;
 }
 
-function markFromRatio(attendanceRatio: number | undefined): AttendanceMark {
-  if (attendanceRatio == null || !Number.isFinite(attendanceRatio)) {
-    return "unknown";
-  }
-
-  for (const option of ATTENDANCE_POINT_OPTIONS) {
+function markFromRatio(attendanceRatio: number | undefined): AttendanceRatioValue {
+  for (const option of ATTENDANCE_CYCLE_SEQUENCE) {
     if (isSameAttendanceRatio(attendanceRatio, option)) {
       return option;
     }
   }
 
-  return "unknown";
+  return 0;
 }
 
-function formatMarkLabel(mark: AttendanceMark, rawRatio: number | undefined): string {
-  if (mark === "unknown") {
-    if (rawRatio != null && Number.isFinite(rawRatio)) {
-      return tr(`niestandardowe ${rawRatio.toFixed(2)} pkt`, `custom ${rawRatio.toFixed(2)} pts`);
-    }
-    return tr("brak wpisu", "not marked");
+function formatAttendanceValue(value: AttendanceRatioValue): string {
+  if (Number.isInteger(value)) {
+    return String(value);
   }
 
-  return tr(`${mark.toFixed(2)} pkt`, `${mark.toFixed(2)} pts`);
+  const rounded = Number(value.toFixed(2));
+  return String(rounded);
 }
 
-function getNextAttendanceRatio(currentRatio: number | undefined): AttendancePointOption {
+function formatMarkLabel(mark: AttendanceRatioValue): string {
+  return tr(`${formatAttendanceValue(mark)} pkt`, `${formatAttendanceValue(mark)} pts`);
+}
+
+function getNextAttendanceRatio(currentRatio: number | undefined): AttendanceRatioValue {
   const currentMark = markFromRatio(currentRatio);
-  if (currentMark === "unknown") {
-    return ATTENDANCE_POINT_OPTIONS[0];
-  }
-
-  const currentIndex = ATTENDANCE_POINT_OPTIONS.findIndex((option) => option === currentMark);
+  const currentIndex = ATTENDANCE_CYCLE_SEQUENCE.findIndex((option) => option === currentMark);
   if (currentIndex < 0) {
-    return ATTENDANCE_POINT_OPTIONS[0];
+    return ATTENDANCE_CYCLE_SEQUENCE[1];
   }
 
-  return ATTENDANCE_POINT_OPTIONS[(currentIndex + 1) % ATTENDANCE_POINT_OPTIONS.length];
+  return ATTENDANCE_CYCLE_SEQUENCE[(currentIndex + 1) % ATTENDANCE_CYCLE_SEQUENCE.length];
 }
 
 function buildExpectedRehearsalDates(now: Date, pastWeeks = 8, futureWeeks = 6): string[] {
@@ -352,15 +345,17 @@ function groupMembersByInstrument(members: MemberRow[]): Array<{ instrument: str
 }
 
 function summarizeGroupMarks(members: MemberRow[], entriesByMemberId: Record<string, number>): GroupSummary {
+  let points000 = 0;
   let points025 = 0;
   let points050 = 0;
   let points075 = 0;
   let points100 = 0;
-  let unknown = 0;
 
   for (const member of members) {
     const mark = markFromRatio(entriesByMemberId[member.member_id]);
-    if (mark === 0.25) {
+    if (mark === 0) {
+      points000 += 1;
+    } else if (mark === 0.25) {
       points025 += 1;
     } else if (mark === 0.5) {
       points050 += 1;
@@ -368,12 +363,10 @@ function summarizeGroupMarks(members: MemberRow[], entriesByMemberId: Record<str
       points075 += 1;
     } else if (mark === 1) {
       points100 += 1;
-    } else {
-      unknown += 1;
     }
   }
 
-  return { points025, points050, points075, points100, unknown };
+  return { points000, points025, points050, points075, points100 };
 }
 
 function extractSnapshotEventDetails(payload: ForumSnapshotPayload | null): SnapshotEventDetail[] {
@@ -905,8 +898,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         <Text style={styles.title}>{tr("Faktyczna obecność", "Actual attendance")}</Text>
         <Text style={styles.copy}>
           {tr(
-            "Tutaj zaznaczasz realną obecność po próbie/wydarzeniu punktami 0.25 / 0.50 / 0.75 / 1.00. Deklaracje RSVP z eventów są tylko podpowiedzią i nie są źródłem prawdy.",
-            "Use this screen to mark real attendance after rehearsal/event with 0.25 / 0.50 / 0.75 / 1.00 points. RSVP declarations from events are only hints and are not the source of truth.",
+            "Klikaj w kafelek orkiestranta, aby przełączać punkty: 0 -> 1 -> 0.75 -> 0.50 -> 0.25. Deklaracje RSVP z eventów są tylko podpowiedzią i nie są źródłem prawdy.",
+            "Click a member tile to cycle points: 0 -> 1 -> 0.75 -> 0.50 -> 0.25. RSVP declarations from events are only hints and are not the source of truth.",
           )}
         </Text>
         {!canWrite ? (
@@ -1142,7 +1135,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               <View style={styles.instrumentHeaderTextCol}>
                 <Text style={styles.instrumentTitle}>{group.instrument}</Text>
                 <Text style={styles.instrumentSummary}>
-                  {`1.00: ${summary.points100} · 0.75: ${summary.points075} · 0.50: ${summary.points050} · 0.25: ${summary.points025} · ${tr("Brak", "None")}: ${summary.unknown}`}
+                  {`1.00: ${summary.points100} · 0.75: ${summary.points075} · 0.50: ${summary.points050} · 0.25: ${summary.points025} · 0.00: ${summary.points000}`}
                 </Text>
               </View>
             </View>
@@ -1154,16 +1147,22 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                 const nextRatio = getNextAttendanceRatio(ratio);
                 const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
                 const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
+                const isTileDisabled = !canWrite || !selectedSession || isBatchSaving;
 
                 return (
-                  <View
+                  <Pressable
                     key={member.member_id}
+                    disabled={isTileDisabled}
+                    onPress={() => {
+                      handleSetAttendance(member.member_id, nextRatio);
+                    }}
                     style={[
                       styles.memberRow,
                       isDesktop && styles.memberRowDesktop,
                       isDesktop && { width: desktopTileWidth },
                       isRsvpHinted && styles.memberRowHinted,
                       hasPendingOverride && styles.memberRowPending,
+                      isTileDisabled && styles.memberRowDisabled,
                     ]}
                   >
                     <View style={styles.memberTextCol}>
@@ -1178,30 +1177,26 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                           styles.memberMeta,
                           mark === 1
                             ? styles.memberMetaPresent
-                            : mark === 0.25
+                            : mark === 0
                               ? styles.memberMetaAbsent
                               : null,
                         ]}
                       >
-                        {formatMarkLabel(mark, ratio)}
+                        {formatMarkLabel(mark)}
                         {hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
                       </Text>
                     </View>
 
-                    <Pressable
-                      disabled={!canWrite || !selectedSession || isBatchSaving}
-                      onPress={() => {
-                        handleSetAttendance(member.member_id, nextRatio);
-                      }}
+                    <View
                       style={[
                         styles.cycleButton,
-                        mark !== "unknown" && styles.cycleButtonActive,
+                        styles.cycleButtonActive,
+                        mark === 1 ? styles.cycleButtonActiveStrong : null,
                       ]}
                     >
-                      <Text style={styles.cycleButtonLabel}>{nextRatio.toFixed(2)}</Text>
-                      <Text style={styles.cycleButtonMeta}>{tr("następna", "next")}</Text>
-                    </Pressable>
-                  </View>
+                      <Text style={styles.cycleButtonLabel}>{formatAttendanceValue(mark)}</Text>
+                    </View>
+                  </Pressable>
                 );
               })}
             </View>
@@ -1520,6 +1515,9 @@ const styles = StyleSheet.create({
   memberRowPending: {
     borderColor: tokens.colors.brand,
   },
+  memberRowDisabled: {
+    opacity: 0.65,
+  },
   memberRowDesktop: {
     minHeight: 54,
   },
@@ -1573,15 +1571,13 @@ const styles = StyleSheet.create({
     borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
   },
+  cycleButtonActiveStrong: {
+    borderColor: tokens.colors.successInk,
+    backgroundColor: tokens.colors.successSurface,
+  },
   cycleButtonLabel: {
     fontSize: tokens.typography.caption,
     color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cycleButtonMeta: {
-    marginTop: 1,
-    fontSize: 10,
-    color: tokens.colors.muted,
     fontWeight: "700",
   },
 });
