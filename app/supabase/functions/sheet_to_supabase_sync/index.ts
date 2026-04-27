@@ -39,6 +39,7 @@ type ParsedEventDate =
     isoDate: string;
     year: number;
     normalizedFromSwap?: boolean;
+    normalizedFromSwapReason?: "invalid_month_day" | "ambiguous_day_month_preference";
   }
   | {
     status: "needs_month";
@@ -111,12 +112,22 @@ type PreflightResult = {
   };
 };
 
+type EventDateOverride = {
+  sourceRef: string;
+  columnRef: string;
+  eventDate: string;
+  title?: string;
+};
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY =
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SECRET_KEY");
 const DEFAULT_SHEET_ID = Deno.env.get("ATTENDANCE_SHEET_ID");
 const DEFAULT_SHEET_GID = Deno.env.get("ATTENDANCE_SHEET_GID");
 const DEFAULT_SHEET_SOURCES_JSON = Deno.env.get("ATTENDANCE_SHEET_SOURCES_JSON");
+const EVENT_DATE_OVERRIDES_BY_SOURCE = parseEventDateOverrides(
+  Deno.env.get("ATTENDANCE_EVENT_DATE_OVERRIDES_JSON"),
+);
 const GOOGLE_SHEETS_API_KEY = Deno.env.get("GOOGLE_SHEETS_API_KEY");
 const AUTO_DISCOVER_SOURCES = (Deno.env.get("ATTENDANCE_SHEET_AUTO_DISCOVER_SOURCES") ?? "false").toLowerCase() !==
   "false";
@@ -256,6 +267,85 @@ function buildIsoDate(year: number, month: number, day: number): string | null {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function parseIsoDateLiteral(value: unknown): string | null {
+  const normalized = normalizeWhitespace(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return buildIsoDate(year, month, day);
+}
+
+function parseEventDateOverrides(raw: unknown): Map<string, Map<string, EventDateOverride>> {
+  const result = new Map<string, Map<string, EventDateOverride>>();
+  if (!raw) {
+    return result;
+  }
+
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      return result;
+    }
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return result;
+    }
+  }
+
+  if (!Array.isArray(parsed)) {
+    return result;
+  }
+
+  for (const candidate of parsed) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+    const record = candidate as Record<string, unknown>;
+
+    let sourceRef = normalizeWhitespace(record.sourceRef ?? record.source_ref ?? "");
+    if (!sourceRef) {
+      const sheetId = normalizeWhitespace(record.sheetId ?? record.sheet_id ?? "");
+      const gid = normalizeWhitespace(record.gid ?? record.sheetGid ?? record.sheet_gid ?? "");
+      if (sheetId && /^\d+$/.test(gid)) {
+        sourceRef = `${sheetId}:${gid}`;
+      }
+    }
+    if (!sourceRef || !sourceRef.includes(":")) {
+      continue;
+    }
+
+    const columnRef = normalizeWhitespace(record.columnRef ?? record.column_ref ?? "").toUpperCase();
+    if (!/^[A-Z]+$/.test(columnRef)) {
+      continue;
+    }
+
+    const eventDate = parseIsoDateLiteral(record.eventDate ?? record.event_date ?? "");
+    if (!eventDate) {
+      continue;
+    }
+
+    const title = normalizeWhitespace(record.title ?? "");
+    const override: EventDateOverride = {
+      sourceRef,
+      columnRef,
+      eventDate,
+      title: title || undefined,
+    };
+
+    const byColumn = result.get(sourceRef) ?? new Map<string, EventDateOverride>();
+    byColumn.set(columnRef, override);
+    result.set(sourceRef, byColumn);
+  }
+
+  return result;
+}
+
 function inferSeasonYear(baseYear: number, month: number): number {
   return month <= 6 ? baseYear + 1 : baseYear;
 }
@@ -318,6 +408,13 @@ function parseCsv(input: string): string[][] {
 }
 
 function parseIsoDateToken(header: string): ParsedEventDate {
+  return parseIsoDateTokenWithOptions(header, { preferSwapForAmbiguous: false });
+}
+
+function parseIsoDateTokenWithOptions(
+  header: string,
+  options: { preferSwapForAmbiguous: boolean },
+): ParsedEventDate {
   const normalized = normalizeWhitespace(header);
   const match = normalized.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
   if (!match) {
@@ -345,25 +442,41 @@ function parseIsoDateToken(header: string): ParsedEventDate {
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
-  const isoDate = buildIsoDate(year, month, day);
+  const directDate = buildIsoDate(year, month, day);
+  const swappedDate = buildIsoDate(year, day, month);
 
-  if (isoDate) {
+  if (directDate && swappedDate) {
+    if (options.preferSwapForAmbiguous) {
+      return {
+        status: "ok",
+        isoDate: swappedDate,
+        year,
+        normalizedFromSwap: true,
+        normalizedFromSwapReason: "ambiguous_day_month_preference",
+      };
+    }
     return {
       status: "ok",
-      isoDate,
+      isoDate: directDate,
       year,
     };
   }
 
-  const suggestionMonth = day;
-  const suggestionDay = month;
-  const suggestion = buildIsoDate(year, suggestionMonth, suggestionDay);
-  if (suggestion) {
+  if (directDate) {
     return {
       status: "ok",
-      isoDate: suggestion,
+      isoDate: directDate,
+      year,
+    };
+  }
+
+  if (swappedDate) {
+    return {
+      status: "ok",
+      isoDate: swappedDate,
       year,
       normalizedFromSwap: true,
+      normalizedFromSwapReason: "invalid_month_day",
     };
   }
 
@@ -372,6 +485,48 @@ function parseIsoDateToken(header: string): ParsedEventDate {
     reason: "invalid_date_token",
     suggestion: undefined,
   };
+}
+
+function detectPreferSwapForAmbiguousDateTokens(headers: string[]): {
+  preferSwapForAmbiguous: boolean;
+  swapOnlyCount: number;
+  directOnlyCount: number;
+} {
+  let swapOnlyCount = 0;
+  let directOnlyCount = 0;
+
+  for (const header of headers) {
+    const normalized = normalizeWhitespace(header);
+    if (!normalized) {
+      continue;
+    }
+    const match = normalized.match(/(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+    if (!match) {
+      continue;
+    }
+
+    const year = Number(match[1]);
+    const first = Number(match[2]);
+    const second = Number(match[3]);
+    const directDate = buildIsoDate(year, first, second);
+    const swappedDate = buildIsoDate(year, second, first);
+
+    if (!directDate && swappedDate) {
+      swapOnlyCount += 1;
+    } else if (directDate && !swappedDate) {
+      directOnlyCount += 1;
+    }
+  }
+
+  return {
+    preferSwapForAmbiguous: swapOnlyCount > 0 && directOnlyCount === 0,
+    swapOnlyCount,
+    directOnlyCount,
+  };
+}
+
+function dayFromIsoDate(isoDate: string): number {
+  return Number(isoDate.slice(8, 10));
 }
 
 function parseSheetSource(candidate: unknown): SheetSource | null {
@@ -725,6 +880,7 @@ function buildPreflight(
   options?: {
     globalDominantYear?: number | null;
     sourceMonthHint?: number | null;
+    eventDateOverridesByColumn?: Map<string, EventDateOverride>;
   },
 ): PreflightResult {
   const issues: SyncIssue[] = [];
@@ -747,24 +903,51 @@ function buildPreflight(
     }
   }
 
-  const rawEventColumns: Array<{
+  const rawEventColumnCandidates: Array<{
     index: number;
     columnRef: string;
     header: string;
-    parsed: ParsedEventDate;
   }> = [];
   for (let col = 4; col < header.length; col += 1) {
     const rawHeader = normalizeWhitespace(header[col] ?? "");
     if (!rawHeader) {
       continue;
     }
-    rawEventColumns.push({
+    rawEventColumnCandidates.push({
       index: col,
       columnRef: toColumnRef(col),
       header: rawHeader,
-      parsed: parseIsoDateToken(rawHeader),
     });
   }
+
+  const dateStylePreference = detectPreferSwapForAmbiguousDateTokens(
+    rawEventColumnCandidates.map((candidate) => candidate.header),
+  );
+
+  if (dateStylePreference.preferSwapForAmbiguous) {
+    issues.push({
+      severity: "warning",
+      code: "event_date_style_inferred_day_month",
+      message:
+        "Interpreted ambiguous YYYY-MM-DD tokens as YYYY-DD-MM based on non-ambiguous columns in this sheet.",
+      details: {
+        swap_only_count: dateStylePreference.swapOnlyCount,
+        direct_only_count: dateStylePreference.directOnlyCount,
+      },
+    });
+  }
+
+  const rawEventColumns: Array<{
+    index: number;
+    columnRef: string;
+    header: string;
+    parsed: ParsedEventDate;
+  }> = rawEventColumnCandidates.map((candidate) => ({
+    ...candidate,
+    parsed: parseIsoDateTokenWithOptions(candidate.header, {
+      preferSwapForAmbiguous: dateStylePreference.preferSwapForAmbiguous,
+    }),
+  }));
 
   const dominantYear = modeNumber(
     rawEventColumns
@@ -779,11 +962,16 @@ function buildPreflight(
 
   const events: EventColumn[] = [];
   const usedEventIds = new Set<string>();
+  const missingDateEventIndexes: number[] = [];
+  const missingDateEventContextByIndex = new Map<number, { columnRef: string; header: string }>();
 
   for (const rawColumn of rawEventColumns) {
     let eventDate: string | null = null;
+    const columnOverride = options?.eventDateOverridesByColumn?.get(rawColumn.columnRef);
 
-    if (rawColumn.parsed.status === "ok") {
+    if (columnOverride) {
+      eventDate = columnOverride.eventDate;
+    } else if (rawColumn.parsed.status === "ok") {
       eventDate = rawColumn.parsed.isoDate;
       if (rawColumn.parsed.normalizedFromSwap) {
         issues.push({
@@ -924,15 +1112,24 @@ function buildPreflight(
         details: rawColumn.parsed.suggestion ? { suggested_iso_date: rawColumn.parsed.suggestion } : {},
       });
     } else {
-      issues.push({
-        severity: "warning",
-        code: rawColumn.parsed.reason,
-        message: `Invalid or missing date token in ${rawColumn.columnRef} (${rawColumn.header}).`,
-        column_ref: rawColumn.columnRef,
-      });
+      if (rawColumn.parsed.reason === "missing_date_token") {
+        const eventIndex = events.length;
+        missingDateEventIndexes.push(eventIndex);
+        missingDateEventContextByIndex.set(eventIndex, {
+          columnRef: rawColumn.columnRef,
+          header: rawColumn.header,
+        });
+      } else {
+        issues.push({
+          severity: "warning",
+          code: rawColumn.parsed.reason,
+          message: `Invalid or missing date token in ${rawColumn.columnRef} (${rawColumn.header}).`,
+          column_ref: rawColumn.columnRef,
+        });
+      }
     }
 
-    const title = eventTitleFromHeader(rawColumn.header);
+    const title = normalizeWhitespace(columnOverride?.title ?? "") || eventTitleFromHeader(rawColumn.header);
     const baseId = eventDate
       ? `evt-${eventDate}-${slugify(title || rawColumn.columnRef)}`
       : `evt-${rawColumn.columnRef}-${slugify(title || "event")}`;
@@ -952,6 +1149,63 @@ function buildPreflight(
       eventId,
       title: title || rawColumn.header,
       eventDate,
+    });
+  }
+
+  for (const missingIndex of missingDateEventIndexes) {
+    const target = events[missingIndex];
+    if (!target || target.eventDate) {
+      continue;
+    }
+
+    const left = events[missingIndex - 1];
+    const right = events[missingIndex + 1];
+    if (!left?.eventDate || !right?.eventDate) {
+      continue;
+    }
+
+    const leftMonthKey = left.eventDate.slice(0, 7);
+    const rightMonthKey = right.eventDate.slice(0, 7);
+    if (leftMonthKey !== rightMonthKey) {
+      continue;
+    }
+
+    const dayGap = Math.abs(dayFromIsoDate(right.eventDate) - dayFromIsoDate(left.eventDate));
+    if (dayGap > 3) {
+      continue;
+    }
+
+    target.eventDate = left.eventDate;
+    issues.push({
+      severity: "warning",
+      code: "event_date_inferred_from_neighbors",
+      message:
+        `Inferred missing date token in ${target.columnRef} (${target.header}) from neighboring columns ${left.columnRef}/${right.columnRef}.`,
+      column_ref: target.columnRef,
+      details: {
+        inferred_iso_date: target.eventDate,
+        left_neighbor_column: left.columnRef,
+        left_neighbor_iso_date: left.eventDate,
+        right_neighbor_column: right.columnRef,
+        right_neighbor_iso_date: right.eventDate,
+      },
+    });
+  }
+
+  for (const missingIndex of missingDateEventIndexes) {
+    const target = events[missingIndex];
+    if (!target || target.eventDate) {
+      continue;
+    }
+    const context = missingDateEventContextByIndex.get(missingIndex) ?? {
+      columnRef: target.columnRef,
+      header: target.header,
+    };
+    issues.push({
+      severity: "warning",
+      code: "missing_date_token",
+      message: `Invalid or missing date token in ${context.columnRef} (${context.header}).`,
+      column_ref: context.columnRef,
     });
   }
 
@@ -1317,6 +1571,7 @@ Deno.serve(async (request) => {
       const preflight = buildPreflight(rows, {
         globalDominantYear,
         sourceMonthHint: parseMonthHintFromLabel(source.label),
+        eventDateOverridesByColumn: EVENT_DATE_OVERRIDES_BY_SOURCE.get(source.sourceRef),
       });
       totalAttendanceCellsEmpty += preflight.stats.attendanceCellsEmpty;
 

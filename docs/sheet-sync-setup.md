@@ -29,6 +29,7 @@ Recommended env vars for the function:
 - `ATTENDANCE_SHEET_AUTO_DISCOVER_SOURCES` (optional; `true/false`, default `false`)
 - `GOOGLE_SHEETS_API_KEY` (optional; recommended for robust auto-discovery via Sheets API)
 - `ATTENDANCE_SHEET_DISCOVER_INCLUDE_HIDDEN` (optional; include hidden tabs when auto-discovering)
+- `ATTENDANCE_EVENT_DATE_OVERRIDES_JSON` (optional; JSON array with forced `eventDate` by `sourceRef + columnRef`)
 - `SHEET_SYNC_FUNCTION_AUTH_TOKEN` (shared secret for manual + cron calls)
 - `SHEET_SYNC_DRY_RUN_ONLY=true`
 - `SHEET_SYNC_DEFAULT_DRY_RUN=true`
@@ -43,6 +44,25 @@ Auto-discovery mode:
 - tabs that do not look like attendance are skipped with warning `source_skipped_non_attendance_layout`
 - parser also supports `YYYY-DD` tokens (month inferred from tab context); warnings are logged as `event_month_inferred`
 - if month still cannot be inferred and token looks like `YYYY-MM`, parser falls back to `YYYY-MM-01` with warning `event_month_interpreted_from_yyyy_mm_token`
+- parser auto-detects day-month style (`YYYY-DD-MM`) on a per-sheet basis and normalizes ambiguous tokens (`event_date_style_inferred_day_month`)
+- if a single header column has no date token but both neighboring columns have close dates in the same month, parser infers date from neighbors (`event_date_inferred_from_neighbors`)
+
+Immutable reference sheet workaround:
+
+- if a column has no parseable date token (example: `Warsztaty TILL AGH`), define override via
+  `ATTENDANCE_EVENT_DATE_OVERRIDES_JSON`
+- format:
+
+```json
+[
+  {
+    "sourceRef": "1CGIEDfRTiNVKDllaVCZGh3TcseN9udtkKIyjKgskjEM:675114180",
+    "columnRef": "M",
+    "eventDate": "2025-11-15",
+    "title": "Warsztaty TILL AGH"
+  }
+]
+```
 
 ## 3. Smoke test manual invocation
 
