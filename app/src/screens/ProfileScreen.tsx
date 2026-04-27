@@ -40,6 +40,8 @@ export function ProfileScreen({
   onSignOut,
   canManageActualAttendance,
   onOpenAttendanceManager,
+  canManageRoles,
+  onOpenRoleManagement,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -48,6 +50,8 @@ export function ProfileScreen({
   onSignOut?: () => Promise<void>;
   canManageActualAttendance?: boolean;
   onOpenAttendanceManager?: () => void;
+  canManageRoles?: boolean;
+  onOpenRoleManagement?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
@@ -104,6 +108,28 @@ export function ProfileScreen({
           <Pressable style={styles.manageButton} onPress={onOpenAttendanceManager}>
             <Text style={styles.manageButtonLabel}>
               {tr("Otwórz rejestr", "Open register")}
+            </Text>
+          </Pressable>
+        </SurfaceCard>
+      ) : null}
+
+      {canManageRoles && onOpenRoleManagement ? (
+        <SurfaceCard variant="default">
+          <Text style={styles.cardEyebrow}>
+            {tr("Panel administratora", "Admin panel")}
+          </Text>
+          <Text style={styles.cardTitle}>
+            {tr("Zarządzanie rolami użytkowników", "Manage user roles")}
+          </Text>
+          <Text style={styles.cardBody}>
+            {tr(
+              "Nadaj lub zmień role member, leader oraz admin dla kont użytkowników.",
+              "Assign or update member, leader, and admin roles for user accounts.",
+            )}
+          </Text>
+          <Pressable style={styles.manageButton} onPress={onOpenRoleManagement}>
+            <Text style={styles.manageButtonLabel}>
+              {tr("Otwórz role", "Open role manager")}
             </Text>
           </Pressable>
         </SurfaceCard>

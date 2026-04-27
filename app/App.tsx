@@ -22,6 +22,7 @@ import { MissingEventScreen } from "./src/screens/MissingEventScreen";
 import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
+import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
 import { SquadScreen } from "./src/screens/SquadScreen";
 import { tr } from "./src/i18n";
@@ -95,7 +96,8 @@ function isValidAppRoute(value: unknown): value is AppRoute {
   if (
     candidate.name === "events" ||
     candidate.name === "profile" ||
-    candidate.name === "attendanceManager"
+    candidate.name === "attendanceManager" ||
+    candidate.name === "roleManagement"
   ) {
     return true;
   }
@@ -606,6 +608,7 @@ export default function App() {
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
   const canManageAttendance =
     effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
+  const canManageRoles = effectiveCurrentUser.role === "admin";
 
   function openTab(tab: PrimaryTab) {
     if (tab === "events") {
@@ -709,11 +712,29 @@ export default function App() {
                 ? () => pushRoute({ name: "attendanceManager" })
                 : undefined
             }
+            canManageRoles={canManageRoles}
+            onOpenRoleManagement={
+              canManageRoles
+                ? () => pushRoute({ name: "roleManagement" })
+                : undefined
+            }
           />
         );
       case "attendanceManager":
         return canManageAttendance ? (
           <AttendanceManagerScreen onBack={() => goBack({ name: "profile" })} />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "profile" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
+        );
+      case "roleManagement":
+        return canManageRoles ? (
+          <RoleManagementScreen
+            currentUserId={effectiveCurrentUser.id}
+            onBack={() => goBack({ name: "profile" })}
+          />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "profile" })}
