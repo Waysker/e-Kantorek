@@ -11,6 +11,7 @@ import type {
   UserProfile,
 } from "../../../domain/models";
 import { canonicalizeInstrumentLabel } from "../../../domain/instruments";
+import { normalizePrimaryRole } from "../../../domain/roles";
 import {
   legacyForumAttendance,
   legacyForumCurrentUserId,
@@ -302,7 +303,7 @@ export class ForumAdapter implements UsersRepository, EventsRepository {
     return {
       id: member.member_id,
       fullName: member.full_name,
-      role: member.role_code,
+      role: normalizePrimaryRole(member.role_code),
       primaryInstrument: normalizeForumInstrument(member.instrument_label),
     };
   }

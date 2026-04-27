@@ -80,6 +80,7 @@ declare
   caller_id uuid;
   caller_role text;
   normalized_role text;
+  normalized_role_key text;
   previous_role text;
 begin
   caller_id := auth.uid();
@@ -100,9 +101,31 @@ begin
     raise exception 'Target profile id is required.';
   end if;
 
-  normalized_role := lower(trim(coalesce(p_next_role, '')));
-  if normalized_role not in ('member', 'leader', 'admin') then
-    raise exception 'Invalid role. Allowed values: member, leader, admin.';
+  normalized_role_key := regexp_replace(
+    translate(lower(trim(coalesce(p_next_role, ''))), 'ąćęłńóśźż', 'acelnoszz'),
+    '\s+',
+    ' ',
+    'g'
+  );
+
+  if normalized_role_key = 'admin' then
+    normalized_role := 'admin';
+  elsif normalized_role_key in (
+    'section',
+    'leader',
+    'lider',
+    'sekcyjne',
+    'sekcyjny',
+    'sekcyjna',
+    'sekcyjni'
+  ) then
+    normalized_role := 'section';
+  elsif normalized_role_key in ('board', 'zarzad') then
+    normalized_role := 'board';
+  elsif normalized_role_key = 'member' then
+    normalized_role := 'member';
+  else
+    raise exception 'Invalid role. Allowed values: member, section, board, admin.';
   end if;
 
   if caller_id = p_target_profile_id and normalized_role <> 'admin' then

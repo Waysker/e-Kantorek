@@ -1441,13 +1441,28 @@ async function enqueueAttendanceChange(
   return updatedRow;
 }
 
-function normalizeProfileRole(rawRole: string | null): "member" | "leader" | "admin" {
+function normalizeProfileRole(rawRole: string | null): "member" | "section" | "board" | "admin" {
   const normalized = normalizeWhitespace(rawRole ?? "").toLowerCase();
   if (normalized === "admin") {
     return "admin";
   }
-  if (normalized === "leader") {
-    return "leader";
+  if (
+    normalized === "section" ||
+    normalized === "leader" ||
+    normalized === "lider" ||
+    normalized === "sekcyjne" ||
+    normalized === "sekcyjny" ||
+    normalized === "sekcyjna" ||
+    normalized === "sekcyjni"
+  ) {
+    return "section";
+  }
+  if (
+    normalized === "board" ||
+    normalized === "zarzad" ||
+    normalized === "zarząd"
+  ) {
+    return "board";
   }
   return "member";
 }
@@ -1588,14 +1603,15 @@ async function handleEnqueueMode(
   const explicitMemberId = normalizeWhitespace(body.memberId ?? body.member_id ?? "");
   const targetMemberId = explicitMemberId || actorMemberId;
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges = profileRole === "leader" || profileRole === "admin";
+  const hasManagerPrivileges =
+    profileRole === "section" || profileRole === "board" || profileRole === "admin";
   const isSelfWrite = targetMemberId === actorMemberId;
 
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only leader/admin can use this write path.",
+      "Only section/board/admin can use this write path.",
     );
   }
 
@@ -1690,12 +1706,13 @@ async function handleEnqueueBatchMode(
   const profile = await loadProfile(supabaseAdmin, user.id);
 
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges = profileRole === "leader" || profileRole === "admin";
+  const hasManagerPrivileges =
+    profileRole === "section" || profileRole === "board" || profileRole === "admin";
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only leader/admin can use this write path.",
+      "Only section/board/admin can use this write path.",
     );
   }
 

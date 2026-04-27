@@ -11,6 +11,19 @@ type AttendanceSetupScreenProps = {
   onBack: () => void;
 };
 
+function formatRoleLabel(role: UserProfile["role"]) {
+  if (role === "admin") {
+    return tr("Administrator", "Admin");
+  }
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjne", "Section leader");
+  }
+  return tr("Członek", "Member");
+}
+
 type SetupStep = {
   id: string;
   titlePl: string;
@@ -102,7 +115,7 @@ export function AttendanceSetupScreen({
       </Pressable>
 
       <SurfaceCard variant="default">
-        <Text style={styles.cardEyebrow}>{tr("Narzędzia lidera", "Leader tools")}</Text>
+        <Text style={styles.cardEyebrow}>{tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}</Text>
         <Text style={styles.screenTitle}>{tr("Konfiguracja obecności", "Attendance setup")}</Text>
         <Text style={styles.cardBody}>
           {tr(
@@ -114,7 +127,7 @@ export function AttendanceSetupScreen({
           {tr("Operator", "Operator")}: {currentUser.fullName}
         </Text>
         <Text style={styles.cardSecondary}>
-          {tr("Rola", "Role")}: {currentUser.role}
+          {tr("Rola", "Role")}: {formatRoleLabel(currentUser.role)}
         </Text>
       </SurfaceCard>
 

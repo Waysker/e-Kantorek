@@ -12,6 +12,19 @@ type FeedScreenProps = {
   onOpenEvents: () => void;
 };
 
+function formatRoleLabel(role: UserProfile["role"]) {
+  if (role === "admin") {
+    return tr("Administrator", "Admin");
+  }
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjne", "Section leader");
+  }
+  return tr("Członek", "Member");
+}
+
 export function FeedScreen({
   currentUser,
   feedPosts,
@@ -99,7 +112,7 @@ export function FeedScreen({
         <Text style={styles.cardBody}>
           {tr("Instrument główny", "Primary instrument")}:{" "}
           {currentUser.primaryInstrument ?? tr("Nieprzypisany", "Unassigned")}.{" "}
-          {tr("Rola", "Role")}: {currentUser.role}.
+          {tr("Rola", "Role")}: {formatRoleLabel(currentUser.role)}.
         </Text>
       </SurfaceCard>
     </ScrollView>

@@ -10,8 +10,11 @@ function formatRoleLabel(role: UserProfile["role"]) {
   if (role === "admin") {
     return tr("Administrator", "Admin");
   }
-  if (role === "leader") {
-    return tr("Lider", "Leader");
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjne", "Section leader");
   }
   return tr("Członek", "Member");
 }
@@ -94,7 +97,7 @@ export function ProfileScreen({
       {canManageActualAttendance && onOpenAttendanceManager ? (
         <SurfaceCard variant="default">
           <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia zarządu", "Management tools")}
+            {tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}
           </Text>
           <Text style={styles.cardTitle}>
             {tr("Rejestr faktycznej obecności", "Actual attendance register")}
@@ -123,8 +126,8 @@ export function ProfileScreen({
           </Text>
           <Text style={styles.cardBody}>
             {tr(
-              "Nadaj lub zmień role member, leader oraz admin dla kont użytkowników.",
-              "Assign or update member, leader, and admin roles for user accounts.",
+              "Nadaj lub zmień role member, section, board oraz admin dla kont użytkowników.",
+              "Assign or update member, section, board, and admin roles for user accounts.",
             )}
           </Text>
           <Pressable style={styles.manageButton} onPress={onOpenRoleManagement}>

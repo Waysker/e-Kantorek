@@ -12,6 +12,11 @@ import type {
   EventListItem,
   UserProfile,
 } from "./src/domain/models";
+import {
+  canManageAttendanceByRole,
+  canManageRolesByRole,
+  normalizePrimaryRole,
+} from "./src/domain/roles";
 import type { AppRoute, PrimaryTab } from "./src/navigation/routes";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
@@ -60,7 +65,7 @@ type ProfileRow = {
   last_name: string;
   full_name: string;
   instrument: string;
-  role: UserProfile["role"];
+  role: string;
 };
 
 type AuthView = "sign_in" | "register";
@@ -345,7 +350,7 @@ export default function App() {
                 ? {
                     fullName: profileResult.data.full_name,
                     primaryInstrument: profileResult.data.instrument,
-                    role: profileResult.data.role,
+                    role: normalizePrimaryRole(profileResult.data.role),
                   }
                 : null,
             },
@@ -599,16 +604,15 @@ export default function App() {
     fullName: authProfile?.fullName || metadataFullName || currentUser.fullName,
     primaryInstrument:
       authProfile?.primaryInstrument || metadataInstrument || currentUser.primaryInstrument,
-    role: authProfile?.role || currentUser.role,
+    role: normalizePrimaryRole(authProfile?.role || currentUser.role),
   };
   const signedInEmail =
     authState.status === "signed_in" ? authState.session.user.email ?? null : null;
   const activeTab = routeToTab(route);
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
-  const canManageAttendance =
-    effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
-  const canManageRoles = effectiveCurrentUser.role === "admin";
+  const canManageAttendance = canManageAttendanceByRole(effectiveCurrentUser.role);
+  const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
 
   function openTab(tab: PrimaryTab) {
     if (tab === "events") {

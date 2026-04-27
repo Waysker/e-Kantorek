@@ -1,4 +1,4 @@
-export type PrimaryRole = "member" | "leader" | "admin";
+export type PrimaryRole = "member" | "section" | "board" | "admin";
 export type AttendanceStatus = "going" | "maybe" | "not_going" | "no_response";
 
 export type UserProfile = {

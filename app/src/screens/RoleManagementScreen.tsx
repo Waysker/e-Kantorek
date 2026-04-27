@@ -11,6 +11,7 @@ import {
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import type { PrimaryRole } from "../domain/models";
+import { normalizePrimaryRole, PRIMARY_ROLE_SEQUENCE } from "../domain/roles";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { SurfaceCard } from "../ui/SurfaceCard";
@@ -43,8 +44,6 @@ type RawRoleUpdateRow = {
   updated_at?: string;
 };
 
-const ROLE_SEQUENCE: PrimaryRole[] = ["member", "leader", "admin"];
-
 function normalizeWhitespace(value: unknown): string {
   return String(value ?? "")
     .replace(/\s+/g, " ")
@@ -58,23 +57,15 @@ function normalizeSearchText(value: unknown): string {
     .toLowerCase();
 }
 
-function normalizeRole(value: unknown): PrimaryRole {
-  const normalized = normalizeWhitespace(value).toLowerCase();
-  if (normalized === "admin") {
-    return "admin";
-  }
-  if (normalized === "leader") {
-    return "leader";
-  }
-  return "member";
-}
-
 function formatRoleLabel(role: PrimaryRole): string {
   if (role === "admin") {
     return tr("Administrator", "Admin");
   }
-  if (role === "leader") {
-    return tr("Lider", "Leader");
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjne", "Section leader");
   }
   return tr("Członek", "Member");
 }
@@ -117,7 +108,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
         id: normalizeWhitespace(row.id),
         full_name: normalizeWhitespace(row.full_name) || tr("Nieznany użytkownik", "Unknown user"),
         instrument: normalizeWhitespace(row.instrument) || tr("Brak", "Missing"),
-        role: normalizeRole(row.role),
+        role: normalizePrimaryRole(row.role),
         updated_at: normalizeWhitespace(row.updated_at),
       }))
       .sort(compareProfiles);
@@ -157,7 +148,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
     const updatedRow = Array.isArray(data) && data.length > 0
       ? (data[0] as RawRoleUpdateRow)
       : null;
-    const resolvedRole = normalizeRole(updatedRow?.role ?? nextRole);
+    const resolvedRole = normalizePrimaryRole(updatedRow?.role ?? nextRole);
     const resolvedUpdatedAt = normalizeWhitespace(updatedRow?.updated_at);
 
     setProfiles((current) =>
@@ -213,8 +204,8 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
         <Text style={styles.screenTitle}>{tr("Zarządzanie rolami", "Role management")}</Text>
         <Text style={styles.cardBody}>
           {tr(
-            "Panel do nadawania ról member/leader/admin. Zmiany zapisują się od razu.",
-            "Panel for assigning member/leader/admin roles. Changes are saved immediately.",
+            "Panel do nadawania ról member/section/board/admin. Zmiany zapisują się od razu.",
+            "Panel for assigning member/section/board/admin roles. Changes are saved immediately.",
           )}
         </Text>
         <Text style={styles.cardSecondary}>
@@ -273,7 +264,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
                 </Text>
               ) : null}
               <View style={styles.roleActionsRow}>
-                {ROLE_SEQUENCE.map((roleOption) => {
+                {PRIMARY_ROLE_SEQUENCE.map((roleOption) => {
                   const isSelected = profile.role === roleOption;
                   const isSelfDemotion = isSelf && roleOption !== "admin";
                   const isDisabled =
