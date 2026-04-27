@@ -102,9 +102,21 @@ const DEFAULT_ATTENDANCE_SHEET_ID = normalizeWhitespace(Deno.env.get("ATTENDANCE
 const DEFAULT_ATTENDANCE_SHEET_GID = normalizeWhitespace(Deno.env.get("ATTENDANCE_SHEET_GID") ?? "");
 const SHEET_TO_SUPABASE_SYNC_URL = Deno.env.get("SHEET_TO_SUPABASE_SYNC_URL");
 const SHEET_TO_SUPABASE_SYNC_TOKEN = Deno.env.get("SHEET_TO_SUPABASE_SYNC_TOKEN");
+const DB_TO_SHEET_EXPORT_URL =
+  Deno.env.get("DB_TO_SHEET_EXPORT_URL") ??
+  Deno.env.get("SUPABASE_TO_SHEET_EXPORT_URL");
+const DB_TO_SHEET_EXPORT_TOKEN =
+  Deno.env.get("DB_TO_SHEET_EXPORT_TOKEN") ??
+  Deno.env.get("SUPABASE_TO_SHEET_EXPORT_TOKEN");
 const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));
 const ALLOW_CRON_SYNC_FALLBACK = parseBooleanEnv(
   Deno.env.get("ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK"),
+  false,
+);
+const WRITE_SOURCE_MODE = normalizeWhitespace(Deno.env.get("ATTENDANCE_WRITE_SOURCE_MODE") ?? "sheet_first").toLowerCase();
+const IS_DB_FIRST_MODE = WRITE_SOURCE_MODE === "db_first";
+const TRIGGER_DB_EXPORT_AFTER_WRITE = parseBooleanEnv(
+  Deno.env.get("ATTENDANCE_WRITE_TRIGGER_DB_EXPORT"),
   false,
 );
 
@@ -1574,6 +1586,367 @@ async function maybeTriggerSheetSync(): Promise<{ triggered: boolean; ok: boolea
   }
 }
 
+async function maybeTriggerDbToSheetExport(params: {
+  eventId: string;
+  eventDate: string;
+  memberIds?: string[];
+  overwriteMissingWithZero?: boolean;
+}): Promise<{ triggered: boolean; ok: boolean; status?: number; message?: string }> {
+  if (!TRIGGER_DB_EXPORT_AFTER_WRITE) {
+    return {
+      triggered: false,
+      ok: true,
+      message: "DB->Sheet export trigger disabled by ATTENDANCE_WRITE_TRIGGER_DB_EXPORT.",
+    };
+  }
+
+  if (!DB_TO_SHEET_EXPORT_URL) {
+    return {
+      triggered: false,
+      ok: false,
+      message: "DB_TO_SHEET_EXPORT_URL is not set.",
+    };
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (DB_TO_SHEET_EXPORT_TOKEN) {
+    headers.Authorization = `Bearer ${DB_TO_SHEET_EXPORT_TOKEN}`;
+  }
+
+  try {
+    const memberIds = Array.isArray(params.memberIds)
+      ? params.memberIds.map((value) => normalizeWhitespace(value)).filter(Boolean)
+      : [];
+
+    const response = await fetch(DB_TO_SHEET_EXPORT_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        trigger: "attendance_write_db_first",
+        dryRun: false,
+        eventId: params.eventId,
+        eventDate: params.eventDate,
+        overwriteMissingWithZero: params.overwriteMissingWithZero ?? false,
+        memberIds,
+        writeConcurrency: 4,
+      }),
+    });
+
+    if (!response.ok) {
+      const bodyText = await response.text();
+      return {
+        triggered: true,
+        ok: false,
+        status: response.status,
+        message: bodyText.slice(0, 500),
+      };
+    }
+
+    return {
+      triggered: true,
+      ok: true,
+      status: response.status,
+    };
+  } catch (error) {
+    return {
+      triggered: true,
+      ok: false,
+      message: sanitizeErrorMessage(error),
+    };
+  }
+}
+
+async function upsertAttendanceEntriesDbFirst(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  payload: {
+    eventId: string;
+    changes: Array<{
+      memberId: string;
+      attendanceRatio: number;
+      rawValue: string;
+    }>;
+  },
+): Promise<void> {
+  const sourceUpdatedAt = new Date().toISOString();
+  const rows = payload.changes.map((change) => ({
+    member_id: change.memberId,
+    event_id: payload.eventId,
+    attendance_ratio: change.attendanceRatio,
+    source_raw_value: change.rawValue,
+    source_updated_at: sourceUpdatedAt,
+  }));
+
+  const { error } = await supabaseAdmin
+    .from("attendance_entries")
+    .upsert(rows, { onConflict: "member_id,event_id" });
+
+  if (error) {
+    throw new HttpError(500, "attendance_entries_upsert_failed", error.message);
+  }
+}
+
+async function handleDbFirstEnqueueMode(
+  request: Request,
+  body: Record<string, unknown>,
+  supabaseAdmin: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accessToken = parseBearerToken(request.headers.get("authorization"));
+  if (!accessToken) {
+    throw new HttpError(401, "unauthorized", "Missing Bearer access token.");
+  }
+
+  const user = await resolveUserFromToken(accessToken);
+  const profile = await loadProfile(supabaseAdmin, user.id);
+
+  const eventIdInput = normalizeWhitespace(body.eventId ?? body.event_id ?? "");
+  const eventDateInput = parseEventDateInput(body.eventDate ?? body.event_date ?? body.startsAt ?? body.starts_at);
+  const eventTitleInput = normalizeWhitespace(body.eventTitle ?? body.event_title ?? body.title ?? "");
+  if (!eventIdInput && !eventDateInput) {
+    throw new HttpError(422, "missing_event_id_or_date", "Provide eventId or eventDate.");
+  }
+
+  const ratioInput = body.attendanceRatio ?? body.attendance_ratio ?? body.value ?? body.attendanceValue;
+  const { ratio, rawValue } = parseAttendanceRatioInput(ratioInput);
+  const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
+  const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
+
+  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+  const explicitMemberId = normalizeWhitespace(body.memberId ?? body.member_id ?? "");
+  const targetMemberId = explicitMemberId || actorMemberId;
+  const profileRole = normalizeProfileRole(profile.role);
+  const hasManagerPrivileges =
+    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  const isSelfWrite = targetMemberId === actorMemberId;
+
+  if (!hasManagerPrivileges) {
+    throw new HttpError(
+      403,
+      "management_only_write_path",
+      "Only section/board/admin can use this write path.",
+    );
+  }
+
+  if (targetMemberId !== actorMemberId) {
+    await ensureMemberExists(supabaseAdmin, targetMemberId);
+  }
+
+  const sourceRaw = normalizeWhitespace(body.source ?? "");
+  const source = sourceRaw
+    ? sourceRaw.toLowerCase().slice(0, 64)
+    : "manager_panel_db_first";
+
+  const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
+    eventIdInput,
+    eventDateInput,
+    eventTitleInput,
+  });
+  const eventId = resolvedEvent.eventId;
+
+  await upsertAttendanceEntriesDbFirst(supabaseAdmin, {
+    eventId,
+    changes: [{
+      memberId: targetMemberId,
+      attendanceRatio: ratio,
+      rawValue,
+    }],
+  });
+
+  await supabaseAdmin.from("change_journal").insert({
+    entity_type: "attendance_entries",
+    entity_id: `${eventId}:${targetMemberId}`,
+    action: "attendance_write_db_applied",
+    actor: `profile:${profile.id}`,
+    payload: {
+      actor_member_id: actorMemberId,
+      member_id: targetMemberId,
+      is_self_write: isSelfWrite,
+      profile_role: profileRole,
+      source,
+      event_id: eventId,
+      attendance_ratio: ratio,
+      requested_event_id: eventIdInput || null,
+      requested_event_date: eventDateInput,
+      requested_event_title: eventTitleInput || null,
+      resolved_event_id: eventId,
+      event_resolution: resolvedEvent.resolution,
+      mode: "db_first",
+      request_note: requestNote,
+    },
+  });
+
+  const exportTrigger = eventDateInput
+    ? await maybeTriggerDbToSheetExport({
+      eventId,
+      eventDate: eventDateInput,
+      memberIds: [targetMemberId],
+      overwriteMissingWithZero: false,
+    })
+    : { triggered: false, ok: true, message: "No eventDate provided for export trigger." };
+
+  return jsonResponse({
+    status: "applied",
+    mode: "db_first",
+    member_id: targetMemberId,
+    actor_member_id: actorMemberId,
+    is_self_write: isSelfWrite,
+    profile_role: profileRole,
+    source,
+    requested_event_id: eventIdInput || null,
+    event_id: eventId,
+    event_resolution: resolvedEvent.resolution,
+    attendance_ratio: ratio,
+    export_trigger: exportTrigger,
+  });
+}
+
+async function handleDbFirstEnqueueBatchMode(
+  request: Request,
+  body: Record<string, unknown>,
+  supabaseAdmin: ReturnType<typeof createClient>,
+): Promise<Response> {
+  const accessToken = parseBearerToken(request.headers.get("authorization"));
+  if (!accessToken) {
+    throw new HttpError(401, "unauthorized", "Missing Bearer access token.");
+  }
+
+  const user = await resolveUserFromToken(accessToken);
+  const profile = await loadProfile(supabaseAdmin, user.id);
+  const profileRole = normalizeProfileRole(profile.role);
+  const hasManagerPrivileges =
+    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  if (!hasManagerPrivileges) {
+    throw new HttpError(
+      403,
+      "management_only_write_path",
+      "Only section/board/admin can use this write path.",
+    );
+  }
+
+  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+  const eventIdInput = normalizeWhitespace(body.eventId ?? body.event_id ?? "");
+  const eventDateInput = parseEventDateInput(body.eventDate ?? body.event_date ?? body.startsAt ?? body.starts_at);
+  const eventTitleInput = normalizeWhitespace(body.eventTitle ?? body.event_title ?? body.title ?? "");
+  if (!eventIdInput && !eventDateInput) {
+    throw new HttpError(422, "missing_event_id_or_date", "Provide eventId or eventDate.");
+  }
+
+  const rawChanges = Array.isArray(body.changes)
+    ? body.changes
+    : Array.isArray(body.items)
+    ? body.items
+    : [];
+  if (rawChanges.length === 0) {
+    throw new HttpError(422, "missing_changes", "Provide non-empty changes array.");
+  }
+  if (rawChanges.length > 500) {
+    throw new HttpError(422, "too_many_changes", "Batch size exceeds limit (500).");
+  }
+
+  const parsedChanges: Array<{
+    memberId: string;
+    attendanceRatio: number;
+    rawValue: string;
+  }> = [];
+  for (let index = 0; index < rawChanges.length; index += 1) {
+    const rawChange = rawChanges[index];
+    if (!rawChange || typeof rawChange !== "object") {
+      throw new HttpError(422, "invalid_change_item", `changes[${index}] must be an object.`);
+    }
+    const change = rawChange as Record<string, unknown>;
+    const memberId = normalizeWhitespace(change.memberId ?? change.member_id ?? "");
+    if (!memberId) {
+      throw new HttpError(422, "missing_member_id", `changes[${index}].memberId is required.`);
+    }
+
+    const ratioInput = change.attendanceRatio ?? change.attendance_ratio ?? change.value ?? change.attendanceValue;
+    const { ratio, rawValue } = parseAttendanceRatioInput(ratioInput);
+    parsedChanges.push({
+      memberId,
+      attendanceRatio: ratio,
+      rawValue,
+    });
+  }
+
+  await ensureMembersExist(supabaseAdmin, parsedChanges.map((change) => change.memberId));
+
+  const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
+    eventIdInput,
+    eventDateInput,
+    eventTitleInput,
+  });
+  const eventId = resolvedEvent.eventId;
+
+  const dedupedChanges = new Map<string, { attendanceRatio: number; rawValue: string }>();
+  for (const change of parsedChanges) {
+    dedupedChanges.set(change.memberId, {
+      attendanceRatio: change.attendanceRatio,
+      rawValue: change.rawValue,
+    });
+  }
+
+  await upsertAttendanceEntriesDbFirst(supabaseAdmin, {
+    eventId,
+    changes: Array.from(dedupedChanges.entries()).map(([memberId, value]) => ({
+      memberId,
+      attendanceRatio: value.attendanceRatio,
+      rawValue: value.rawValue,
+    })),
+  });
+
+  const sourceRaw = normalizeWhitespace(body.source ?? "");
+  const source = sourceRaw
+    ? sourceRaw.toLowerCase().slice(0, 64)
+    : "manager_panel_db_first";
+  const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
+  const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
+
+  await supabaseAdmin.from("change_journal").insert({
+    entity_type: "attendance_entries",
+    entity_id: eventId,
+    action: "attendance_write_db_applied_batch",
+    actor: `profile:${profile.id}`,
+    payload: {
+      actor_member_id: actorMemberId,
+      profile_role: profileRole,
+      source,
+      event_id: eventId,
+      requested_event_id: eventIdInput || null,
+      requested_event_date: eventDateInput,
+      requested_event_title: eventTitleInput || null,
+      resolved_event_id: eventId,
+      event_resolution: resolvedEvent.resolution,
+      changed_members_count: dedupedChanges.size,
+      changed_member_ids: Array.from(dedupedChanges.keys()).slice(0, 500),
+      mode: "db_first",
+      request_note: requestNote,
+    },
+  });
+
+  const exportTrigger = eventDateInput
+    ? await maybeTriggerDbToSheetExport({
+      eventId,
+      eventDate: eventDateInput,
+      memberIds: Array.from(dedupedChanges.keys()),
+      overwriteMissingWithZero: false,
+    })
+    : { triggered: false, ok: true, message: "No eventDate provided for export trigger." };
+
+  return jsonResponse({
+    status: "applied",
+    mode: "db_first",
+    queued_count: dedupedChanges.size,
+    changed_count: dedupedChanges.size,
+    profile_role: profileRole,
+    source,
+    requested_event_id: eventIdInput || null,
+    event_id: eventId,
+    event_resolution: resolvedEvent.resolution,
+    export_trigger: exportTrigger,
+  });
+}
+
 async function handleEnqueueMode(
   request: Request,
   body: Record<string, unknown>,
@@ -2076,13 +2449,26 @@ Deno.serve(async (request) => {
     });
 
     if (mode === "process") {
+      if (IS_DB_FIRST_MODE) {
+        return withCors(jsonResponse({
+          status: "skipped",
+          mode: "db_first",
+          message: "Process mode is disabled in db_first mode.",
+        }), request);
+      }
       return withCors(await handleProcessMode(request, body, supabaseAdmin), request);
     }
 
     if (mode === "enqueue_batch") {
+      if (IS_DB_FIRST_MODE) {
+        return withCors(await handleDbFirstEnqueueBatchMode(request, body, supabaseAdmin), request);
+      }
       return withCors(await handleEnqueueBatchMode(request, body, supabaseAdmin), request);
     }
 
+    if (IS_DB_FIRST_MODE) {
+      return withCors(await handleDbFirstEnqueueMode(request, body, supabaseAdmin), request);
+    }
     return withCors(await handleEnqueueMode(request, body, supabaseAdmin), request);
   } catch (error) {
     if (error instanceof HttpError) {

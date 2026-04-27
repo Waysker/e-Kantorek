@@ -165,6 +165,9 @@ GitHub Actions setup:
 5. Enable Actions and run workflow `Forum Sync Publish` manually once.
 6. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
 
+Attendance sync (`reference -> DB -> copy`) is intentionally Supabase-only (Edge Functions + `pg_cron`).
+Use `../docs/sheet-sync-setup.md` for setup and runbook.
+
 ## Web Hosting (GitHub Pages)
 
 This repo includes `.github/workflows/web-deploy-pages.yml` which exports Expo web (`app/dist`) and deploys it to GitHub Pages on every push to `main` (and manually with `workflow_dispatch`).

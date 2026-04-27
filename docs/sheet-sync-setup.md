@@ -538,3 +538,76 @@ where pipeline_name in ('attendance_write_sheet_first', 'sheet_to_supabase_sync'
 order by started_at desc
 limit 50;
 ```
+
+## Dev mode: reference import + copy export
+
+Use this when the reference Google Sheet is read-only (current real process), and your own copy is overwritten from DB for comparison.
+
+### 1. Keep import source on reference sheet
+
+Set on `sheet_to_supabase_sync`:
+
+- `ATTENDANCE_SHEET_ID=<REFERENCE_SHEET_ID>`
+- optional `ATTENDANCE_SHEET_AUTO_DISCOVER_SOURCES=true`
+
+Example reference ID:
+
+- `1CGIEDfRTiNVKDllaVCZGh3TcseN9udtkKIyjKgskjEM`
+
+### 2. Switch writes to DB-first mode
+
+Set on `attendance_write_sheet_first`:
+
+- `ATTENDANCE_WRITE_SOURCE_MODE=db_first`
+- optional `ATTENDANCE_WRITE_TRIGGER_DB_EXPORT=true`
+- optional `DB_TO_SHEET_EXPORT_URL=https://<project-ref>.functions.supabase.co/supabase_to_sheet_export`
+- optional `DB_TO_SHEET_EXPORT_TOKEN=<shared-token>`
+
+In `db_first` mode:
+
+- app writes are upserted directly to `public.attendance_entries`
+- queue `process` path is skipped
+- optional per-event export trigger can run after successful write (changed members only; does not rewrite whole column)
+
+### 3. Deploy DB -> copy exporter
+
+Deploy:
+
+```bash
+supabase functions deploy supabase_to_sheet_export --no-verify-jwt
+```
+
+Required env for `supabase_to_sheet_export`:
+
+- `ATTENDANCE_EXPORT_TARGET_SHEET_ID=<WORKING_COPY_SHEET_ID>`
+- `ATTENDANCE_APPS_SCRIPT_WEBHOOK_URL=<apps-script-webhook-url>`
+- `ATTENDANCE_APPS_SCRIPT_WEBHOOK_TOKEN=<webhook-token>`
+- optional `DB_TO_SHEET_EXPORT_AUTH_TOKEN=<shared-token>`
+
+Manual export for one event date:
+
+```bash
+curl -sS \
+  -X POST \
+  "https://<project-ref>.functions.supabase.co/supabase_to_sheet_export" \
+  -H "Authorization: Bearer <DB_TO_SHEET_EXPORT_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"eventDate":"2026-04-28","dryRun":false,"overwriteMissingWithZero":false,"writeConcurrency":6}'
+```
+
+This keeps `reference` as import-only and updates your `copy` from DB state.
+
+Default export mode is overwrite per event column (`overwriteMissingWithZero=true`), so missing DB rows are written as `0` for active members.
+If runs are slow, tune concurrency with body `writeConcurrency` or env `DB_TO_SHEET_EXPORT_WRITE_CONCURRENCY` (range `1..20`, default `6`).
+For full column overwrite on large ensembles, run in windows:
+
+```bash
+curl -sS \
+  -X POST \
+  "https://<project-ref>.functions.supabase.co/supabase_to_sheet_export" \
+  -H "Authorization: Bearer <DB_TO_SHEET_EXPORT_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"eventDate":"2026-04-28","dryRun":false,"overwriteMissingWithZero":true,"memberOffset":0,"memberLimit":25,"writeConcurrency":4}'
+```
+
+Use `next_member_offset` from response until `has_more_member_pages=false`.

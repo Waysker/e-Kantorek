@@ -54,11 +54,18 @@ type AttendanceRatioValue = (typeof ATTENDANCE_CYCLE_SEQUENCE)[number];
 
 type EnqueueResponsePayload = {
   status?: string;
+  mode?: string;
   queue_id?: number;
   queued_count?: number;
   queue_ids?: number[];
   event_id?: string;
   event_resolution?: string;
+  export_trigger?: {
+    triggered?: boolean;
+    ok?: boolean;
+    status?: number;
+    message?: string;
+  };
   error?: string;
   message?: string;
 };
@@ -918,16 +925,27 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       setEntriesByMemberId((current) => ({ ...current, ...pendingAttendanceByMemberId }));
       setPendingAttendanceByMemberId({});
 
-      const queuedCount = typeof payload?.queued_count === "number" ? payload.queued_count : changes.length;
+      const changedCount = typeof payload?.queued_count === "number" ? payload.queued_count : changes.length;
+      const isAppliedDirectly = normalizeSearchText(payload?.status ?? "") === "applied";
       const placeholderHint = payload?.event_resolution === "created_placeholder"
         ? tr(
           " Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
           " Working session was created and column will be prepared on write.",
         )
         : "";
+      const exportHint = payload?.export_trigger?.triggered && payload?.export_trigger?.ok === false
+        ? tr(
+          " Zapisano w DB, ale eksport do arkusza roboczego nie powiódł się.",
+          " Saved to DB, but export to working sheet failed.",
+        )
+        : "";
 
       setInfoMessage(
-        tr(`Zmieniono i zakolejkowano ${queuedCount} wpisów.`, `${queuedCount} changes queued.`) + placeholderHint,
+        (
+          isAppliedDirectly
+            ? tr(`Zapisano ${changedCount} wpisów.`, `${changedCount} changes saved.`)
+            : tr(`Zmieniono i zakolejkowano ${changedCount} wpisów.`, `${changedCount} changes queued.`)
+        ) + placeholderHint + exportHint,
       );
     } catch (error) {
       setErrorMessage(
