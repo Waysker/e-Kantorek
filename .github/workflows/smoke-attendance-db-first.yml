@@ -1,0 +1,41 @@
+name: Smoke Attendance DB-First
+
+on:
+  workflow_dispatch:
+
+jobs:
+  smoke-db-first:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Supabase smoke function
+        env:
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN: ${{ secrets.SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN }}
+          SMOKE_REQUIRE_EXPORT_TRIGGER_OK: ${{ vars.SMOKE_REQUIRE_EXPORT_TRIGGER_OK || 'false' }}
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
+            exit 1
+          fi
+          if [ -z "$SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" ]; then
+            echo "::error::SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is missing (repo secret)."
+            exit 1
+          fi
+
+          normalized_flag="$(echo "${SMOKE_REQUIRE_EXPORT_TRIGGER_OK:-false}" | tr '[:upper:]' '[:lower:]')"
+          case "$normalized_flag" in
+            1|true|yes|on) require_export=true ;;
+            *) require_export=false ;;
+          esac
+
+          smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
+          payload="{\"requireExportTriggerOk\":${require_export}}"
+
+          response="$(curl -sS --fail-with-body -X POST "$smoke_url" \
+            -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload")"
+
+          echo "$response"
+          echo "$response" | jq -e '.status == "ok"' >/dev/null
