@@ -220,6 +220,35 @@ function normalizeWhitespace(value: unknown): string {
     .trim();
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCanonicalSourceHeader(eventDate: string, eventTitle: string, sourceHeader: string | null): string {
+  const normalizedEventDate = normalizeWhitespace(eventDate);
+  const normalizedSourceHeader = normalizeWhitespace(sourceHeader ?? "");
+  const normalizedEventTitle = normalizeWhitespace(eventTitle);
+
+  const datePattern = normalizedEventDate
+    ? new RegExp(`\\b${escapeRegex(normalizedEventDate)}\\b`, "g")
+    : null;
+
+  const baseTitleRaw = normalizedSourceHeader || normalizedEventTitle;
+  const baseTitleWithoutDate = datePattern
+    ? normalizeWhitespace(baseTitleRaw.replace(datePattern, " "))
+    : normalizeWhitespace(baseTitleRaw);
+  const fallbackTitleWithoutDate = datePattern
+    ? normalizeWhitespace(normalizedEventTitle.replace(datePattern, " "))
+    : normalizedEventTitle;
+  const resolvedTitle = baseTitleWithoutDate || fallbackTitleWithoutDate || "Proba";
+
+  if (!normalizedEventDate) {
+    return resolvedTitle;
+  }
+
+  return `${resolvedTitle}\n${normalizedEventDate}`;
+}
+
 function normalizeMatchText(value: unknown): string {
   return normalizeWhitespace(value)
     .normalize("NFD")
@@ -557,12 +586,11 @@ async function ensureAttendanceColumnViaAppsScript(params: {
     throw new HttpError(422, "invalid_source_gid", `Invalid gid value: ${params.gid}`);
   }
 
-  const preferredSourceHeaderBase = normalizeWhitespace(params.sourceHeader ?? "");
-  const preferredSourceHeader = preferredSourceHeaderBase
-    ? preferredSourceHeaderBase.includes(params.eventDate)
-      ? preferredSourceHeaderBase
-      : `${params.eventDate} ${preferredSourceHeaderBase}`.trim()
-    : `${params.eventDate} ${normalizeWhitespace(params.eventTitle)}`.trim();
+  const preferredSourceHeader = buildCanonicalSourceHeader(
+    params.eventDate,
+    params.eventTitle,
+    params.sourceHeader,
+  );
 
   const responseText = await callAppsScriptWebhook({
     action: "ensure_attendance_column",
@@ -1023,8 +1051,8 @@ async function resolveDefaultSheetSource(
   return null;
 }
 
-function buildFallbackEventTitle(eventDate: string): string {
-  return `Proba ${eventDate}`;
+function buildFallbackEventTitle(_eventDate: string): string {
+  return "Proba";
 }
 
 function buildSheetStyleEventId(eventDate: string, eventTitle: string): string {
@@ -1040,7 +1068,7 @@ async function createPlaceholderEvent(
   },
 ): Promise<string> {
   const eventTitle = normalizeWhitespace(payload.eventTitleInput) || buildFallbackEventTitle(payload.eventDate);
-  const sourceHeader = `${payload.eventDate} ${eventTitle}`.trim();
+  const sourceHeader = buildCanonicalSourceHeader(payload.eventDate, eventTitle, null);
   const fallbackSource = await resolveDefaultSheetSource(supabaseAdmin, { eventDate: payload.eventDate });
   if (!fallbackSource) {
     throw new HttpError(

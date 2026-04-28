@@ -251,7 +251,123 @@ function monthLabelFromIsoDate(isoDate) {
   return "Obecnosc " + monthKey;
 }
 
+function normalizeSearchText(value) {
+  var text = String(value || "");
+  if (typeof text.normalize === "function") {
+    text = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+var MONTH_KEYWORDS = [
+  { month: 1, keywords: ["styczen", "stycznia", "jan", "january"] },
+  { month: 2, keywords: ["luty", "lutego", "feb", "february"] },
+  { month: 3, keywords: ["marzec", "marca", "mar", "march"] },
+  { month: 4, keywords: ["kwiecien", "kwietnia", "apr", "april"] },
+  { month: 5, keywords: ["maj", "maja", "may"] },
+  { month: 6, keywords: ["czerwiec", "czerwca", "jun", "june"] },
+  { month: 7, keywords: ["lipiec", "lipca", "jul", "july"] },
+  { month: 8, keywords: ["sierpien", "sierpnia", "aug", "august"] },
+  { month: 9, keywords: ["wrzesien", "wrzesnia", "sep", "september"] },
+  { month: 10, keywords: ["pazdziernik", "pazdziernika", "oct", "october"] },
+  { month: 11, keywords: ["listopad", "listopada", "nov", "november"] },
+  { month: 12, keywords: ["grudzien", "grudnia", "dec", "december"] }
+];
+
+function parseYearToken(token) {
+  var value = String(token || "").trim();
+  if (!/^\d{2,4}$/.test(value)) return null;
+  if (value.length === 4) return Number(value);
+  var yy = Number(value);
+  return yy >= 70 ? (1900 + yy) : (2000 + yy);
+}
+
+function parseMonthKey(monthKey) {
+  var match = String(monthKey || "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  var year = Number(match[1]);
+  var month = Number(match[2]);
+  if (!year || month < 1 || month > 12) return null;
+  return { year: year, month: month };
+}
+
+function resolveMonthFromName(normalizedName) {
+  for (var i = 0; i < MONTH_KEYWORDS.length; i++) {
+    var entry = MONTH_KEYWORDS[i];
+    for (var j = 0; j < entry.keywords.length; j++) {
+      if (normalizedName.indexOf(entry.keywords[j]) >= 0) {
+        return entry.month;
+      }
+    }
+  }
+  return null;
+}
+
+function parseYearMonthFromSheetName(sheetName) {
+  var raw = String(sheetName || "").trim();
+  if (!raw) return null;
+
+  var isoLike = raw.match(/\b(20\d{2})[.\-_/ ](0?[1-9]|1[0-2])\b/);
+  if (isoLike) {
+    return { year: Number(isoLike[1]), month: Number(isoLike[2]) };
+  }
+
+  var reversedIsoLike = raw.match(/\b(0?[1-9]|1[0-2])[.\-_/ ](20\d{2})\b/);
+  if (reversedIsoLike) {
+    return { year: Number(reversedIsoLike[2]), month: Number(reversedIsoLike[1]) };
+  }
+
+  var normalized = normalizeSearchText(raw);
+  if (!normalized) return null;
+  var month = resolveMonthFromName(normalized);
+  if (!month) return null;
+
+  var tokens = normalized.split(" ");
+  var year = null;
+  for (var idx = 0; idx < tokens.length; idx++) {
+    var parsedYear = parseYearToken(tokens[idx]);
+    if (parsedYear) {
+      year = parsedYear;
+      break;
+    }
+  }
+  if (!year) return null;
+
+  return { year: year, month: month };
+}
+
+function headerContainsMonth(sheet, targetYear, targetMonth) {
+  var lastColumn = sheet.getLastColumn();
+  if (lastColumn < 5) return false;
+
+  var headerRow = sheet.getRange(1, 5, 1, lastColumn - 4).getDisplayValues()[0] || [];
+  for (var i = 0; i < headerRow.length; i++) {
+    var header = String(headerRow[i] || "").trim();
+    if (!header) continue;
+
+    var isoDate = normalizeIsoDate(header);
+    var dateText = isoDate || header;
+    var dateMatch = dateText.match(/\b(20\d{2})[.\-_/](0?[1-9]|1[0-2])[.\-_/](0?[1-9]|[12]\d|3[01])\b/);
+    if (!dateMatch) continue;
+
+    var year = Number(dateMatch[1]);
+    var month = Number(dateMatch[2]);
+    if (year === targetYear && month === targetMonth) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function findMonthlyAttendanceSheet(ss, monthKey) {
+  var parsedMonthKey = parseMonthKey(monthKey);
+  if (!parsedMonthKey) return null;
+
   var directLabel = "Obecnosc " + monthKey;
   var direct = ss.getSheets().find(function (sheet) {
     return String(sheet.getName() || "").trim() === directLabel;
@@ -259,19 +375,55 @@ function findMonthlyAttendanceSheet(ss, monthKey) {
   if (direct) return direct;
 
   var regex = new RegExp(monthKey.replace("-", "\\\\-"));
-  return ss.getSheets().find(function (sheet) {
+  var byMonthKeyInName = ss.getSheets().find(function (sheet) {
     return regex.test(String(sheet.getName() || "").trim());
   }) || null;
+  if (byMonthKeyInName) return byMonthKeyInName;
+
+  var byMonthNameAndYear = ss.getSheets().find(function (sheet) {
+    var parsed = parseYearMonthFromSheetName(sheet.getName());
+    return parsed &&
+      parsed.year === parsedMonthKey.year &&
+      parsed.month === parsedMonthKey.month;
+  }) || null;
+  if (byMonthNameAndYear) return byMonthNameAndYear;
+
+  var byHeaderMonth = ss.getSheets().find(function (sheet) {
+    return headerContainsMonth(sheet, parsedMonthKey.year, parsedMonthKey.month);
+  }) || null;
+  if (byHeaderMonth) return byHeaderMonth;
+
+  return null;
 }
 
-function pickTemplateSheet(ss, suggestedGid) {
+function pickTemplateSheet(ss, suggestedGid, monthKey) {
+  var allSheets = ss.getSheets();
+
   if (suggestedGid) {
-    var fromGid = ss.getSheets().find(function (sheet) {
+    var fromGid = allSheets.find(function (sheet) {
       return String(sheet.getSheetId()) === String(suggestedGid);
     });
     if (fromGid) return fromGid;
   }
-  return ss.getSheets()[0] || null;
+
+  var target = parseMonthKey(monthKey);
+  if (!target) return allSheets[0] || null;
+
+  var candidates = allSheets
+    .map(function (sheet) {
+      var parsed = parseYearMonthFromSheetName(sheet.getName());
+      if (!parsed) return null;
+      var distance = Math.abs((parsed.year - target.year) * 12 + (parsed.month - target.month));
+      return { sheet: sheet, distance: distance };
+    })
+    .filter(function (item) { return item !== null; })
+    .sort(function (a, b) { return a.distance - b.distance; });
+
+  if (candidates.length > 0) {
+    return candidates[0].sheet;
+  }
+
+  return allSheets[0] || null;
 }
 
 function ensureAttendanceMonthSheet(ss, eventDate, suggestedGid) {
@@ -285,7 +437,7 @@ function ensureAttendanceMonthSheet(ss, eventDate, suggestedGid) {
     return { sheet: existing, created: false };
   }
 
-  var templateSheet = pickTemplateSheet(ss, suggestedGid);
+  var templateSheet = pickTemplateSheet(ss, suggestedGid, monthKey);
   if (!templateSheet) {
     throw new Error("template_sheet_not_found");
   }
@@ -315,22 +467,62 @@ function findColumnByDateToken(sheet, eventDate) {
   return null;
 }
 
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildCanonicalHeader(eventDate, eventTitle, sourceHeader) {
+  var normalizedEventDate = String(eventDate || "").trim();
+  var preferred = String(sourceHeader || "").trim();
+  var fallbackTitle = String(eventTitle || "").trim();
+  var base = preferred || fallbackTitle;
+  var dateRegex = normalizedEventDate
+    ? new RegExp("\\b" + escapeRegex(normalizedEventDate) + "\\b", "g")
+    : null;
+
+  var titleWithoutDate = String(base || "")
+    .replace(dateRegex || /$^/, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  var fallbackTitleWithoutDate = String(fallbackTitle || "")
+    .replace(dateRegex || /$^/, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  var resolvedTitle = titleWithoutDate || fallbackTitleWithoutDate || "Proba";
+
+  if (!normalizedEventDate) {
+    return resolvedTitle;
+  }
+
+  return resolvedTitle + "\n" + normalizedEventDate;
+}
+
+function applyHeaderCellStyle(cell) {
+  cell.setWrapStrategy(SpreadsheetApp.WrapStrategy.WRAP);
+  cell.setFontWeight("bold");
+  cell.setHorizontalAlignment("center");
+  cell.setVerticalAlignment("middle");
+}
+
 function ensureAttendanceColumn(sheet, eventDate, eventTitle, sourceHeader) {
   var existing = findColumnByDateToken(sheet, eventDate);
+  var canonicalHeader = buildCanonicalHeader(eventDate, eventTitle, sourceHeader);
+
   if (existing) {
-    return existing;
+    var existingCell = sheet.getRange(1, existing.columnNumber);
+    if (String(existing.header || "").trim() !== canonicalHeader) {
+      existingCell.setValue(canonicalHeader);
+    }
+    applyHeaderCellStyle(existingCell);
+    return { columnNumber: existing.columnNumber, header: canonicalHeader, created: false };
   }
 
   var lastColumn = Math.max(sheet.getLastColumn(), 4);
   var newColumn = lastColumn + 1;
-  var header = String(sourceHeader || "").trim();
-  if (!header) {
-    var suffix = String(eventTitle || "").trim();
-    header = suffix ? (eventDate + " " + suffix) : eventDate;
-  }
-
-  sheet.getRange(1, newColumn).setValue(header);
-  return { columnNumber: newColumn, header: header, created: true };
+  var headerCell = sheet.getRange(1, newColumn);
+  headerCell.setValue(canonicalHeader);
+  applyHeaderCellStyle(headerCell);
+  return { columnNumber: newColumn, header: canonicalHeader, created: true };
 }
 
 function doPost(e) {
@@ -465,6 +657,10 @@ function doPost(e) {
 In Script Properties set:
 
 - `WEBHOOK_TOKEN=<same value as ATTENDANCE_APPS_SCRIPT_WEBHOOK_TOKEN>`
+
+Important:
+
+- keep the `findMonthlyAttendanceSheet` logic exactly as above; it matches both `Obecnosc YYYY-MM` and localized month tab names (for example `Kwiecień 26`) and also checks header dates to avoid creating duplicate month tabs.
 
 Deploy:
 

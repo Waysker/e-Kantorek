@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -100,6 +101,13 @@ type GroupSummary = {
   points050: number;
   points075: number;
   points100: number;
+};
+
+type SaveFeedback = {
+  count: number;
+  wasAppliedDirectly: boolean;
+  timestampMs: number;
+  notes: string | null;
 };
 
 type SectionGridItem = {
@@ -226,6 +234,14 @@ function formatMonthLabel(monthKey: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+function formatTimeLabel(timestampMs: number): string {
+  return new Intl.DateTimeFormat("pl-PL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(timestampMs));
+}
+
 function buildCalendarCells(monthKey: string): CalendarCell[] {
   const monthStart = parseMonthKey(monthKey);
   const offsetToMonday = weekdayMonToSun(monthStart) - 1;
@@ -250,6 +266,54 @@ function buildCalendarCells(monthKey: string): CalendarCell[] {
 function isRehearsalLikeSession(session: SessionRow): boolean {
   const haystack = normalizeSearchText([session.title, session.source_header, session.source_column].filter(Boolean).join(" "));
   return REHEARSAL_KEYWORDS.some((keyword) => haystack.includes(keyword));
+}
+
+function normalizeSessionTitleForDedup(title: string): string {
+  return normalizeSearchText(title)
+    .replace(/\b20\d{2}[./-]\d{1,2}[./-]\d{1,2}\b/g, " ")
+    .replace(/\b20\d{2}[./-]\d{1,2}\b/g, " ")
+    .replace(/\b\d{1,2}[./-]\d{1,2}\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function filterShadowPlaceholderSessions(sessions: SessionRow[]): SessionRow[] {
+  if (sessions.length <= 1) {
+    return sessions;
+  }
+
+  const byKey = new Map<string, SessionRow[]>();
+  for (const session of sessions) {
+    const titleKey = normalizeSessionTitleForDedup(session.title);
+    const key = `${session.event_date}::${titleKey || normalizeSearchText(session.title)}`;
+    const bucket = byKey.get(key) ?? [];
+    bucket.push(session);
+    byKey.set(key, bucket);
+  }
+
+  const filtered: SessionRow[] = [];
+  for (const session of sessions) {
+    const titleKey = normalizeSessionTitleForDedup(session.title);
+    const key = `${session.event_date}::${titleKey || normalizeSearchText(session.title)}`;
+    const bucket = byKey.get(key) ?? [];
+    if (bucket.length <= 1) {
+      filtered.push(session);
+      continue;
+    }
+
+    const hasMappedSource = bucket.some((candidate) => normalizeWhitespace(candidate.source_column).length > 0);
+    if (!hasMappedSource) {
+      filtered.push(session);
+      continue;
+    }
+
+    const isMapped = normalizeWhitespace(session.source_column).length > 0;
+    if (isMapped) {
+      filtered.push(session);
+    }
+  }
+
+  return filtered;
 }
 
 function isSameAttendanceRatio(left: number | undefined, right: number): boolean {
@@ -470,6 +534,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastSaveFeedback, setLastSaveFeedback] = useState<SaveFeedback | null>(null);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
 
   const canWrite = Boolean(
@@ -551,7 +616,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         return;
       }
 
-      const loadedSessions = (sessionsResult.data ?? []) as SessionRow[];
+      const loadedSessionsRaw = (sessionsResult.data ?? []) as SessionRow[];
+      const loadedSessions = filterShadowPlaceholderSessions(loadedSessionsRaw);
       const loadedMembers = (membersResult.data ?? []) as MemberRow[];
       setSessions(loadedSessions);
       setMembers(loadedMembers);
@@ -810,6 +876,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
     setInfoMessage(null);
     setErrorMessage(null);
+    setLastSaveFeedback(null);
     setPendingAttendanceByMemberId((current) => ({
       ...current,
       [memberId]: attendanceRatio,
@@ -848,6 +915,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
     setInfoMessage(null);
     setErrorMessage(null);
+    setLastSaveFeedback(null);
     setIsBatchSaving(true);
 
     try {
@@ -929,25 +997,26 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       const isAppliedDirectly = normalizeSearchText(payload?.status ?? "") === "applied";
       const placeholderHint = payload?.event_resolution === "created_placeholder"
         ? tr(
-          " Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
+          "Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
           " Working session was created and column will be prepared on write.",
         )
         : "";
       const exportHint = payload?.export_trigger?.triggered && payload?.export_trigger?.ok === false
         ? tr(
-          " Zapisano w DB, ale eksport do arkusza roboczego nie powiódł się.",
+          "Zapisano w DB, ale eksport do arkusza roboczego nie powiódł się.",
           " Saved to DB, but export to working sheet failed.",
         )
         : "";
-
-      setInfoMessage(
-        (
-          isAppliedDirectly
-            ? tr(`Zapisano ${changedCount} wpisów.`, `${changedCount} changes saved.`)
-            : tr(`Zmieniono i zakolejkowano ${changedCount} wpisów.`, `${changedCount} changes queued.`)
-        ) + placeholderHint + exportHint,
-      );
+      const notes = [placeholderHint, exportHint].filter((value) => value.length > 0).join(" ");
+      setInfoMessage(notes || null);
+      setLastSaveFeedback({
+        count: changedCount,
+        wasAppliedDirectly: isAppliedDirectly,
+        timestampMs: Date.now(),
+        notes: notes || null,
+      });
     } catch (error) {
+      setLastSaveFeedback(null);
       setErrorMessage(
         error instanceof Error
           ? error.message
@@ -1170,6 +1239,45 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               `${pendingChangesCount} staged changes. Click "Save changes" when done.`,
             )}
           </Text>
+        ) : null}
+        {isBatchSaving ? (
+          <View style={styles.saveProgressBox}>
+            <ActivityIndicator color={tokens.colors.brand} size="small" />
+            <View style={styles.saveProgressTextCol}>
+              <Text style={styles.saveProgressTitle}>
+                {tr(`Zapisywanie ${pendingChangesCount} zmian...`, `Saving ${pendingChangesCount} changes...`)}
+              </Text>
+              <Text style={styles.saveProgressMeta}>
+                {tr(
+                  "Trwa aktualizacja obecności w bazie i synchronizacja.",
+                  "Updating attendance in DB and synchronizing.",
+                )}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {!isBatchSaving && lastSaveFeedback ? (
+          <View style={styles.saveSuccessBox}>
+            <Text style={styles.saveSuccessTitle}>
+              {lastSaveFeedback.wasAppliedDirectly
+                ? tr("Zapis zakończony", "Save completed")
+                : tr("Zapis zakończony (kolejka)", "Save completed (queued)")}
+            </Text>
+            <Text style={styles.saveSuccessMeta}>
+              {(lastSaveFeedback.wasAppliedDirectly
+                ? tr(
+                  `Zapisano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                  `${lastSaveFeedback.count} changes saved at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                )
+                : tr(
+                  `Zakolejkowano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                  `${lastSaveFeedback.count} changes queued at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                ))}
+            </Text>
+            {lastSaveFeedback.notes ? (
+              <Text style={styles.saveSuccessMeta}>{lastSaveFeedback.notes}</Text>
+            ) : null}
+          </View>
         ) : null}
         {isEntriesLoading ? (
           <Text style={styles.copy}>{tr("Ładowanie wpisów...", "Loading entries...")}</Text>
@@ -1667,6 +1775,56 @@ const styles = StyleSheet.create({
   },
   batchButtonDisabled: {
     opacity: 0.45,
+  },
+  saveProgressBox: {
+    marginTop: tokens.spacing.sm,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.surfaceMuted,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  saveProgressTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  saveProgressTitle: {
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  saveProgressMeta: {
+    color: tokens.colors.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  saveSuccessBox: {
+    marginTop: tokens.spacing.sm,
+    borderWidth: 1,
+    borderColor: tokens.colors.successInk,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.successSurface,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.sm,
+    gap: 2,
+  },
+  saveSuccessTitle: {
+    color: tokens.colors.successInk,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  saveSuccessMeta: {
+    color: tokens.colors.successInk,
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
   },
   memberRows: {
     gap: 6,
