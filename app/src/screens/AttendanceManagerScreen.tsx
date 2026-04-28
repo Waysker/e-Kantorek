@@ -733,32 +733,38 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     async function loadEntries() {
       if (!supabaseAuthClient || !selectedCanonicalEventId) {
         setEntriesByMemberId({});
+        setIsEntriesLoading(false);
+        setErrorMessage(null);
         return;
       }
 
       setIsEntriesLoading(true);
       setErrorMessage(null);
-      const { data, error } = await supabaseAuthClient
-        .from("attendance_entries")
-        .select("member_id,attendance_ratio")
-        .eq("event_id", selectedCanonicalEventId);
+      try {
+        const { data, error } = await supabaseAuthClient
+          .from("attendance_entries")
+          .select("member_id,attendance_ratio")
+          .eq("event_id", selectedCanonicalEventId);
 
-      if (isCancelled) {
-        return;
-      }
+        if (isCancelled) {
+          return;
+        }
 
-      if (error) {
-        setErrorMessage(error.message);
-        setIsEntriesLoading(false);
-        return;
-      }
+        if (error) {
+          setErrorMessage(error.message);
+          return;
+        }
 
-      const map: Record<string, number> = {};
-      for (const entry of (data ?? []) as AttendanceEntryRow[]) {
-        map[entry.member_id] = Number(entry.attendance_ratio);
+        const map: Record<string, number> = {};
+        for (const entry of (data ?? []) as AttendanceEntryRow[]) {
+          map[entry.member_id] = Number(entry.attendance_ratio);
+        }
+        setEntriesByMemberId(map);
+      } finally {
+        if (!isCancelled) {
+          setIsEntriesLoading(false);
+        }
       }
-      setEntriesByMemberId(map);
-      setIsEntriesLoading(false);
     }
 
     void loadEntries();

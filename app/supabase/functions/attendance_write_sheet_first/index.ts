@@ -1715,6 +1715,28 @@ async function upsertAttendanceEntriesDbFirst(
   }
 }
 
+async function resolveEventDateForExport(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  eventId: string,
+  requestedEventDate: string | null,
+): Promise<string> {
+  if (requestedEventDate) {
+    return requestedEventDate;
+  }
+
+  const eventSource = await resolveEventSource(supabaseAdmin, eventId);
+  const eventDate = parseEventDateInput(eventSource.event_date);
+  if (!eventDate) {
+    throw new HttpError(
+      500,
+      "event_date_missing_for_export",
+      `Resolved event ${eventId} is missing a valid event_date for DB->Sheet export trigger.`,
+    );
+  }
+
+  return eventDate;
+}
+
 async function handleDbFirstEnqueueMode(
   request: Request,
   body: Record<string, unknown>,
@@ -1771,6 +1793,7 @@ async function handleDbFirstEnqueueMode(
     eventTitleInput,
   });
   const eventId = resolvedEvent.eventId;
+  const exportEventDate = await resolveEventDateForExport(supabaseAdmin, eventId, eventDateInput);
 
   await upsertAttendanceEntriesDbFirst(supabaseAdmin, {
     eventId,
@@ -1804,14 +1827,12 @@ async function handleDbFirstEnqueueMode(
     },
   });
 
-  const exportTrigger = eventDateInput
-    ? await maybeTriggerDbToSheetExport({
-      eventId,
-      eventDate: eventDateInput,
-      memberIds: [targetMemberId],
-      overwriteMissingWithZero: false,
-    })
-    : { triggered: false, ok: true, message: "No eventDate provided for export trigger." };
+  const exportTrigger = await maybeTriggerDbToSheetExport({
+    eventId,
+    eventDate: exportEventDate,
+    memberIds: [targetMemberId],
+    overwriteMissingWithZero: false,
+  });
 
   return jsonResponse({
     status: "applied",
@@ -1905,6 +1926,7 @@ async function handleDbFirstEnqueueBatchMode(
     eventTitleInput,
   });
   const eventId = resolvedEvent.eventId;
+  const exportEventDate = await resolveEventDateForExport(supabaseAdmin, eventId, eventDateInput);
 
   const dedupedChanges = new Map<string, { attendanceRatio: number; rawValue: string }>();
   for (const change of parsedChanges) {
@@ -1952,14 +1974,12 @@ async function handleDbFirstEnqueueBatchMode(
     },
   });
 
-  const exportTrigger = eventDateInput
-    ? await maybeTriggerDbToSheetExport({
-      eventId,
-      eventDate: eventDateInput,
-      memberIds: Array.from(dedupedChanges.keys()),
-      overwriteMissingWithZero: false,
-    })
-    : { triggered: false, ok: true, message: "No eventDate provided for export trigger." };
+  const exportTrigger = await maybeTriggerDbToSheetExport({
+    eventId,
+    eventDate: exportEventDate,
+    memberIds: Array.from(dedupedChanges.keys()),
+    overwriteMissingWithZero: false,
+  });
 
   return jsonResponse({
     status: "applied",
@@ -2359,7 +2379,7 @@ async function handleProcessMode(
           deadLetterCount += 1;
         }
 
-        await supabaseAdmin
+        const { error: updateFailureError } = await supabaseAdmin
           .from("attendance_change_queue")
           .update({
             status: nextStatus,
@@ -2370,6 +2390,16 @@ async function handleProcessMode(
             applied_cell_ref: null,
           })
           .eq("id", queueRow.id);
+
+        if (updateFailureError) {
+          const queueUpdateErrorMessage =
+            `Failed to persist queue failure state for queue_id=${queueRow.id}: ${updateFailureError.message}`;
+          failures.push({
+            queue_id: queueRow.id,
+            error: queueUpdateErrorMessage,
+          });
+          throw new HttpError(500, "queue_failure_state_update_failed", queueUpdateErrorMessage);
+        }
 
         failures.push({
           queue_id: queueRow.id,
