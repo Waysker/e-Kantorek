@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "forum:sync": "node ./scripts/sync-forum-snapshot.mjs",
     "forum:publish": "node ./scripts/publish-snapshot-to-supabase.mjs",
-    "forum:sync:publish": "node ./scripts/run-forum-sync-pipeline.mjs"
+    "forum:sync:publish": "node ./scripts/run-forum-sync-pipeline.mjs",
+    "smoke:attendance:db-first": "node ./scripts/smoke-attendance-db-first.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -37,6 +37,62 @@ The UI should not depend directly on legacy forum fields or markup.
 - `npm run forum:sync`
 - `npm run forum:publish`
 - `npm run forum:sync:publish`
+- `npm run smoke:attendance:db-first`
+
+## Automated Attendance Regression (db_first)
+
+Default model is hybrid:
+
+- smoke logic and sensitive credentials live in Supabase (`smoke_attendance_db_first` function),
+- GitHub Actions only triggers that function with a dedicated bearer token.
+
+What the smoke run validates:
+
+- sign-in with manager account (`section` / `board` / `admin`),
+- attendance write via `attendance_write_sheet_first` (`mode=enqueue_batch`, `db_first`),
+- DB value changed,
+- rollback restores original value.
+
+Supabase secrets (runtime):
+
+- `SMOKE_ATTENDANCE_TEST_EMAIL`
+- `SMOKE_ATTENDANCE_TEST_PASSWORD`
+- `SMOKE_ATTENDANCE_EVENT_ID`
+- `SMOKE_ATTENDANCE_MEMBER_ID`
+- `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK` (optional)
+- `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` (required to protect smoke endpoint)
+
+Deploy function:
+
+```bash
+supabase functions deploy smoke_attendance_db_first --no-verify-jwt
+```
+
+GitHub Actions trigger setup:
+
+- workflow: `.github/workflows/smoke-attendance-db-first.yml`
+- required GitHub inputs:
+  - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
+  - variable: `SUPABASE_PROJECT_REF`
+  - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+
+Manual trigger:
+
+```bash
+curl -sS -X POST \
+  "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
+  -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"requireExportTriggerOk":false}'
+```
+
+Local fallback script (kept for debugging):
+
+```bash
+npm run smoke:attendance:db-first
+```
+
+Secrets ownership reference: `../docs/secrets-runtime-matrix.md`
 
 ## Authentication (Supabase)
 

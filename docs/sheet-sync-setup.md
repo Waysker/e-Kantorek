@@ -98,6 +98,58 @@ Expected:
 - `sync_runs` gets a row with status `dry_run` or `failed`
 - `sync_issues` includes validation findings when data is malformed
 
+## 3a. Automated regression check (db_first write path)
+
+Manual SQL/curl checks are still useful for debugging, but default regression path should be automated.
+
+Recommended model is hybrid:
+
+- smoke execution is inside Supabase function `smoke_attendance_db_first`,
+- GitHub Actions only triggers that function via bearer token.
+
+The smoke run performs:
+
+1. login with a manager account (`section`, `board`, or `admin`),
+2. `attendance_write_sheet_first` call in `enqueue_batch` mode with `eventId`-only request,
+3. DB assertion (`attendance_entries` value changed),
+4. rollback assertion (original value restored).
+
+Supabase function secrets:
+
+- `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
+- `SMOKE_ATTENDANCE_TEST_EMAIL`
+- `SMOKE_ATTENDANCE_TEST_PASSWORD`
+- `SMOKE_ATTENDANCE_EVENT_ID`
+- `SMOKE_ATTENDANCE_MEMBER_ID`
+- optional `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK=true`
+
+Deploy:
+
+```bash
+supabase functions deploy smoke_attendance_db_first --no-verify-jwt
+```
+
+GitHub workflow inputs:
+
+- secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
+- variable: `SUPABASE_PROJECT_REF`
+- optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+
+Manual trigger:
+
+```bash
+curl -sS -X POST \
+  "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
+  -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"requireExportTriggerOk":false}'
+```
+
+Local fallback smoke (debug only):
+
+- `app/scripts/smoke-attendance-db-first.mjs`
+- `npm run smoke:attendance:db-first`
+
 ## 4. Schedule every 5 minutes
 
 Run in SQL editor:
