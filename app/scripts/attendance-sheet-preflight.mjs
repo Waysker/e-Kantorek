@@ -706,7 +706,7 @@ async function loadCsvText(args) {
     };
   }
 
-  const url = `https://docs.google.com/spreadsheets/d/${args.sheetId}/gviz/tq?tqx=out:csv&gid=${args.gid}`;
+  const url = `https://docs.google.com/spreadsheets/d/${args.sheetId}/export?format=csv&gid=${args.gid}`;
   const csvText = await getUrl(url);
   return {
     csvText,

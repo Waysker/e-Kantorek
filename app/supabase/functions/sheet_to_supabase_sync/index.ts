@@ -2296,7 +2296,7 @@ Deno.serve(async (request) => {
 
   const runId = runStart.id as string;
   const csvUrls = effectiveSources.map((source) =>
-    `https://docs.google.com/spreadsheets/d/${source.sheetId}/gviz/tq?tqx=out:csv&gid=${source.gid}`
+    `https://docs.google.com/spreadsheets/d/${source.sheetId}/export?format=csv&gid=${source.gid}`
   );
 
   try {
