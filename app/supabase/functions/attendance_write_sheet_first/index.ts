@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+type SupabaseAdminClient = SupabaseClient<any, "public", any>;
 
 type ProfileRow = {
   id: string;
@@ -785,7 +787,7 @@ async function resolveUserFromToken(accessToken: string): Promise<{ id: string }
 }
 
 async function loadProfile(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   profileId: string,
 ): Promise<ProfileRow> {
   const { data, error } = await supabaseAdmin
@@ -806,7 +808,7 @@ async function loadProfile(
 }
 
 async function resolveMemberIdForProfile(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   profile: ProfileRow,
 ): Promise<string> {
   const { data: existingLink, error: existingLinkError } = await supabaseAdmin
@@ -902,7 +904,7 @@ async function resolveMemberIdForProfile(
 }
 
 async function resolveEventSource(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventId: string,
 ): Promise<EventSourceRow> {
   const { data, error } = await supabaseAdmin
@@ -923,7 +925,7 @@ async function resolveEventSource(
 }
 
 async function resolveDefaultSheetSource(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   options?: {
     eventDate?: string | null;
   },
@@ -1061,7 +1063,7 @@ function buildSheetStyleEventId(eventDate: string, eventTitle: string): string {
 }
 
 async function createPlaceholderEvent(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventDate: string;
     eventTitleInput: string;
@@ -1126,7 +1128,7 @@ async function createPlaceholderEvent(
 }
 
 async function resolveCanonicalEventId(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventIdInput: string;
     eventDateInput: string | null;
@@ -1224,7 +1226,7 @@ async function resolveCanonicalEventId(
 }
 
 async function resolveSourceCoordinates(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   queueRow: {
     member_id: string;
     event_id: string;
@@ -1385,7 +1387,7 @@ async function resolveSourceCoordinates(
 }
 
 async function enqueueAttendanceChange(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   payload: {
     memberId: string;
     eventId: string;
@@ -1482,7 +1484,7 @@ async function enqueueAttendanceChange(
 }
 
 async function enqueueAttendanceChangeBatchAtomic(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventId: string;
     requestedByProfileId: string;
@@ -1567,7 +1569,7 @@ function normalizeProfileRole(rawRole: string | null): "member" | "section" | "b
 }
 
 async function ensureMemberExists(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   memberId: string,
 ): Promise<void> {
   const { data, error } = await supabaseAdmin
@@ -1585,7 +1587,7 @@ async function ensureMemberExists(
 }
 
 async function ensureMembersExist(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   memberIds: string[],
 ): Promise<void> {
   const uniqueMemberIds = Array.from(new Set(memberIds.map((id) => normalizeWhitespace(id)).filter(Boolean)));
@@ -1746,7 +1748,7 @@ async function maybeTriggerDbToSheetExport(params: {
 }
 
 async function upsertAttendanceEntriesDbFirst(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventId: string;
     changes: Array<{
@@ -1775,7 +1777,7 @@ async function upsertAttendanceEntriesDbFirst(
 }
 
 async function resolveEventDateForExport(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventId: string,
   requestedEventDate: string | null,
 ): Promise<string> {
@@ -1799,7 +1801,7 @@ async function resolveEventDateForExport(
 async function handleDbFirstEnqueueMode(
   request: Request,
   body: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
 ): Promise<Response> {
   const accessToken = parseBearerToken(request.headers.get("authorization"));
   if (!accessToken) {
@@ -1912,7 +1914,7 @@ async function handleDbFirstEnqueueMode(
 async function handleDbFirstEnqueueBatchMode(
   request: Request,
   body: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
 ): Promise<Response> {
   const accessToken = parseBearerToken(request.headers.get("authorization"));
   if (!accessToken) {
@@ -2057,7 +2059,7 @@ async function handleDbFirstEnqueueBatchMode(
 async function handleEnqueueMode(
   request: Request,
   body: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
 ): Promise<Response> {
   const accessToken = parseBearerToken(request.headers.get("authorization"));
   if (!accessToken) {
@@ -2175,7 +2177,7 @@ async function handleEnqueueMode(
 async function handleEnqueueBatchMode(
   request: Request,
   body: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
 ): Promise<Response> {
   const accessToken = parseBearerToken(request.headers.get("authorization"));
   if (!accessToken) {
@@ -2351,7 +2353,7 @@ async function handleEnqueueBatchMode(
 async function handleProcessMode(
   request: Request,
   body: Record<string, unknown>,
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
 ): Promise<Response> {
   const bearerToken = parseBearerToken(request.headers.get("authorization"));
 
