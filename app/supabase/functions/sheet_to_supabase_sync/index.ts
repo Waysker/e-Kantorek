@@ -974,6 +974,14 @@ function eventTitleFromHeader(header: string): string {
   return normalized || normalizeWhitespace(header);
 }
 
+function isDateOnlyEventTitle(title: string): boolean {
+  const normalized = normalizeWhitespace(title).toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return /^\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?$/.test(normalized);
+}
+
 function looksLikeAttendanceLayout(rows: string[][]): boolean {
   const header = rows[0] ?? [];
   const lastNameHeader = normalizeWhitespace(header[2] ?? "").toLowerCase();
@@ -1722,6 +1730,55 @@ async function alignEventIdsToExistingSourceCells(
   };
 }
 
+function pruneDateOnlyDuplicateEvents(
+  events: EventRecord[],
+  attendanceEntries: AttendanceEntryRecord[],
+): {
+  events: EventRecord[];
+  attendanceEntries: AttendanceEntryRecord[];
+  droppedEventIdsCount: number;
+} {
+  if (events.length === 0) {
+    return { events, attendanceEntries, droppedEventIdsCount: 0 };
+  }
+
+  const eventsBySheetDate = new Map<string, EventRecord[]>();
+  for (const event of events) {
+    const key = `${event.source_sheet_id}::${event.event_date}`;
+    const bucket = eventsBySheetDate.get(key) ?? [];
+    bucket.push(event);
+    eventsBySheetDate.set(key, bucket);
+  }
+
+  const droppedEventIds = new Set<string>();
+  for (const bucket of eventsBySheetDate.values()) {
+    if (bucket.length <= 1) {
+      continue;
+    }
+    const hasDescriptiveTitle = bucket.some((event) => !isDateOnlyEventTitle(event.title));
+    if (!hasDescriptiveTitle) {
+      continue;
+    }
+    for (const event of bucket) {
+      if (isDateOnlyEventTitle(event.title)) {
+        droppedEventIds.add(event.event_id);
+      }
+    }
+  }
+
+  if (droppedEventIds.size === 0) {
+    return { events, attendanceEntries, droppedEventIdsCount: 0 };
+  }
+
+  const keptEvents = events.filter((event) => !droppedEventIds.has(event.event_id));
+  const keptAttendance = attendanceEntries.filter((entry) => !droppedEventIds.has(entry.event_id));
+  return {
+    events: keptEvents,
+    attendanceEntries: keptAttendance,
+    droppedEventIdsCount: droppedEventIds.size,
+  };
+}
+
 async function alignMemberIdsToExistingRowIdentity(
   supabaseAdmin: SupabaseAdminClient,
   members: MemberRecord[],
@@ -2461,10 +2518,17 @@ Deno.serve(async (request) => {
       const validAttendanceEntriesInitial = mergedPreflight.attendanceEntries.filter((entry) =>
         validEventIds.has(entry.event_id)
       );
+      const dateOnlyDuplicatePrune = pruneDateOnlyDuplicateEvents(validEvents, validAttendanceEntriesInitial);
+      const prunedValidEvents = dateOnlyDuplicatePrune.events;
+      const prunedValidAttendanceEntries = dateOnlyDuplicatePrune.attendanceEntries;
+      summary.events_dropped_date_only_duplicates = dateOnlyDuplicatePrune.droppedEventIdsCount;
+      summary.attendance_entries_dropped_date_only_duplicates =
+        validAttendanceEntriesInitial.length - prunedValidAttendanceEntries.length;
+
       const alignedBySourceCells = await alignEventIdsToExistingSourceCells(
         supabaseAdmin,
-        validEvents,
-        validAttendanceEntriesInitial,
+        prunedValidEvents,
+        prunedValidAttendanceEntries,
       );
       const finalValidEvents = alignedBySourceCells.events;
       const finalValidAttendanceEntries = alignedBySourceCells.attendanceEntries;

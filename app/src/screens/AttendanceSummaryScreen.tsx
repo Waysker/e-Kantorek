@@ -90,6 +90,26 @@ function parseIsoDateStrict(value: string): string | null {
   return toIsoDateLocal(date) === normalized ? normalized : null;
 }
 
+function parseIsoMonthStrict(value: string): { year: number; monthIndex: number; normalized: string } | null {
+  const normalized = normalizeWhitespace(value);
+  const match = normalized.match(/^(\d{4})-(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+    return null;
+  }
+
+  return {
+    year,
+    monthIndex: month - 1,
+    normalized: `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}`,
+  };
+}
+
 function getDefaultSeasonScope(todayDate = new Date()): { startDate: string; endDate: string } {
   const today = new Date(todayDate);
   const year = today.getMonth() >= 9 ? today.getFullYear() : today.getFullYear() - 1;
@@ -289,12 +309,20 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     }
     return { type: "date" };
   }, []);
+  const webMonthInputProps = useMemo(() => {
+    if (Platform.OS !== "web") {
+      return {};
+    }
+    return { type: "month" };
+  }, []);
 
   const defaultScope = useMemo(() => getDefaultSeasonScope(), []);
+  const defaultMonthInput = useMemo(() => toIsoDateLocal(new Date()).slice(0, 7), []);
   const [scopeStartDate, setScopeStartDate] = useState(defaultScope.startDate);
   const [scopeEndDate, setScopeEndDate] = useState(defaultScope.endDate);
   const [startDateInput, setStartDateInput] = useState(defaultScope.startDate);
   const [endDateInput, setEndDateInput] = useState(defaultScope.endDate);
+  const [singleMonthInput, setSingleMonthInput] = useState(defaultMonthInput);
   const [totalEvents, setTotalEvents] = useState(0);
   const [sections, setSections] = useState<SectionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -363,6 +391,27 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     setScopeEndDate(parsedEndDate);
     setErrorMessage(null);
   }, [endDateInput, startDateInput]);
+
+  const applySingleMonthScope = useCallback(() => {
+    const parsedMonth = parseIsoMonthStrict(singleMonthInput);
+    if (!parsedMonth) {
+      setErrorMessage(
+        tr(
+          "Miesiąc musi być w formacie RRRR-MM.",
+          "Month must use YYYY-MM format.",
+        ),
+      );
+      return;
+    }
+
+    const monthBounds = getCalendarMonthBounds(parsedMonth.year, parsedMonth.monthIndex);
+    setSingleMonthInput(parsedMonth.normalized);
+    setStartDateInput(monthBounds.startDate);
+    setEndDateInput(monthBounds.endDate);
+    setScopeStartDate(monthBounds.startDate);
+    setScopeEndDate(monthBounds.endDate);
+    setErrorMessage(null);
+  }, [singleMonthInput]);
 
   useEffect(() => {
     let isDisposed = false;
@@ -615,6 +664,25 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           </Pressable>
         </View>
 
+        <View style={styles.singleMonthRow}>
+          <View style={styles.singleMonthInputBlock}>
+            <Text style={styles.scopeInputLabel}>{tr("Miesiąc", "Month")}</Text>
+            <TextInput
+              {...(webMonthInputProps as any)}
+              value={singleMonthInput}
+              onChangeText={setSingleMonthInput}
+              placeholder="YYYY-MM"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+              style={styles.scopeInput}
+            />
+          </View>
+          <Pressable style={styles.singleMonthApplyButton} onPress={applySingleMonthScope}>
+            <Text style={styles.applyButtonLabel}>{tr("Ustaw miesiąc", "Apply month")}</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.scopeInputsRow}>
           <View style={styles.scopeInputBlock}>
             <Text style={styles.scopeInputLabel}>{tr("Od", "From")}</Text>
@@ -856,6 +924,17 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.sm,
     flexWrap: "wrap",
   },
+  singleMonthRow: {
+    marginTop: tokens.spacing.md,
+    flexDirection: "row",
+    gap: tokens.spacing.sm,
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+  },
+  singleMonthInputBlock: {
+    flexGrow: 1,
+    minWidth: 160,
+  },
   scopeInputBlock: {
     flexGrow: 1,
     minWidth: 160,
@@ -879,6 +958,12 @@ const styles = StyleSheet.create({
   applyButton: {
     marginTop: tokens.spacing.md,
     alignSelf: "flex-start",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radii.round,
+    backgroundColor: tokens.colors.brand,
+  },
+  singleMonthApplyButton: {
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     borderRadius: tokens.radii.round,
