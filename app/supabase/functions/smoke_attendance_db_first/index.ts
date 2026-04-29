@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+type SupabaseAdminClient = SupabaseClient<any, "public", any>;
 
 type ProfileRow = {
   id: string;
@@ -528,7 +530,7 @@ async function verifySheetSyncContract(params: {
 }
 
 async function loadProfile(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   profileId: string,
 ): Promise<ProfileRow> {
   const { data, error } = await supabaseAdmin
@@ -546,7 +548,7 @@ async function loadProfile(
 }
 
 async function loadAttendanceRow(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventId: string,
   memberId: string,
 ): Promise<AttendanceEntryRow> {
