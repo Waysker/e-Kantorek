@@ -52,11 +52,6 @@ type ScopePreset = "season" | "30d" | "90d" | "ytd" | "all";
 
 type SyncRunRow = {
   finished_at: string | null;
-  source_ref: string | null;
-  summary: {
-    source_refs?: unknown;
-    csv_urls?: unknown;
-  } | null;
 };
 
 function normalizeWhitespace(value: unknown): string {
@@ -158,105 +153,6 @@ function compareSectionLabels(left: string, right: string): number {
   return left.localeCompare(right, "pl");
 }
 
-function parseSheetIdFromSourceRef(sourceRef: unknown): string | null {
-  const normalized = normalizeWhitespace(sourceRef);
-  if (!normalized) {
-    return null;
-  }
-  const separatorIndex = normalized.indexOf(":");
-  if (separatorIndex <= 0) {
-    return null;
-  }
-  return normalizeWhitespace(normalized.slice(0, separatorIndex)) || null;
-}
-
-function parseSheetIdFromCsvUrl(csvUrl: unknown): string | null {
-  const normalized = normalizeWhitespace(csvUrl);
-  if (!normalized) {
-    return null;
-  }
-
-  try {
-    const parsedUrl = new URL(normalized);
-    const match = parsedUrl.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
-    return match?.[1] ? normalizeWhitespace(match[1]) : null;
-  } catch {
-    return null;
-  }
-}
-
-function resolveSheetIdFromSingleSyncRun(syncRun: SyncRunRow | null): string | null {
-  if (!syncRun) {
-    return null;
-  }
-
-  const candidates: string[] = [];
-  const directSourceSheetId = parseSheetIdFromSourceRef(syncRun.source_ref);
-  if (directSourceSheetId) {
-    candidates.push(directSourceSheetId);
-  }
-
-  const sourceRefs = syncRun.summary?.source_refs;
-  if (Array.isArray(sourceRefs)) {
-    for (const sourceRef of sourceRefs) {
-      const sheetId = parseSheetIdFromSourceRef(sourceRef);
-      if (sheetId) {
-        candidates.push(sheetId);
-      }
-    }
-  }
-
-  const csvUrls = syncRun.summary?.csv_urls;
-  if (Array.isArray(csvUrls)) {
-    for (const csvUrl of csvUrls) {
-      const sheetId = parseSheetIdFromCsvUrl(csvUrl);
-      if (sheetId) {
-        candidates.push(sheetId);
-      }
-    }
-  }
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const counts = new Map<string, number>();
-  for (const candidate of candidates) {
-    counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
-  }
-
-  const ranked = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
-  if (ranked.length === 0) {
-    return null;
-  }
-
-  if (ranked.length === 1) {
-    return ranked[0][0];
-  }
-
-  return ranked[0][1] > ranked[1][1] ? ranked[0][0] : null;
-}
-
-function resolveReferenceSheetFromSyncRuns(
-  syncRuns: SyncRunRow[],
-): { sheetId: string; finishedAt: string } | null {
-  for (const syncRun of syncRuns) {
-    const finishedAt = normalizeWhitespace(syncRun.finished_at);
-    if (!finishedAt) {
-      continue;
-    }
-
-    const sheetId = resolveSheetIdFromSingleSyncRun(syncRun);
-    if (!sheetId) {
-      continue;
-    }
-
-    return { sheetId, finishedAt };
-  }
-
-  return null;
-}
-
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
   const defaultScope = useMemo(() => getDefaultSeasonScope(), []);
   const [scopeStartDate, setScopeStartDate] = useState(defaultScope.startDate);
@@ -268,7 +164,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
-  const [effectiveReferenceSheetId, setEffectiveReferenceSheetId] = useState("-");
+  const [latestRefSyncAt, setLatestRefSyncAt] = useState<string | null>(null);
 
   const applyPreset = useCallback((preset: ScopePreset) => {
     const next = getPresetScope(preset);
@@ -322,7 +218,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       setConsistencyNotice(null);
 
       try {
-        const [membersResult, syncRunsResult] = await Promise.all([
+        const [membersResult, eventsResult, latestSyncRunResult] = await Promise.all([
           supabaseAuthClient
             .from("members")
             .select("member_id,full_name,instrument")
@@ -330,14 +226,20 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
             .order("instrument", { ascending: true })
             .order("full_name", { ascending: true }),
           supabaseAuthClient
+            .from("events")
+            .select("event_id")
+            .gte("event_date", scopeStartDate)
+            .lte("event_date", scopeEndDate)
+            .order("event_date", { ascending: true }),
+          supabaseAuthClient
             .from("sync_runs")
-            .select("finished_at,source_ref,summary")
+            .select("finished_at")
             .eq("pipeline_name", "sheet_to_supabase_sync")
             .eq("status", "success")
             .not("finished_at", "is", null)
             .order("started_at", { ascending: false })
-            .limit(30)
-            .returns<SyncRunRow[]>(),
+            .limit(1)
+            .maybeSingle<SyncRunRow>(),
         ]);
 
         if (isDisposed) {
@@ -348,41 +250,18 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           throw new Error(membersResult.error.message);
         }
 
-        if (syncRunsResult.error) {
-          throw new Error(syncRunsResult.error.message);
-        }
-
         const members = ((membersResult.data ?? []) as MemberRow[]).filter(
           (member) => normalizeWhitespace(member.member_id).length > 0,
         );
-        const syncRunResolution = resolveReferenceSheetFromSyncRuns(syncRunsResult.data ?? []);
-        if (!syncRunResolution) {
-          throw new Error(
-            tr(
-              "Nie udało się ustalić ref sheet ID z historii udanych synców ref -> DB.",
-              "Could not resolve ref sheet ID from successful ref -> DB sync history.",
-            ),
-          );
-        }
-
-        const referenceSheetId = syncRunResolution.sheetId;
-        const latestSyncFinishedAt = syncRunResolution.finishedAt;
-
-        setEffectiveReferenceSheetId(referenceSheetId);
-
-        const eventsResult = await supabaseAuthClient
-          .from("events")
-          .select("event_id")
-          .eq("source_sheet_id", referenceSheetId)
-          .gte("event_date", scopeStartDate)
-          .lte("event_date", scopeEndDate)
-          .order("event_date", { ascending: true });
-
         if (eventsResult.error) {
           throw new Error(eventsResult.error.message);
         }
 
-        const eventIds = (eventsResult.data ?? [])
+        const latestSyncFinishedAt = normalizeWhitespace(latestSyncRunResult.data?.finished_at ?? "");
+        const hasSyncMetadataError = Boolean(latestSyncRunResult.error);
+        setLatestRefSyncAt(latestSyncFinishedAt || null);
+
+        const eventIds = ((eventsResult.data ?? []) as Array<{ event_id: string }>)
           .map((event) => normalizeWhitespace(event.event_id))
           .filter((eventId) => eventId.length > 0);
 
@@ -415,11 +294,25 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           }
         }
 
-        if (changedAfterSyncCount > 0) {
+        if (hasSyncMetadataError) {
           setConsistencyNotice(
             tr(
-              `Wykryto ${changedAfterSyncCount} zmian obecności po ostatnim syncu ref -> DB. Pokazuję aktualny stan DB, który może chwilowo różnić się od ref. Uruchom sync ref -> DB, żeby wyrównać punktację.`,
-              `Detected ${changedAfterSyncCount} attendance changes after the last ref -> DB sync. Showing current DB state, which can temporarily differ from ref. Run ref -> DB sync to realign scores.`,
+              "Nie udało się pobrać metadanych ostatniego syncu ref -> DB. Pokazuję bieżące dane z DB.",
+              "Could not load latest ref -> DB sync metadata. Showing current DB data.",
+            ),
+          );
+        } else if (!latestSyncFinishedAt) {
+          setConsistencyNotice(
+            tr(
+              "Brak zakończonego syncu ref -> DB. Pokazuję bieżące dane z DB; mogą różnić się od arkusza ref.",
+              "No completed ref -> DB sync found. Showing current DB data, which may differ from the ref sheet.",
+            ),
+          );
+        } else if (changedAfterSyncCount > 0) {
+          setConsistencyNotice(
+            tr(
+              `Wykryto ${changedAfterSyncCount} zmian obecności po ostatnim syncu ref -> DB. Pokazuję aktualny stan DB, który może chwilowo różnić się od ref.`,
+              `Detected ${changedAfterSyncCount} attendance changes after the last ref -> DB sync. Showing current DB state, which may temporarily differ from ref.`,
             ),
           );
         }
@@ -468,7 +361,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       } catch (error) {
         setSections([]);
         setTotalEvents(0);
-        setEffectiveReferenceSheetId("-");
+        setLatestRefSyncAt(null);
         setConsistencyNotice(null);
         setErrorMessage(
           error instanceof Error
@@ -496,12 +389,12 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         <Text style={styles.cardTitle}>{tr("Podsumowanie sekcyjne", "Section attendance summary")}</Text>
         <Text style={styles.cardBody}>
           {tr(
-            "Źródło prawdy: ref attendance. Wynik liczymy wyłącznie z wydarzeń zsynchronizowanych z arkusza referencyjnego.",
-            "Source of truth: ref attendance. We compute only from events synced from the reference sheet.",
+            "Panel liczy punktację na podstawie aktualnych danych w DB. Gdy sync ref -> DB jest opóźniony, wyniki mogą chwilowo różnić się od arkusza referencyjnego.",
+            "This panel computes scores from current DB data. If ref -> DB sync is delayed, results can temporarily differ from the reference sheet.",
           )}
         </Text>
         <Text style={styles.cardSecondary}>
-          {tr("Ref sheet", "Ref sheet")}: {effectiveReferenceSheetId}
+          {tr("Ostatni sync ref -> DB", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
         </Text>
         <Pressable style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonLabel}>{tr("← Wróć do profilu", "← Back to profile")}</Text>
