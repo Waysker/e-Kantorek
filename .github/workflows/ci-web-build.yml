@@ -1,23 +1,16 @@
-name: CI Typecheck
+name: CI Web Build
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - "app/**"
-      - ".github/workflows/ci-typecheck.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - ".github/workflows/ci-typecheck.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
 
 jobs:
-  typecheck:
+  web-build:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,5 +30,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run typecheck
-        run: npm run typecheck
+      - name: Build web bundle
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ci-placeholder-key
+        run: npm run web:build

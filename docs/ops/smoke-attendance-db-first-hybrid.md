@@ -19,6 +19,8 @@ Supabase secrets (function runtime):
 - `SMOKE_ATTENDANCE_MEMBER_ID`
 - optional `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK`
 - optional `SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT` (default `false`; can be enabled per call/workflow)
+- optional `SMOKE_SYNC_MAX_WARNINGS` (non-negative integer; fail when `warnings_count` is above threshold)
+- optional `SMOKE_SYNC_FORBID_WARNING_CODES` (comma-separated warning codes; fail when present in warning breakdown)
 - `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
 - `SHEET_SYNC_FUNCTION_AUTH_TOKEN` (required only when sync contract check is enabled)
 
@@ -36,6 +38,10 @@ GitHub settings (trigger only):
 3. DB assertion that value changed.
 4. Rollback assertion that original value was restored.
 5. Optional contract check of `sheet_to_supabase_sync` (`dryRun=true`), including response shape validation.
+6. Optional quality gate for sync summary:
+   - `errors_count == 0`
+   - `attendance_entries_skipped_due_to_invalid_events == 0`
+   - optional warning limits via env thresholds.
 
 ## Workflow
 
@@ -57,7 +63,7 @@ curl -sS -X POST \
   "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
   -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"requireExportTriggerOk":false}'
+  -d '{"requireExportTriggerOk":false,"checkSyncContract":true}'
 ```
 
 Expected result:

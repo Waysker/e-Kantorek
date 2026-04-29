@@ -39,15 +39,22 @@ Supported date tokens:
 
 - `YYYY-MM-DD` (preferred)
 - `DD.MM` (year inferred from dominant year in sheet, warning emitted)
+- `YYYY-DD` (month inferred from tab/month context, warning emitted)
+- ambiguous day-month headers are normalized using per-sheet day-month style inference (warning emitted)
 
-Invalid date tokens produce validation errors (for example malformed `YYYY-MM-DD` values).
+Additional parser behavior:
+
+- if a single event column has no explicit date token, parser may infer date from neighboring event columns in the same month (warning emitted)
+- if date is still not parseable, provide a manual override via runtime secret `ATTENDANCE_EVENT_DATE_OVERRIDES_JSON` keyed by `sourceRef` + `columnRef`
+
+Invalid date tokens (without successful inference or override) produce validation issues and should be treated as contract violations.
 
 ## Data Quality Checklist
 
 Run this checklist before each publish:
 
 1. Header row has expected base columns (`L.p.`, `Nazwisko`, `Imię`).
-2. All event columns have a parseable date token.
+2. All event columns have a parseable date token, or an explicit override entry for known immutable headers.
 3. No invalid attendance values (`text`, negative values, values above 100%).
 4. Names are complete (`Nazwisko` + `Imię` both set).
 5. Section context is present for each participant row.

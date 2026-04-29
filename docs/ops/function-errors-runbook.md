@@ -66,6 +66,11 @@ order by status;
 | `smoke_attendance_db_first` | `smoke_rollback_failed` | Smoke could not restore original value. | Immediate manual rollback in DB, then fix function and rerun smoke. |
 | `smoke_attendance_db_first` | `missing_sheet_sync_auth_token` | Sync contract check enabled, but function has no sync auth token. | Set `SHEET_SYNC_FUNCTION_AUTH_TOKEN` in Supabase secrets or disable `checkSyncContract` for smoke call. |
 | `smoke_attendance_db_first` | `sync_contract_http_status_unexpected` / `sync_contract_invalid_payload` / `sync_contract_missing_run_id` / `sync_contract_invalid_status` / `sync_contract_invalid_dry_run` / `sync_contract_missing_summary` | `sheet_to_supabase_sync` contract check failed. | Inspect `sheet_to_supabase_sync` logs and response payload; validate auth token, payload contract, and function deployment version. |
+| `smoke_attendance_db_first` | `invalid_smoke_sync_max_warnings_env` | `SMOKE_SYNC_MAX_WARNINGS` has invalid value. | Set non-negative integer or unset variable. |
+| `smoke_attendance_db_first` | `sync_quality_missing_errors_count` / `sync_quality_errors_count_not_zero` | Sync summary quality gate failed on `errors_count`. | Inspect latest sync run issues and fix sheet/parser problems before rerun. |
+| `smoke_attendance_db_first` | `sync_quality_missing_skipped_invalid_events_count` / `sync_quality_skipped_invalid_events_not_zero` | Sync summary quality gate failed on skipped invalid events. | Fix event parsing/mapping so `attendance_entries_skipped_due_to_invalid_events` returns to `0`. |
+| `smoke_attendance_db_first` | `sync_quality_missing_warnings_count` / `sync_quality_warnings_count_exceeded` | Warnings threshold gate failed. | Increase threshold intentionally or reduce parser warnings in source sheets/overrides. |
+| `smoke_attendance_db_first` | `sync_quality_forbidden_warning_codes_present` | Forbidden warning code detected in sync warning breakdown. | Remove source anomaly or relax `SMOKE_SYNC_FORBID_WARNING_CODES` only with explicit decision. |
 
 ## Platform-Level Errors Seen in Client Calls
 

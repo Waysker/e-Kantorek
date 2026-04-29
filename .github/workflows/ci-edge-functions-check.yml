@@ -1,0 +1,36 @@
+name: CI Edge Functions Check
+
+on:
+  pull_request:
+    paths:
+      - "app/supabase/functions/**"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  deno-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Check all Edge Functions
+        run: |
+          set -euo pipefail
+          files="$(find app/supabase/functions -type f -name '*.ts' | sort)"
+          if [ -z "$files" ]; then
+            echo "No TypeScript files found in app/supabase/functions"
+            exit 0
+          fi
+          while IFS= read -r file; do
+            echo "Checking $file"
+            deno check "$file"
+          done <<< "$files"

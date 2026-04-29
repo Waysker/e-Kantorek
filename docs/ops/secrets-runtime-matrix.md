@@ -37,6 +37,8 @@ Keep every variable in the runtime where it is consumed.
 | `SMOKE_ATTENDANCE_TEST_PASSWORD` | secret | smoke function runtime | Supabase Secret | Test user password (never in GitHub). |
 | `SMOKE_ATTENDANCE_EVENT_ID` | config | smoke function runtime | Supabase Secret | Fixed smoke target event. |
 | `SMOKE_ATTENDANCE_MEMBER_ID` | config | smoke function runtime | Supabase Secret | Fixed smoke target member. |
+| `SMOKE_SYNC_MAX_WARNINGS` | config | smoke function runtime | Supabase Secret | Optional warnings threshold for sync quality gate. |
+| `SMOKE_SYNC_FORBID_WARNING_CODES` | config | smoke function runtime | Supabase Secret | Optional comma-separated forbidden warning codes for sync quality gate. |
 | `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` | secret | smoke trigger auth | Supabase Secret + GitHub Secret | Only intentionally duplicated secret. |
 | `SUPABASE_PROJECT_REF` | config | smoke workflow trigger | GitHub Variable | Non-sensitive project ref for function URL. |
 | `SMOKE_REQUIRE_EXPORT_TRIGGER_OK` | config | smoke workflow trigger | GitHub Variable | Optional strict smoke mode. |

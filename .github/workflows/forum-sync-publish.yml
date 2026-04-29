@@ -6,6 +6,9 @@ on:
     # Every 4 hours (UTC)
     - cron: "17 */4 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   sync-publish:
     runs-on: ubuntu-latest

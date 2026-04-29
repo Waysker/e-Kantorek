@@ -139,6 +139,11 @@ GitHub (for smoke workflow):
 - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
 - optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (defaults to `true` in workflow)
 
+Optional Supabase smoke quality knobs:
+
+- `SMOKE_SYNC_MAX_WARNINGS`
+- `SMOKE_SYNC_FORBID_WARNING_CODES`
+
 Secret ownership matrix:
 
 - `docs/ops/secrets-runtime-matrix.md`

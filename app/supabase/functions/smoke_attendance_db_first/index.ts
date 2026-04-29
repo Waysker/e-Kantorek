@@ -54,6 +54,10 @@ const DEFAULT_CHECK_SYNC_CONTRACT = parseBooleanEnv(
   Deno.env.get("SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT"),
   false,
 );
+const SMOKE_SYNC_MAX_WARNINGS_RAW = normalizeWhitespace(Deno.env.get("SMOKE_SYNC_MAX_WARNINGS") ?? "");
+const SMOKE_SYNC_FORBID_WARNING_CODES = parseWarningCodeList(
+  Deno.env.get("SMOKE_SYNC_FORBID_WARNING_CODES"),
+);
 const ATTENDANCE_WRITE_FUNCTION_URL =
   normalizeWhitespace(Deno.env.get("SMOKE_ATTENDANCE_WRITE_FUNCTION_URL") ?? "") ||
   normalizeWhitespace(Deno.env.get("EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL") ?? "");
@@ -82,6 +86,124 @@ function parseBooleanEnv(rawValue: string | undefined, fallback: boolean): boole
 
 function parseBooleanInput(rawValue: unknown, fallback: boolean): boolean {
   return parseBooleanEnv(normalizeWhitespace(rawValue), fallback);
+}
+
+function parseWarningCodeList(rawValue: string | undefined): string[] {
+  const normalized = normalizeWhitespace(rawValue ?? "");
+  if (!normalized) {
+    return [];
+  }
+
+  const uniqueCodes = new Set<string>();
+  for (const chunk of normalized.split(",")) {
+    const code = normalizeWhitespace(chunk).toLowerCase();
+    if (!code) continue;
+    uniqueCodes.add(code);
+  }
+
+  return Array.from(uniqueCodes);
+}
+
+function parseNonNegativeInteger(value: unknown): number | null {
+  if (typeof value === "number") {
+    if (Number.isInteger(value) && value >= 0) return value;
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = normalizeWhitespace(value);
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    if (!Number.isInteger(parsed) || parsed < 0) return null;
+    return parsed;
+  }
+
+  return null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function parseOptionalMaxWarningsThreshold(): number | null {
+  if (!SMOKE_SYNC_MAX_WARNINGS_RAW) {
+    return null;
+  }
+
+  const parsed = Number(SMOKE_SYNC_MAX_WARNINGS_RAW);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new HttpError(
+      500,
+      "invalid_smoke_sync_max_warnings_env",
+      "SMOKE_SYNC_MAX_WARNINGS must be a non-negative integer when set.",
+      { value: SMOKE_SYNC_MAX_WARNINGS_RAW },
+    );
+  }
+
+  return parsed;
+}
+
+function parseWarningBreakdownCandidate(value: unknown): Map<string, number> | null {
+  if (Array.isArray(value)) {
+    const counts = new Map<string, number>();
+    for (const item of value) {
+      const asRecord = toRecord(item);
+      if (!asRecord) continue;
+      const code = normalizeWhitespace(
+        asRecord.code ?? asRecord.warning_code ?? asRecord.name ?? "",
+      ).toLowerCase();
+      if (!code) continue;
+      const count = parseNonNegativeInteger(asRecord.count ?? asRecord.cnt ?? asRecord.total ?? 1) ?? 1;
+      counts.set(code, (counts.get(code) ?? 0) + count);
+    }
+    return counts.size > 0 ? counts : null;
+  }
+
+  const asRecord = toRecord(value);
+  if (!asRecord) {
+    return null;
+  }
+
+  const counts = new Map<string, number>();
+  for (const [rawCode, rawCount] of Object.entries(asRecord)) {
+    const code = normalizeWhitespace(rawCode).toLowerCase();
+    if (!code) continue;
+    const count = parseNonNegativeInteger(rawCount);
+    if (count === null) continue;
+    counts.set(code, count);
+  }
+
+  return counts.size > 0 ? counts : null;
+}
+
+function extractWarningBreakdown(
+  payload: Record<string, unknown>,
+  summary: Record<string, unknown>,
+): Map<string, number> | null {
+  const candidates: unknown[] = [
+    summary.warning_breakdown,
+    summary.warnings_breakdown,
+    summary.warning_code_counts,
+    summary.warnings_by_code,
+    summary.warning_counts_by_code,
+    payload.warning_breakdown,
+    payload.warnings_breakdown,
+    payload.warning_code_counts,
+    payload.warnings_by_code,
+    payload.warning_counts_by_code,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseWarningBreakdownCandidate(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 function parseBearerToken(headerValue: string | null): string | null {
@@ -220,12 +342,18 @@ type SyncContractCheckResult = {
   run_id: string;
   status: "dry_run" | "success" | "failed";
   dry_run: boolean;
+  errors_count: number;
+  attendance_entries_skipped_due_to_invalid_events: number;
+  warnings_count: number | null;
+  warning_breakdown_available: boolean;
 };
 
 async function verifySheetSyncContract(params: {
   functionUrl: string;
   functionAuthToken: string;
   runTag: string;
+  maxWarnings: number | null;
+  forbiddenWarningCodes: string[];
 }): Promise<SyncContractCheckResult> {
   const response = await fetch(params.functionUrl, {
     method: "POST",
@@ -298,11 +426,100 @@ async function verifySheetSyncContract(params: {
     });
   }
 
+  const summaryRecord = summary as Record<string, unknown>;
+  const errorsCount = parseNonNegativeInteger(summaryRecord.errors_count);
+  if (errorsCount === null) {
+    throw new HttpError(
+      502,
+      "sync_quality_missing_errors_count",
+      "Sync summary is missing numeric errors_count.",
+      { response_payload: payload },
+    );
+  }
+  if (errorsCount !== 0) {
+    throw new HttpError(
+      502,
+      "sync_quality_errors_count_not_zero",
+      `Sync summary errors_count must be 0, got ${errorsCount}.`,
+      { errors_count: errorsCount, response_payload: payload },
+    );
+  }
+
+  const skippedInvalidEventsCount = parseNonNegativeInteger(
+    summaryRecord.attendance_entries_skipped_due_to_invalid_events,
+  );
+  if (skippedInvalidEventsCount === null) {
+    throw new HttpError(
+      502,
+      "sync_quality_missing_skipped_invalid_events_count",
+      "Sync summary is missing numeric attendance_entries_skipped_due_to_invalid_events.",
+      { response_payload: payload },
+    );
+  }
+  if (skippedInvalidEventsCount !== 0) {
+    throw new HttpError(
+      502,
+      "sync_quality_skipped_invalid_events_not_zero",
+      "Sync summary attendance_entries_skipped_due_to_invalid_events must be 0.",
+      {
+        attendance_entries_skipped_due_to_invalid_events: skippedInvalidEventsCount,
+        response_payload: payload,
+      },
+    );
+  }
+
+  const warningsCount = parseNonNegativeInteger(summaryRecord.warnings_count);
+  if (params.maxWarnings !== null) {
+    if (warningsCount === null) {
+      throw new HttpError(
+        502,
+        "sync_quality_missing_warnings_count",
+        "Sync summary is missing numeric warnings_count required by SMOKE_SYNC_MAX_WARNINGS.",
+        { response_payload: payload, max_warnings: params.maxWarnings },
+      );
+    }
+    if (warningsCount > params.maxWarnings) {
+      throw new HttpError(
+        502,
+        "sync_quality_warnings_count_exceeded",
+        `Sync summary warnings_count=${warningsCount} exceeds SMOKE_SYNC_MAX_WARNINGS=${params.maxWarnings}.`,
+        { warnings_count: warningsCount, max_warnings: params.maxWarnings, response_payload: payload },
+      );
+    }
+  }
+
+  const warningBreakdown = extractWarningBreakdown(asRecord, summaryRecord);
+  if (params.forbiddenWarningCodes.length > 0 && warningBreakdown) {
+    const offending = params.forbiddenWarningCodes
+      .map((code) => ({
+        code,
+        count: warningBreakdown.get(code) ?? 0,
+      }))
+      .filter((entry) => entry.count > 0);
+
+    if (offending.length > 0) {
+      throw new HttpError(
+        502,
+        "sync_quality_forbidden_warning_codes_present",
+        "Sync warning breakdown contains forbidden warning codes.",
+        {
+          forbidden_warning_codes: params.forbiddenWarningCodes,
+          offending_warning_codes: offending,
+          response_payload: payload,
+        },
+      );
+    }
+  }
+
   return {
     http_status: response.status,
     run_id: runId,
     status,
     dry_run: true,
+    errors_count: errorsCount,
+    attendance_entries_skipped_due_to_invalid_events: skippedInvalidEventsCount,
+    warnings_count: warningsCount,
+    warning_breakdown_available: !!warningBreakdown,
   };
 }
 
@@ -533,10 +750,13 @@ Deno.serve(async (request) => {
         }
 
         const sheetSyncUrl = SHEET_SYNC_FUNCTION_URL || deriveSheetSyncFunctionUrl(SUPABASE_URL);
+        const maxWarnings = parseOptionalMaxWarningsThreshold();
         syncContractCheck = await verifySheetSyncContract({
           functionUrl: sheetSyncUrl,
           functionAuthToken: sheetSyncFunctionAuthToken,
           runTag,
+          maxWarnings,
+          forbiddenWarningCodes: SMOKE_SYNC_FORBID_WARNING_CODES,
         });
       }
 

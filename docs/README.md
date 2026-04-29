@@ -9,13 +9,14 @@
 
 ## Start Here (Current Baseline)
 
-1. `docs/reference/cleanup-maintenance-plan.md`
-2. `docs/ops/sheet-sync-setup.md`
-3. `docs/ops/attendance-ops-runbook.md`
-4. `docs/ops/function-errors-runbook.md`
-5. `docs/ops/secrets-runtime-matrix.md`
-6. `docs/ops/smoke-attendance-db-first-hybrid.md`
-7. `docs/contracts/attendance-sheet-contract.md`
+1. `docs/reference/phase-6-maintainability-plan.md`
+2. `docs/reference/cleanup-maintenance-plan.md`
+3. `docs/ops/sheet-sync-setup.md`
+4. `docs/ops/attendance-ops-runbook.md`
+5. `docs/ops/function-errors-runbook.md`
+6. `docs/ops/secrets-runtime-matrix.md`
+7. `docs/ops/smoke-attendance-db-first-hybrid.md`
+8. `docs/contracts/attendance-sheet-contract.md`
 
 ## Scope Notes
 

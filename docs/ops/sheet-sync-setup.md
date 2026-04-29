@@ -5,10 +5,16 @@ This document describes the current attendance runtime:
 - Google Sheet CSV source
 - Supabase Edge Function `sheet_to_supabase_sync`
 - Supabase Cron every 5 minutes
-- manager write path through `attendance_write_sheet_first` (`db_first`)
+- manager write path through `attendance_write_sheet_first` (`db_first`, roles: `section` / `board` / `admin`)
 - DB -> copy export through `supabase_to_sheet_export`
 
 Current baseline expects migrations through `023_atomic_enqueue_batch_rpc.sql` to be applied.
+
+Source-of-truth model in current runtime:
+
+- reference sheet is ingress-only source for `sheet_to_supabase_sync` (`Sheet -> DB`)
+- Supabase DB is canonical source for app writes (`db_first`)
+- copy sheet is export target for comparison/reporting (`DB -> copy`)
 
 ## 1. Apply migrations
 
@@ -21,9 +27,9 @@ Minimum baseline is `010` through `023`:
 - `012_sheet_sync_upsert_enablement.sql`
 - `013_attendance_sheet_first_write_path.sql`
 - `014_instrument_canonicalization.sql`
-- `015_change_journal_rls_and_restrict.sql`
-- `016_profiles_and_role_rpc_hardening.sql`
-- `017_profile_trigger_role_lockdown.sql`
+- `015_change_journal_rls.sql`
+- `016_admin_role_management.sql`
+- `017_role_taxonomy_section_board.sql`
 - `018_dedupe_events_by_source_cell.sql`
 - `019_security_hardening_roles_and_rpc_privileges.sql`
 - `020_queue_reclaim_stale_processing.sql`
@@ -243,9 +249,10 @@ Related docs:
 - `docs/ops/function-errors-runbook.md`
 - `docs/ops/secrets-runtime-matrix.md`
 
-## Phase A write path: management panel -> queue -> Google Sheet -> sync
+## Legacy sheet-first path (optional): management panel -> queue -> Google Sheet -> sync
 
-Google Sheet remains source of truth. Event RSVP screen stays read-only; actual attendance is written by leader/admin panel.
+This section documents the older sheet-first write mode where queue worker updates Google Sheet first and sync pulls changes back to DB.
+Current baseline is `db_first` (DB is canonical for app writes), described in `Current DB-first mode` below.
 
 ### 1. Apply migration
 
@@ -813,7 +820,7 @@ curl -sS -X POST \
 Expected: if at least one queue row is applied to Sheet, the worker run should also include a successful `sync_trigger`.  
 If `SHEET_TO_SUPABASE_SYNC_URL` is missing (and fallback flag is not enabled), process mode returns failed status by design.
 
-Enqueue mode (leader/admin user access token, not worker token):
+Enqueue mode (`section`/`board`/`admin` user access token, not worker token):
 
 ```bash
 curl -sS -X POST \
@@ -838,9 +845,9 @@ order by started_at desc
 limit 50;
 ```
 
-## Dev mode: reference import + copy export
+## Current DB-first mode: reference import + copy export
 
-Use this when the reference Google Sheet is read-only (current real process), and your own copy is overwritten from DB for comparison.
+Use this when the reference Google Sheet is read-only (current real process). In this mode, reference stays ingress-only and your own copy is overwritten from DB for comparison.
 
 ### 1. Keep import source on reference sheet
 
