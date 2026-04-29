@@ -55,6 +55,11 @@ type SortMode = "alpha" | "points_section" | "points_all";
 
 type SyncRunRow = {
   finished_at: string | null;
+  source_ref?: string | null;
+  summary?: {
+    source_refs?: unknown;
+    csv_urls?: unknown;
+  } | null;
 };
 
 function normalizeWhitespace(value: unknown): string {
@@ -193,6 +198,76 @@ function compareMembersByPoints(left: MemberSummaryRow, right: MemberSummaryRow)
   return compareMembersByName(left, right);
 }
 
+function parseSheetIdFromSourceRef(sourceRef: unknown): string | null {
+  const normalized = normalizeWhitespace(sourceRef);
+  if (!normalized) {
+    return null;
+  }
+  const separatorIndex = normalized.indexOf(":");
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  return normalizeWhitespace(normalized.slice(0, separatorIndex)) || null;
+}
+
+function parseSheetIdFromCsvUrl(csvUrl: unknown): string | null {
+  const normalized = normalizeWhitespace(csvUrl);
+  if (!normalized) {
+    return null;
+  }
+  try {
+    const parsed = new URL(normalized);
+    const match = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+    return match?.[1] ? normalizeWhitespace(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveActiveSheetIdFromSyncRun(syncRun: SyncRunRow | null): string | null {
+  if (!syncRun) {
+    return null;
+  }
+
+  const candidates: string[] = [];
+  const direct = parseSheetIdFromSourceRef(syncRun.source_ref ?? null);
+  if (direct) {
+    candidates.push(direct);
+  }
+
+  const sourceRefs = syncRun.summary?.source_refs;
+  if (Array.isArray(sourceRefs)) {
+    for (const sourceRef of sourceRefs) {
+      const parsed = parseSheetIdFromSourceRef(sourceRef);
+      if (parsed) {
+        candidates.push(parsed);
+      }
+    }
+  }
+
+  const csvUrls = syncRun.summary?.csv_urls;
+  if (Array.isArray(csvUrls)) {
+    for (const csvUrl of csvUrls) {
+      const parsed = parseSheetIdFromCsvUrl(csvUrl);
+      if (parsed) {
+        candidates.push(parsed);
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
+  }
+
+  const ranked = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
+  return ranked[0]?.[0] ?? null;
+}
+
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
   const { width: viewportWidth } = useWindowDimensions();
   const isDesktopLayout = viewportWidth >= tokens.breakpoints.desktop;
@@ -226,6 +301,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
   const [latestRefSyncAt, setLatestRefSyncAt] = useState<string | null>(null);
+  const [activeSourceSheetId, setActiveSourceSheetId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("alpha");
 
   const displaySections = useMemo<SectionSummary[]>(() => {
@@ -314,13 +390,13 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
             .order("full_name", { ascending: true }),
           supabaseAuthClient
             .from("events")
-            .select("event_id")
+            .select("event_id,source_sheet_id")
             .gte("event_date", scopeStartDate)
             .lte("event_date", scopeEndDate)
             .order("event_date", { ascending: true }),
           supabaseAuthClient
             .from("sync_runs")
-            .select("finished_at")
+            .select("finished_at,source_ref,summary")
             .eq("pipeline_name", "sheet_to_supabase_sync")
             .eq("status", "success")
             .not("finished_at", "is", null)
@@ -347,8 +423,15 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         const latestSyncFinishedAt = normalizeWhitespace(latestSyncRunResult.data?.finished_at ?? "");
         const hasSyncMetadataError = Boolean(latestSyncRunResult.error);
         setLatestRefSyncAt(latestSyncFinishedAt || null);
+        const resolvedActiveSheetId = resolveActiveSheetIdFromSyncRun(latestSyncRunResult.data ?? null);
+        setActiveSourceSheetId(resolvedActiveSheetId);
 
-        const eventIds = ((eventsResult.data ?? []) as Array<{ event_id: string }>)
+        const events = (eventsResult.data ?? []) as Array<{ event_id: string; source_sheet_id?: string | null }>;
+        const filteredEvents = resolvedActiveSheetId
+          ? events.filter((event) => normalizeWhitespace(event.source_sheet_id ?? "") === resolvedActiveSheetId)
+          : events;
+
+        const eventIds = filteredEvents
           .map((event) => normalizeWhitespace(event.event_id))
           .filter((eventId) => eventId.length > 0);
 
@@ -393,6 +476,13 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
             tr(
               "Brak zakończonego syncu ref -> DB. Pokazuję bieżące dane z DB; mogą różnić się od arkusza ref.",
               "No completed ref -> DB sync found. Showing current DB data, which may differ from the ref sheet.",
+            ),
+          );
+        } else if (!resolvedActiveSheetId) {
+          setConsistencyNotice(
+            tr(
+              "Nie udało się ustalić aktywnego source_sheet_id z ostatniego syncu. Pokazuję wszystkie eventy z DB w zakresie.",
+              "Could not resolve active source_sheet_id from latest sync. Showing all DB events in scope.",
             ),
           );
         } else if (changedAfterSyncCount > 0) {
@@ -449,6 +539,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         setSections([]);
         setTotalEvents(0);
         setLatestRefSyncAt(null);
+        setActiveSourceSheetId(null);
         setConsistencyNotice(null);
         setErrorMessage(
           error instanceof Error
@@ -482,6 +573,9 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         </Text>
         <Text style={styles.cardSecondary}>
           {tr("Ostatni sync ref -> DB", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
+        </Text>
+        <Text style={styles.cardSecondary}>
+          {tr("Aktywne źródło", "Active source")}: {activeSourceSheetId ?? tr("wszystkie źródła DB", "all DB sources")}
         </Text>
         <Pressable style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonLabel}>{tr("← Wróć do profilu", "← Back to profile")}</Text>
