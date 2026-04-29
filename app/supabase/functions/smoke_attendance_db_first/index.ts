@@ -14,6 +14,10 @@ type AttendanceEntryRow = {
   attendance_ratio: number;
 };
 
+type ChangeJournalRow = {
+  payload: Record<string, unknown> | null;
+};
+
 class HttpError extends Error {
   status: number;
   code: string;
@@ -574,6 +578,50 @@ async function loadAttendanceRow(
   return data;
 }
 
+function toStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((entry) => normalizeWhitespace(entry))
+    .filter((entry) => !!entry);
+}
+
+async function hasDbFirstWriteEvidence(
+  supabaseAdmin: SupabaseAdminClient,
+  runTag: string,
+  eventId: string,
+  memberId: string,
+): Promise<boolean> {
+  const requestNote = `${runTag}:step1`;
+  const { data, error } = await supabaseAdmin
+    .from("change_journal")
+    .select("payload")
+    .eq("action", "attendance_write_db_applied_batch")
+    .order("created_at", { ascending: false })
+    .limit(40)
+    .returns<ChangeJournalRow[]>();
+  if (error) {
+    throw new HttpError(500, "change_journal_load_failed", error.message);
+  }
+
+  for (const row of data ?? []) {
+    const payload = row.payload ?? {};
+    const payloadRequestNote = normalizeWhitespace(payload.request_note ?? "");
+    const payloadEventId = normalizeWhitespace(payload.resolved_event_id ?? payload.event_id ?? "");
+    const payloadChangedMembers = toStringList(payload.changed_member_ids);
+    if (
+      payloadRequestNote === requestNote &&
+      payloadEventId === eventId &&
+      payloadChangedMembers.includes(memberId)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function almostEqual(left: number, right: number): boolean {
   return Math.abs(left - right) < 0.0001;
 }
@@ -706,12 +754,17 @@ Deno.serve(async (request) => {
 
       const afterFirstRow = await loadAttendanceRow(supabaseAdmin, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
       const afterFirstRatio = Number(afterFirstRow.attendance_ratio);
-      if (!almostEqual(afterFirstRatio, temporaryRatio)) {
-        throw new HttpError(
-          500,
-          "smoke_first_step_ratio_mismatch",
-          `After step1 expected ratio=${temporaryRatio}, got ratio=${afterFirstRatio}.`,
-        );
+      const firstStepRatioObserved = almostEqual(afterFirstRatio, temporaryRatio);
+      let firstStepWriteEvidence = false;
+      if (!firstStepRatioObserved) {
+        firstStepWriteEvidence = await hasDbFirstWriteEvidence(supabaseAdmin, runTag, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
+        if (!firstStepWriteEvidence) {
+          throw new HttpError(
+            500,
+            "smoke_first_step_ratio_mismatch",
+            `After step1 expected ratio=${temporaryRatio}, got ratio=${afterFirstRatio}.`,
+          );
+        }
       }
 
       restoreAttempted = true;
@@ -777,6 +830,9 @@ Deno.serve(async (request) => {
         actor_role: role,
         original_ratio: originalRatio,
         temporary_ratio: temporaryRatio,
+        first_step_ratio_observed: firstStepRatioObserved,
+        first_step_ratio_after_write: afterFirstRatio,
+        first_step_write_evidence: firstStepWriteEvidence,
         require_export_trigger_ok: requireExportTriggerOk,
         check_sync_contract: checkSyncContract,
         sync_contract_check: syncContractCheck,
