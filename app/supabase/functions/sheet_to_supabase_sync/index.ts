@@ -40,6 +40,9 @@ type ParsedEventDate =
     status: "ok";
     isoDate: string;
     year: number;
+    ambiguousYearFirstToken?: boolean;
+    directIsoDate?: string;
+    swappedIsoDate?: string;
     normalizedFromSwap?: boolean;
     normalizedFromSwapReason?: "invalid_month_day" | "ambiguous_day_month_preference";
   }
@@ -471,6 +474,9 @@ function parseIsoDateTokenWithOptions(
         status: "ok",
         isoDate: swappedDate,
         year,
+        ambiguousYearFirstToken: true,
+        directIsoDate: directDate,
+        swappedIsoDate: swappedDate,
         normalizedFromSwap: true,
         normalizedFromSwapReason: "ambiguous_day_month_preference",
       };
@@ -479,6 +485,9 @@ function parseIsoDateTokenWithOptions(
       status: "ok",
       isoDate: directDate,
       year,
+      ambiguousYearFirstToken: true,
+      directIsoDate: directDate,
+      swappedIsoDate: swappedDate,
     };
   }
 
@@ -547,6 +556,14 @@ function detectPreferSwapForAmbiguousDateTokens(headers: string[]): {
 
 function dayFromIsoDate(isoDate: string): number {
   return Number(isoDate.slice(8, 10));
+}
+
+function monthFromIsoDate(isoDate: string): number {
+  return Number(isoDate.slice(5, 7));
+}
+
+function sourceCellKey(sheetId: string, gid: string, columnRef: string): string {
+  return `${sheetId}::${gid}::${columnRef}`;
 }
 
 function parseSheetSource(candidate: unknown): SheetSource | null {
@@ -994,6 +1011,43 @@ function buildPreflight(
       eventDate = columnOverride.eventDate;
     } else if (rawColumn.parsed.status === "ok") {
       eventDate = rawColumn.parsed.isoDate;
+      if (rawColumn.parsed.ambiguousYearFirstToken && rawColumn.parsed.directIsoDate && rawColumn.parsed.swappedIsoDate) {
+        const directIsoDate = rawColumn.parsed.directIsoDate;
+        const swappedIsoDate = rawColumn.parsed.swappedIsoDate;
+        const directMonth = monthFromIsoDate(directIsoDate);
+        const swappedMonth = monthFromIsoDate(swappedIsoDate);
+        const monthHints = [options?.sourceMonthHint, dominantMonth]
+          .filter((value): value is number => typeof value === "number" && value >= 1 && value <= 12);
+
+        for (const hint of monthHints) {
+          const directMatchesHint = directMonth === hint;
+          const swappedMatchesHint = swappedMonth === hint;
+          if (directMatchesHint === swappedMatchesHint) {
+            continue;
+          }
+
+          const resolvedIsoDate = swappedMatchesHint ? swappedIsoDate : directIsoDate;
+          if (resolvedIsoDate !== eventDate) {
+            eventDate = resolvedIsoDate;
+            issues.push({
+              severity: "warning",
+              code: "event_date_ambiguous_resolved_by_month_hint",
+              message:
+                `Resolved ambiguous YYYY-MM-DD token in ${rawColumn.columnRef} (${rawColumn.header}) using month hint ${hint}.`,
+              column_ref: rawColumn.columnRef,
+              details: {
+                direct_iso_date: directIsoDate,
+                swapped_iso_date: swappedIsoDate,
+                selected_iso_date: resolvedIsoDate,
+                source_month_hint: options?.sourceMonthHint ?? null,
+                dominant_month: dominantMonth,
+                resolved_by_month_hint: hint,
+              },
+            });
+          }
+          break;
+        }
+      }
       if (rawColumn.parsed.normalizedFromSwap) {
         issues.push({
           severity: "warning",
@@ -1437,6 +1491,110 @@ async function pruneStaleAttendanceEntries(
   return prunedCount;
 }
 
+async function alignEventIdsToExistingSourceCells(
+  supabaseAdmin: SupabaseAdminClient,
+  events: EventRecord[],
+  attendanceEntries: AttendanceEntryRecord[],
+): Promise<{
+  events: EventRecord[];
+  attendanceEntries: AttendanceEntryRecord[];
+  remappedEventIdsCount: number;
+}> {
+  if (events.length === 0) {
+    return {
+      events,
+      attendanceEntries,
+      remappedEventIdsCount: 0,
+    };
+  }
+
+  const sourceSheetIds = Array.from(new Set(events.map((event) => event.source_sheet_id)));
+  const sourceGids = Array.from(new Set(events.map((event) => event.source_gid)));
+  const sourceColumns = Array.from(new Set(events.map((event) => event.source_column)));
+
+  const { data, error } = await supabaseAdmin
+    .from("events")
+    .select("event_id,source_sheet_id,source_gid,source_column")
+    .in("source_sheet_id", sourceSheetIds)
+    .in("source_gid", sourceGids)
+    .in("source_column", sourceColumns);
+
+  if (error) {
+    throw new Error(`Failed to load existing events for source-cell reconciliation: ${error.message}`);
+  }
+
+  const existingEventIdBySourceCell = new Map<string, string>();
+  for (const row of (data ?? []) as Array<{
+    event_id: string;
+    source_sheet_id: string;
+    source_gid: string;
+    source_column: string;
+  }>) {
+    const key = sourceCellKey(row.source_sheet_id, row.source_gid, row.source_column);
+    if (!existingEventIdBySourceCell.has(key)) {
+      existingEventIdBySourceCell.set(key, row.event_id);
+    }
+  }
+
+  const remapEventId = new Map<string, string>();
+  const reconciledEvents = events.map((event) => {
+    const key = sourceCellKey(event.source_sheet_id, event.source_gid, event.source_column);
+    const existingEventId = existingEventIdBySourceCell.get(key);
+    if (!existingEventId || existingEventId === event.event_id) {
+      return event;
+    }
+    remapEventId.set(event.event_id, existingEventId);
+    return {
+      ...event,
+      event_id: existingEventId,
+    };
+  });
+
+  if (remapEventId.size === 0) {
+    return {
+      events,
+      attendanceEntries,
+      remappedEventIdsCount: 0,
+    };
+  }
+
+  const dedupedEventsById = new Map<string, EventRecord>();
+  for (const event of reconciledEvents) {
+    if (!dedupedEventsById.has(event.event_id)) {
+      dedupedEventsById.set(event.event_id, event);
+    }
+  }
+
+  const dedupedAttendanceByMemberEvent = new Map<string, AttendanceEntryRecord>();
+  for (const entry of attendanceEntries) {
+    const mappedEventId = remapEventId.get(entry.event_id) ?? entry.event_id;
+    const key = `${entry.member_id}::${mappedEventId}`;
+    const previous = dedupedAttendanceByMemberEvent.get(key);
+    if (!previous) {
+      dedupedAttendanceByMemberEvent.set(key, {
+        ...entry,
+        event_id: mappedEventId,
+      });
+      continue;
+    }
+
+    const previousUpdatedAt = normalizeWhitespace(previous.source_updated_at);
+    const currentUpdatedAt = normalizeWhitespace(entry.source_updated_at);
+    if (currentUpdatedAt > previousUpdatedAt) {
+      dedupedAttendanceByMemberEvent.set(key, {
+        ...entry,
+        event_id: mappedEventId,
+      });
+    }
+  }
+
+  return {
+    events: Array.from(dedupedEventsById.values()),
+    attendanceEntries: Array.from(dedupedAttendanceByMemberEvent.values()),
+    remappedEventIdsCount: remapEventId.size,
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse({ error: "method_not_allowed" }, 405);
@@ -1756,9 +1914,18 @@ Deno.serve(async (request) => {
         })) as EventRecord[];
 
       const validEventIds = new Set(validEvents.map((event) => event.event_id));
-      const validAttendanceEntries = mergedPreflight.attendanceEntries.filter((entry) =>
+      const validAttendanceEntriesInitial = mergedPreflight.attendanceEntries.filter((entry) =>
         validEventIds.has(entry.event_id)
       );
+      const alignedBySourceCells = await alignEventIdsToExistingSourceCells(
+        supabaseAdmin,
+        validEvents,
+        validAttendanceEntriesInitial,
+      );
+      const finalValidEvents = alignedBySourceCells.events;
+      const finalValidAttendanceEntries = alignedBySourceCells.attendanceEntries;
+      const finalValidEventIds = new Set(finalValidEvents.map((event) => event.event_id));
+      summary.events_remapped_to_existing_source_cell = alignedBySourceCells.remappedEventIdsCount;
 
       await upsertInBatches(
         supabaseAdmin,
@@ -1769,7 +1936,7 @@ Deno.serve(async (request) => {
       await upsertInBatches(
         supabaseAdmin,
         "events",
-        validEvents as unknown as Record<string, unknown>[],
+        finalValidEvents as unknown as Record<string, unknown>[],
         "event_id",
       );
       await upsertInBatches(
@@ -1781,13 +1948,13 @@ Deno.serve(async (request) => {
       await upsertInBatches(
         supabaseAdmin,
         "attendance_entries",
-        validAttendanceEntries as unknown as Record<string, unknown>[],
+        finalValidAttendanceEntries as unknown as Record<string, unknown>[],
         "member_id,event_id",
       );
       const prunedAttendanceEntries = await pruneStaleAttendanceEntries(
         supabaseAdmin,
-        validEvents.map((event) => event.event_id),
-        validAttendanceEntries,
+        Array.from(finalValidEventIds),
+        finalValidAttendanceEntries,
       );
 
       await supabaseAdmin.from("change_journal").insert({
@@ -1797,10 +1964,11 @@ Deno.serve(async (request) => {
         actor: "sheet_to_supabase_sync",
         payload: {
           members_upserted: mergedPreflight.members.length,
-          events_upserted: validEvents.length,
+          events_upserted: finalValidEvents.length,
           sheet_member_rows_upserted: mergedSheetMemberRowsMap.size,
-          attendance_entries_upserted: validAttendanceEntries.length,
+          attendance_entries_upserted: finalValidAttendanceEntries.length,
           attendance_entries_pruned: prunedAttendanceEntries,
+          events_remapped_to_existing_source_cell: alignedBySourceCells.remappedEventIdsCount,
           source_ref: sourceRef,
           source_refs: effectiveSources.map((source) => source.sourceRef),
         },
@@ -1808,11 +1976,11 @@ Deno.serve(async (request) => {
 
       finalStatus = "success";
       summary.members_upserted = mergedPreflight.members.length;
-      summary.events_upserted = validEvents.length;
+      summary.events_upserted = finalValidEvents.length;
       summary.sheet_member_rows_upserted = mergedSheetMemberRowsMap.size;
-      summary.attendance_entries_upserted = validAttendanceEntries.length;
+      summary.attendance_entries_upserted = finalValidAttendanceEntries.length;
       summary.attendance_entries_skipped_due_to_invalid_events =
-        mergedPreflight.attendanceEntries.length - validAttendanceEntries.length;
+        mergedPreflight.attendanceEntries.length - validAttendanceEntriesInitial.length;
       summary.attendance_entries_pruned = prunedAttendanceEntries;
       summary.stale_rows_not_pruned = false;
     }
