@@ -8,6 +8,10 @@ Runbook for the attendance pipeline:
 - `attendance_write_sheet_first` (app write path, queue worker),
 - `supabase_to_sheet_export` (DB -> copy sheet export).
 
+Detailed function error mapping:
+
+- `docs/ops/function-errors-runbook.md`
+
 ## Quick Health Checks
 
 ```sql
@@ -133,6 +137,14 @@ GitHub (for smoke workflow):
 - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
 - variable: `SUPABASE_PROJECT_REF`
 - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+
+Secret ownership matrix:
+
+- `docs/ops/secrets-runtime-matrix.md`
+
+Hybrid smoke model:
+
+- `docs/ops/smoke-attendance-db-first-hybrid.md`
 
 ## Regression Gate After Any Change
 

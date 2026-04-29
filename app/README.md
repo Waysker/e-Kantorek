@@ -12,6 +12,8 @@ Current operating model:
 - a separate reference sheet can sync into DB; copy sheet can be overwritten from DB for validation
 - forum snapshot integration still exists as a separate data pipeline and fallback path
 
+Documentation map: `../docs/README.md`
+
 ## Key Directories
 
 - `App.tsx`: app bootstrap and temporary route state
@@ -89,8 +91,8 @@ Local fallback script (kept for debugging):
 npm run smoke:attendance:db-first
 ```
 
-Secrets ownership reference: `../docs/secrets-runtime-matrix.md`
-Ops runbook: `../docs/attendance-ops-runbook.md`
+Secrets ownership reference: `../docs/ops/secrets-runtime-matrix.md`
+Ops runbook: `../docs/ops/attendance-ops-runbook.md`
 
 ## Authentication (Supabase)
 
@@ -114,6 +116,18 @@ Notes:
 - App resolves signed-in identity from `public.profiles` first, then metadata fallback
 - UI localization defaults to Polish (`pl`); set `EXPO_PUBLIC_APP_LOCALE=en` to preview English copy
 - Data source for events snapshot remains Supabase/local fallback as before
+
+Role model:
+
+- `member`: read-only app usage
+- `section`: can manage factual attendance
+- `board`: can manage factual attendance
+- `admin`: can manage factual attendance + change user roles
+
+Role management hardening:
+
+- `supabase/migrations/019_security_hardening_roles_and_rpc_privileges.sql`
+- UI role admin screen uses RPC guarded for `admin` role only
 
 ## Runtime Baseline
 
@@ -161,7 +175,7 @@ To prepare a real sync:
 2. Review `forum-sync.config.json`
 3. Run `npm.cmd run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
 4. Apply `supabase/migrations/010_attendance_sync_foundation.sql` through `023_atomic_enqueue_batch_rpc.sql`
-5. Configure/deploy Edge Functions from `docs/sheet-sync-setup.md`
+5. Configure/deploy Edge Functions from `../docs/ops/sheet-sync-setup.md`
 6. Run `npm.cmd run forum:sync`
 7. Optionally publish snapshot with `npm.cmd run forum:publish`
 8. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
@@ -174,7 +188,7 @@ Cloud-ready mode:
 - If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are set, the app reads from `forum_snapshot_cache` in Supabase.
 - If they are missing or the cloud row is unavailable, the app falls back to local `forumSnapshot.ts`.
 - Profile screen shows data source and `Last synced` timestamp from snapshot metadata.
-- Leader/admin profile includes an Attendance Setup PoC screen (web) with checklist/runbook for preflight and sheet sync.
+- Section/board/admin profile includes an Attendance Setup PoC screen (web) with checklist/runbook for preflight and sheet sync.
 - Attendance source-of-truth sync is handled by Supabase functions (`sheet_to_supabase_sync`, `attendance_write_sheet_first`).
 - `forum:sync` reads instrument overrides from `forum_instrument_overrides` first (key: `ORAGH_INSTRUMENT_OVERRIDES_KEY`, fallback `ORAGH_SNAPSHOT_KEY`, default `forum`).
 - If DB overrides are missing/unavailable, `forum:sync` falls back to local/env overrides.
@@ -196,10 +210,10 @@ Cloud-ready mode:
   - `supabase/migrations/021_supporting_indexes_export_queue_and_attendance.sql`
   - `supabase/migrations/022_harden_dedupe_queue_preservation.sql`
   - `supabase/migrations/023_atomic_enqueue_batch_rpc.sql`
-- Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
+- Supabase Edge Function runtime setup: `../docs/ops/sheet-sync-setup.md`
 - Supabase Edge Function write path:
   - `supabase/functions/attendance_write_sheet_first/index.ts`
-- Actual attendance writes (leader/admin panel):
+- Actual attendance writes (section/board/admin panel):
   - member RSVP on event screen is read-only preview
   - write path is used by dedicated management page (`Profil -> Rejestr faktycznej obecności`)
   - gate switch: `EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED` (default disabled; enable after pipeline deploy)
@@ -210,7 +224,7 @@ Cloud-ready mode:
 - Post-write DB sync policy:
   - default: `attendance_write_sheet_first` expects `SHEET_TO_SUPABASE_SYNC_URL` and marks worker run failed if sync trigger cannot run
   - optional fallback: set `ATTENDANCE_WRITE_ALLOW_CRON_SYNC_FALLBACK=true` to allow relying only on scheduled `sheet_to_supabase_sync`
-  - write path is management-only (`leader/admin`)
+  - write path is management-only (`section/board/admin`)
 
 Scheduling / trigger:
 
@@ -232,7 +246,7 @@ GitHub Actions setup:
 6. Keep or edit the cron (`17 */4 * * *`, UTC) in the workflow file.
 
 Attendance sync (`reference -> DB -> copy`) is intentionally Supabase-only (Edge Functions + `pg_cron`).
-Use `../docs/sheet-sync-setup.md` for setup and runbook.
+Use `../docs/ops/sheet-sync-setup.md` for setup and runbook.
 
 ## Web Hosting (GitHub Pages)
 

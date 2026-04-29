@@ -19,7 +19,7 @@ function formatRoleLabel(role: UserProfile["role"]) {
     return tr("Zarząd", "Board");
   }
   if (role === "section") {
-    return tr("Sekcyjne", "Section leader");
+    return tr("Sekcyjne", "Section");
   }
   return tr("Członek", "Member");
 }
@@ -47,9 +47,9 @@ const setupSteps: SetupStep[] = [
     titlePl: "Uruchom migracje SQL",
     titleEn: "Apply SQL migrations",
     detailPl:
-      "Wgraj migracje 010-013 i skonfiguruj funkcje zgodnie z docs/sheet-sync-setup.md.",
+      "Wgraj migracje 010-013 i skonfiguruj funkcje zgodnie z docs/ops/sheet-sync-setup.md.",
     detailEn:
-      "Apply migrations 010-013 and configure functions from docs/sheet-sync-setup.md.",
+      "Apply migrations 010-013 and configure functions from docs/ops/sheet-sync-setup.md.",
   },
   {
     id: "preflight",

@@ -30,7 +30,7 @@ This plan avoids hard cutovers and keeps rollback options available.
 
 Deliverables:
 
-- `docs/attendance-sheet-contract.md`
+- `docs/contracts/attendance-sheet-contract.md`
 - `scripts/attendance-sheet-preflight.mjs`
 
 ### A2. Canonical Supabase schema

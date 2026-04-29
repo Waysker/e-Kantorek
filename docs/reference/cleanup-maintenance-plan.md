@@ -11,7 +11,7 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 - `Phase 1`: completed (`023_atomic_enqueue_batch_rpc.sql` + batch handler refactor)
 - `Phase 2`: completed (`022_harden_dedupe_queue_preservation.sql` finalizes open-queue preservation)
 - `Phase 3`: completed
-- `Phase 4`: in progress
+- `Phase 4`: completed
 - `Phase 5`: in progress
 
 ### Completed Highlights
@@ -27,6 +27,10 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 9. `AttendanceManagerScreen` loading lifecycle hardened (request-id guards + deterministic loading off).
 10. `AttendanceManagerScreen` section UI split into dedicated components (`SectionGridPanel`, `SectionMembersPanel`) and member rendering switched to `FlatList`.
 11. `AttendanceManagerScreen` data layer extracted to hooks (`useAttendanceBootData`, `useAttendanceEntries`) with list-first bootstrap and lazy snapshot loading.
+12. Documentation tree split into `docs/ops`, `docs/reference`, `docs/contracts`, `docs/archive`, with root index in `docs/README.md`.
+13. `app/README.md` refreshed to current role/write-path runtime and updated docs references.
+14. Canonical GitHub vs Supabase ownership matrix updated (`docs/ops/secrets-runtime-matrix.md`).
+15. Dedicated function-error remediation runbook + hybrid smoke model doc added.
 
 ## Phase 0: Security Hotfix (immediate)
 

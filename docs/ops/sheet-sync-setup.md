@@ -1,19 +1,35 @@
-# Sheet -> Supabase Sync Setup (Dry-Run)
+# Sheet -> Supabase Sync and Write Path Setup
 
-This document describes how to run the new dry-run sync pipeline:
+This document describes the current attendance runtime:
 
 - Google Sheet CSV source
 - Supabase Edge Function `sheet_to_supabase_sync`
 - Supabase Cron every 5 minutes
+- manager write path through `attendance_write_sheet_first` (`db_first`)
+- DB -> copy export through `supabase_to_sheet_export`
 
 Current baseline expects migrations through `023_atomic_enqueue_batch_rpc.sql` to be applied.
 
 ## 1. Apply migrations
 
-Run migrations so required tables/functions exist:
+Run migrations so required tables/functions exist.
 
-- `app/supabase/migrations/010_attendance_sync_foundation.sql`
-- `app/supabase/migrations/011_sheet_sync_scheduler_helpers.sql`
+Minimum baseline is `010` through `023`:
+
+- `010_attendance_sync_foundation.sql`
+- `011_sheet_sync_scheduler_helpers.sql`
+- `012_sheet_sync_upsert_enablement.sql`
+- `013_attendance_sheet_first_write_path.sql`
+- `014_instrument_canonicalization.sql`
+- `015_change_journal_rls_and_restrict.sql`
+- `016_profiles_and_role_rpc_hardening.sql`
+- `017_profile_trigger_role_lockdown.sql`
+- `018_dedupe_events_by_source_cell.sql`
+- `019_security_hardening_roles_and_rpc_privileges.sql`
+- `020_queue_reclaim_stale_processing.sql`
+- `021_supporting_indexes_export_queue_and_attendance.sql`
+- `022_harden_dedupe_queue_preservation.sql`
+- `023_atomic_enqueue_batch_rpc.sql`
 
 ## 2. Deploy Edge Function
 
@@ -23,7 +39,7 @@ From `app` directory:
 supabase functions deploy sheet_to_supabase_sync --no-verify-jwt
 ```
 
-Recommended env vars for the function:
+Required env vars for baseline runtime:
 
 - `ATTENDANCE_SHEET_ID`
 - `ATTENDANCE_SHEET_GID`
@@ -33,6 +49,11 @@ Recommended env vars for the function:
 - `ATTENDANCE_SHEET_DISCOVER_INCLUDE_HIDDEN` (optional; include hidden tabs when auto-discovering)
 - `ATTENDANCE_EVENT_DATE_OVERRIDES_JSON` (optional; JSON array with forced `eventDate` by `sourceRef + columnRef`)
 - `SHEET_SYNC_FUNCTION_AUTH_TOKEN` (shared secret for manual + cron calls)
+- `SHEET_SYNC_DRY_RUN_ONLY=false`
+- `SHEET_SYNC_DEFAULT_DRY_RUN=false`
+
+Optional validation-only mode (pre-production):
+
 - `SHEET_SYNC_DRY_RUN_ONLY=true`
 - `SHEET_SYNC_DEFAULT_DRY_RUN=true`
 
@@ -74,7 +95,7 @@ curl -sS \
   "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
   -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"trigger":"manual"}'
+  -d '{"trigger":"manual","dryRun":false}'
 ```
 
 Optional manual override for many tabs:
@@ -97,7 +118,7 @@ curl -sS \
 Expected:
 
 - response includes `run_id`
-- `sync_runs` gets a row with status `dry_run` or `failed`
+- `sync_runs` gets a row with status `success` or `failed`
 - `sync_issues` includes validation findings when data is malformed
 
 ## 3a. Automated regression check (db_first write path)
@@ -187,11 +208,11 @@ order by created_at desc
 limit 100;
 ```
 
-## Enable write mode (next phase)
+## Write-mode defaults (current baseline)
 
-When ready to write canonical tables:
+Current baseline uses write mode for canonical tables:
 
-1. Apply `app/supabase/migrations/012_sheet_sync_upsert_enablement.sql`
+1. Apply `app/supabase/migrations/012_sheet_sync_upsert_enablement.sql` (and newer migrations).
 2. Set function env:
    - `SHEET_SYNC_DRY_RUN_ONLY=false`
    - `SHEET_SYNC_DEFAULT_DRY_RUN=false`
@@ -203,7 +224,7 @@ supabase functions deploy sheet_to_supabase_sync --no-verify-jwt
 
 4. Recreate cron schedule (unschedule + schedule) so new payload (`dryRun=false`) is used.
 
-After this, successful runs should end with `status='success'` and upsert into:
+Successful runs should end with `status='success'` and upsert into:
 
 - `public.members`
 - `public.events`
@@ -213,6 +234,13 @@ Stale attendance cleanup:
 
 - write-mode run now prunes stale `attendance_entries` for events touched in the current sync
 - this means blanked cells in source sheets are reflected in Supabase for those events
+
+Related docs:
+
+- `docs/contracts/attendance-sheet-contract.md`
+- `docs/ops/attendance-ops-runbook.md`
+- `docs/ops/function-errors-runbook.md`
+- `docs/ops/secrets-runtime-matrix.md`
 
 ## Phase A write path: management panel -> queue -> Google Sheet -> sync
 
