@@ -52,7 +52,11 @@ export function normalizePrimaryRole(value: unknown): PrimaryRole {
   return "member";
 }
 
-export function canManageAttendanceByRole(role: PrimaryRole): boolean {
+export function canWriteAttendanceByRole(role: PrimaryRole): boolean {
+  return role === "board" || role === "admin";
+}
+
+export function canViewAttendanceSummaryByRole(role: PrimaryRole): boolean {
   return role === "section" || role === "board" || role === "admin";
 }
 

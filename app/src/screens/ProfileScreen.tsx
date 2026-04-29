@@ -41,22 +41,12 @@ export function ProfileScreen({
   dataSourceGeneratedAt,
   signedInEmail,
   onSignOut,
-  canManageActualAttendance,
-  onOpenAttendanceManager,
-  onOpenAttendanceSummary,
-  canManageRoles,
-  onOpenRoleManagement,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
-  canManageActualAttendance?: boolean;
-  onOpenAttendanceManager?: () => void;
-  onOpenAttendanceSummary?: () => void;
-  canManageRoles?: boolean;
-  onOpenRoleManagement?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
@@ -95,87 +85,6 @@ export function ProfileScreen({
           </Pressable>
         ) : null}
       </SurfaceCard>
-
-      {canManageActualAttendance && onOpenAttendanceManager ? (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}
-          </Text>
-          <Text style={styles.cardTitle}>
-            {tr("Rejestr faktycznej obecności", "Actual attendance register")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Oddzielny panel do odklikiwania kto realnie był obecny. Obejmuje mapowane wydarzenia oraz próby wtorek/czwartek.",
-              "Separate panel for marking who was actually present. Includes mapped events and Tuesday/Thursday rehearsals.",
-            )}
-          </Text>
-          <Pressable style={styles.manageButton} onPress={onOpenAttendanceManager}>
-            <Text style={styles.manageButtonLabel}>
-              {tr("Otwórz rejestr", "Open register")}
-            </Text>
-          </Pressable>
-        </SurfaceCard>
-      ) : null}
-
-      {canManageActualAttendance && onOpenAttendanceSummary ? (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}
-          </Text>
-          <Text style={styles.cardTitle}>
-            {tr("Podsumowanie obecności", "Attendance summary")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Lista orkiestrantów pogrupowana sekcjami z procentem i sumą punktów dla wybranego zakresu. Źródło: ref attendance.",
-              "Orchestra members grouped by section with attendance percentage and total points for selected scope. Source: ref attendance.",
-            )}
-          </Text>
-          <Pressable style={styles.manageButton} onPress={onOpenAttendanceSummary}>
-            <Text style={styles.manageButtonLabel}>
-              {tr("Otwórz podsumowanie", "Open summary")}
-            </Text>
-          </Pressable>
-        </SurfaceCard>
-      ) : null}
-
-      {canManageRoles && onOpenRoleManagement ? (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>
-            {tr("Panel administratora", "Admin panel")}
-          </Text>
-          <Text style={styles.cardTitle}>
-            {tr("Zarządzanie rolami użytkowników", "Manage user roles")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Nadaj lub zmień role member, section, board oraz admin dla kont użytkowników.",
-              "Assign or update member, section, board, and admin roles for user accounts.",
-            )}
-          </Text>
-          <Pressable style={styles.manageButton} onPress={onOpenRoleManagement}>
-            <Text style={styles.manageButtonLabel}>
-              {tr("Otwórz role", "Open role manager")}
-            </Text>
-          </Pressable>
-        </SurfaceCard>
-      ) : null}
-
-      <SurfaceCard variant="muted">
-        <Text style={styles.cardEyebrow}>
-          {tr("Zakres prototypu", "Prototype scope")}
-        </Text>
-        <Text style={styles.cardTitle}>
-          {tr("Wizualny przegląd tylko do odczytu", "Read-only visual review")}
-        </Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Edycja profilu, powiadomienia i zapisy danych są poza zakresem tego etapu adapterowego.",
-            "Profile editing, notifications, and write actions stay out of this first adapter-backed phase.",
-          )}
-        </Text>
-      </SurfaceCard>
     </ScrollView>
   );
 }
@@ -199,12 +108,6 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: tokens.typography.hero,
     lineHeight: 34,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
     color: tokens.colors.ink,
     fontWeight: "700",
   },
@@ -232,21 +135,6 @@ const styles = StyleSheet.create({
   },
   signOutLabel: {
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  manageButton: {
-    marginTop: tokens.spacing.md,
-    alignSelf: "flex-start",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
-  },
-  manageButtonLabel: {
-    color: tokens.colors.surface,
     fontSize: tokens.typography.caption,
     fontWeight: "700",
     textTransform: "uppercase",

@@ -19,7 +19,7 @@ import { formatRelativeLabel } from "../utils/format";
 
 type RoleManagementScreenProps = {
   currentUserId: string;
-  onBack: () => void;
+  onBack?: () => void;
 };
 
 type ProfileRoleRow = {
@@ -193,11 +193,13 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
       contentContainerStyle={styles.screenContent}
       showsVerticalScrollIndicator={false}
     >
-      <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>
-          {tr("← Wróć do profilu", "← Back to profile")}
-        </Text>
-      </Pressable>
+      {onBack ? (
+        <Pressable onPress={onBack} style={styles.backLink}>
+          <Text style={styles.backLinkLabel}>
+            {tr("← Wróć", "← Back")}
+          </Text>
+        </Pressable>
+      ) : null}
 
       <SurfaceCard variant="default">
         <Text style={styles.cardEyebrow}>{tr("Admin", "Admin")}</Text>

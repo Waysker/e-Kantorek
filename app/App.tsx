@@ -13,7 +13,8 @@ import type {
   UserProfile,
 } from "./src/domain/models";
 import {
-  canManageAttendanceByRole,
+  canViewAttendanceSummaryByRole,
+  canWriteAttendanceByRole,
   canManageRolesByRole,
   normalizePrimaryRole,
 } from "./src/domain/roles";
@@ -26,6 +27,7 @@ import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
 import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
 import { AttendanceSummaryScreen } from "./src/screens/AttendanceSummaryScreen";
+import { AttendanceWorkspaceScreen } from "./src/screens/AttendanceWorkspaceScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
@@ -102,6 +104,7 @@ function isValidAppRoute(value: unknown): value is AppRoute {
   if (
     candidate.name === "events" ||
     candidate.name === "profile" ||
+    candidate.name === "attendanceWorkspace" ||
     candidate.name === "attendanceManager" ||
     candidate.name === "attendanceSummary" ||
     candidate.name === "roleManagement"
@@ -613,12 +616,38 @@ export default function App() {
   const activeTab = routeToTab(route);
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
-  const canManageAttendance = canManageAttendanceByRole(effectiveCurrentUser.role);
+  const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
+  const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
+  const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
+  const navigationTabs: PrimaryTab[] = [
+    "events",
+    ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
+    ...(canManageRoles ? (["roles"] as const) : []),
+    "profile",
+  ];
 
   function openTab(tab: PrimaryTab) {
     if (tab === "events") {
       resetToRoute({ name: "events" });
+      return;
+    }
+
+    if (tab === "attendance") {
+      if (canAccessAttendanceWorkspace) {
+        resetToRoute({ name: "attendanceWorkspace" });
+      } else {
+        resetToRoute({ name: "events" });
+      }
+      return;
+    }
+
+    if (tab === "roles") {
+      if (canManageRoles) {
+        resetToRoute({ name: "roleManagement" });
+      } else {
+        resetToRoute({ name: "events" });
+      }
       return;
     }
 
@@ -712,52 +741,58 @@ export default function App() {
             dataSourceGeneratedAt={dataSourceGeneratedAt}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
-            canManageActualAttendance={canManageAttendance}
+          />
+        );
+      case "attendanceWorkspace":
+        return canAccessAttendanceWorkspace ? (
+          <AttendanceWorkspaceScreen
+            canWriteAttendance={canWriteAttendance}
+            canViewAttendanceSummary={canViewAttendanceSummary}
             onOpenAttendanceManager={
-              canManageAttendance
+              canWriteAttendance
                 ? () => pushRoute({ name: "attendanceManager" })
                 : undefined
             }
             onOpenAttendanceSummary={
-              canManageAttendance
+              canViewAttendanceSummary
                 ? () => pushRoute({ name: "attendanceSummary" })
                 : undefined
             }
-            canManageRoles={canManageRoles}
-            onOpenRoleManagement={
-              canManageRoles
-                ? () => pushRoute({ name: "roleManagement" })
-                : undefined
-            }
+          />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "events" })}
+            title={tr("Brak uprawnień", "No permission")}
           />
         );
       case "attendanceManager":
-        return canManageAttendance ? (
-          <AttendanceManagerScreen onBack={() => goBack({ name: "profile" })} />
+        return canWriteAttendance ? (
+          <AttendanceManagerScreen
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
+          />
         ) : (
           <MissingEventScreen
-            onBack={() => goBack({ name: "profile" })}
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
       case "attendanceSummary":
-        return canManageAttendance ? (
-          <AttendanceSummaryScreen onBack={() => goBack({ name: "profile" })} />
+        return canViewAttendanceSummary ? (
+          <AttendanceSummaryScreen
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
+          />
         ) : (
           <MissingEventScreen
-            onBack={() => goBack({ name: "profile" })}
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
       case "roleManagement":
         return canManageRoles ? (
-          <RoleManagementScreen
-            currentUserId={effectiveCurrentUser.id}
-            onBack={() => goBack({ name: "profile" })}
-          />
+          <RoleManagementScreen currentUserId={effectiveCurrentUser.id} />
         ) : (
           <MissingEventScreen
-            onBack={() => goBack({ name: "profile" })}
+            onBack={() => goBack({ name: "events" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
@@ -769,6 +804,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppShell
+        tabs={navigationTabs}
         activeTab={activeTab}
         hideNavigation={route.name === "setlist"}
         dataSourceLabel={dataSourceLabel}

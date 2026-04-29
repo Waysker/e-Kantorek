@@ -14,6 +14,7 @@ import { tokens } from "../theme/tokens";
 import { DataFreshnessBanner } from "./DataFreshnessBanner";
 
 type AppShellProps = {
+  tabs: PrimaryTab[];
   activeTab: PrimaryTab;
   hideNavigation?: boolean;
   dataSourceLabel: string;
@@ -23,12 +24,21 @@ type AppShellProps = {
   children: ReactNode;
 };
 
-const tabs: { key: PrimaryTab; label: string }[] = [
-  { key: "events", label: tr("Wydarzenia", "Events") },
-  { key: "profile", label: tr("Profil", "Profile") },
-];
+function getTabLabel(tab: PrimaryTab): string {
+  if (tab === "events") {
+    return tr("Wydarzenia", "Events");
+  }
+  if (tab === "attendance") {
+    return tr("Obecność", "Attendance");
+  }
+  if (tab === "roles") {
+    return tr("Role", "Roles");
+  }
+  return tr("Profil", "Profile");
+}
 
 export function AppShell({
+  tabs,
   activeTab,
   hideNavigation,
   dataSourceLabel,
@@ -63,12 +73,13 @@ export function AppShell({
             <Text style={styles.sidebarTitle}>Orkiestra Reprezentacyjna AGH</Text>
             <View style={styles.sidebarNav}>
               {tabs.map((tab) => {
-                const isActive = tab.key === activeTab;
+                const isActive = tab === activeTab;
+                const label = getTabLabel(tab);
 
                 return (
                   <Pressable
-                    key={tab.key}
-                    onPress={() => onNavigate(tab.key)}
+                    key={tab}
+                    onPress={() => onNavigate(tab)}
                     style={[styles.sidebarLink, isActive && styles.sidebarLinkActive]}
                   >
                     <Text
@@ -77,7 +88,7 @@ export function AppShell({
                         isActive && styles.sidebarLinkLabelActive,
                       ]}
                     >
-                      {tab.label}
+                      {label}
                     </Text>
                   </Pressable>
                 );
@@ -115,12 +126,13 @@ export function AppShell({
         ]}
       >
         {tabs.map((tab) => {
-          const isActive = tab.key === activeTab;
+          const isActive = tab === activeTab;
+          const label = getTabLabel(tab);
 
           return (
             <Pressable
-              key={tab.key}
-              onPress={() => onNavigate(tab.key)}
+              key={tab}
+              onPress={() => onNavigate(tab)}
               style={styles.bottomNavItem}
             >
               <Text
@@ -129,7 +141,7 @@ export function AppShell({
                   isActive && styles.bottomNavLabelActive,
                 ]}
               >
-                {tab.label}
+                {label}
               </Text>
             </Pressable>
           );

@@ -216,6 +216,128 @@ function compareMembersByPoints(left: MemberSummaryRow, right: MemberSummaryRow)
   return compareMembersByName(left, right);
 }
 
+function normalizeNameKey(value: string): string {
+  return normalizeWhitespace(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string; fullName: string } {
+  const tokens = normalizeWhitespace(fullName).split(" ").filter(Boolean);
+  const firstName = normalizeNameKey(tokens[0] ?? "");
+  const lastName = normalizeNameKey(tokens.slice(1).join(" "));
+  const normalizedFullName = normalizeNameKey(tokens.join(" "));
+  return {
+    firstName,
+    lastName,
+    fullName: normalizedFullName,
+  };
+}
+
+function damerauLevenshteinDistanceAtMostOne(left: string, right: string): boolean {
+  if (left === right) {
+    return true;
+  }
+  const leftLength = left.length;
+  const rightLength = right.length;
+  const diff = Math.abs(leftLength - rightLength);
+  if (diff > 1) {
+    return false;
+  }
+
+  if (leftLength === rightLength) {
+    let mismatchCount = 0;
+    let firstMismatch = -1;
+    let secondMismatch = -1;
+    for (let index = 0; index < leftLength; index += 1) {
+      if (left[index] !== right[index]) {
+        mismatchCount += 1;
+        if (mismatchCount === 1) {
+          firstMismatch = index;
+        } else if (mismatchCount === 2) {
+          secondMismatch = index;
+        } else {
+          return false;
+        }
+      }
+    }
+    if (mismatchCount <= 1) {
+      return true;
+    }
+    return (
+      firstMismatch >= 0 &&
+      secondMismatch >= 0 &&
+      secondMismatch === firstMismatch + 1 &&
+      left[firstMismatch] === right[secondMismatch] &&
+      left[secondMismatch] === right[firstMismatch]
+    );
+  }
+
+  const longer = leftLength > rightLength ? left : right;
+  const shorter = leftLength > rightLength ? right : left;
+  let longerIndex = 0;
+  let shorterIndex = 0;
+  let edits = 0;
+  while (longerIndex < longer.length && shorterIndex < shorter.length) {
+    if (longer[longerIndex] === shorter[shorterIndex]) {
+      longerIndex += 1;
+      shorterIndex += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) {
+      return false;
+    }
+    longerIndex += 1;
+  }
+  return true;
+}
+
+function shouldHideLikelyDuplicateZeroPointRow(
+  candidate: MemberSummaryRow,
+  members: MemberSummaryRow[],
+): boolean {
+  if (candidate.points !== 0) {
+    return false;
+  }
+
+  const candidateName = splitFullName(candidate.fullName);
+  if (!candidateName.fullName) {
+    return false;
+  }
+
+  for (const other of members) {
+    if (other.memberId === candidate.memberId) {
+      continue;
+    }
+    if (other.points <= 0) {
+      continue;
+    }
+
+    const otherName = splitFullName(other.fullName);
+    if (!otherName.fullName) {
+      continue;
+    }
+
+    if (candidateName.fullName === otherName.fullName) {
+      return true;
+    }
+
+    if (
+      candidateName.firstName &&
+      candidateName.lastName &&
+      candidateName.firstName === otherName.firstName &&
+      damerauLevenshteinDistanceAtMostOne(candidateName.lastName, otherName.lastName)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function fetchAttendanceEntriesForEvents(eventIds: string[]): Promise<AttendanceEntryRow[]> {
   if (!supabaseAuthClient || eventIds.length === 0) {
     return [];
@@ -520,7 +642,9 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           .map(([label, rows]) => ({
             key: normalizeInstrumentKey(label),
             label,
-              members: [...rows].sort(compareMembersByName),
+            members: rows
+              .filter((row) => !shouldHideLikelyDuplicateZeroPointRow(row, rows))
+              .sort(compareMembersByName),
             }));
 
         setSections(nextSections);
