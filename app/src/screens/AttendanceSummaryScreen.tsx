@@ -267,6 +267,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [sections, setSections] = useState<SectionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
   const [effectiveReferenceSheetId, setEffectiveReferenceSheetId] = useState("-");
 
   const applyPreset = useCallback((preset: ScopePreset) => {
@@ -318,6 +319,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
       setIsLoading(true);
       setErrorMessage(null);
+      setConsistencyNotice(null);
 
       try {
         const [membersResult, syncRunsResult] = await Promise.all([
@@ -405,22 +407,19 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           return;
         }
 
-        const latestEntryUpdatedAt = entries.reduce<string>(
-          (currentLatest, entry) => {
-            const updatedAt = normalizeWhitespace(entry.updated_at);
-            if (!updatedAt) {
-              return currentLatest;
-            }
-            return !currentLatest || updatedAt > currentLatest ? updatedAt : currentLatest;
-          },
-          "",
-        );
+        let changedAfterSyncCount = 0;
+        for (const entry of entries) {
+          const updatedAt = normalizeWhitespace(entry.updated_at);
+          if (updatedAt && updatedAt > latestSyncFinishedAt) {
+            changedAfterSyncCount += 1;
+          }
+        }
 
-        if (latestEntryUpdatedAt && latestEntryUpdatedAt > latestSyncFinishedAt) {
-          throw new Error(
+        if (changedAfterSyncCount > 0) {
+          setConsistencyNotice(
             tr(
-              "Wykryto zmiany obecności po ostatnim syncu ref -> DB. Podsumowanie zablokowane, żeby nie pokazać punktacji różnej od ref.",
-              "Detected attendance changes after the last ref -> DB sync. Summary is blocked to avoid showing values that can differ from ref.",
+              `Wykryto ${changedAfterSyncCount} zmian obecności po ostatnim syncu ref -> DB. Pokazuję aktualny stan DB, który może chwilowo różnić się od ref. Uruchom sync ref -> DB, żeby wyrównać punktację.`,
+              `Detected ${changedAfterSyncCount} attendance changes after the last ref -> DB sync. Showing current DB state, which can temporarily differ from ref. Run ref -> DB sync to realign scores.`,
             ),
           );
         }
@@ -470,6 +469,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         setSections([]);
         setTotalEvents(0);
         setEffectiveReferenceSheetId("-");
+        setConsistencyNotice(null);
         setErrorMessage(
           error instanceof Error
             ? error.message
@@ -581,6 +581,12 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         {!isLoading && errorMessage ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
+
+        {!isLoading && !errorMessage && consistencyNotice ? (
+          <View style={styles.noticeBox}>
+            <Text style={styles.noticeText}>{consistencyNotice}</Text>
           </View>
         ) : null}
 
@@ -745,6 +751,19 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: tokens.colors.dangerInk,
+    fontSize: tokens.typography.body,
+    lineHeight: 22,
+  },
+  noticeBox: {
+    marginTop: tokens.spacing.md,
+    padding: tokens.spacing.sm,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.brandTint,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+  },
+  noticeText: {
+    color: tokens.colors.successInk,
     fontSize: tokens.typography.body,
     lineHeight: 22,
   },
