@@ -5,6 +5,7 @@ type EventRow = {
   title: string;
   event_date: string;
   source_header: string | null;
+  source_sheet_id: string | null;
   source_gid: string | null;
 };
 
@@ -22,9 +23,16 @@ type MemberRow = {
 
 type SheetMemberRow = {
   member_id: string;
+  source_sheet_id: string;
+  source_gid: string;
   source_row_number: number;
   source_updated_at: string | null;
   updated_at: string | null;
+};
+
+type FallbackRowMaps = {
+  bySourceRef: Map<string, Map<string, number>>;
+  byMemberId: Map<string, number>;
 };
 
 class HttpError extends Error {
@@ -153,6 +161,15 @@ function parseMemberIdFilter(body: Record<string, unknown>): Set<string> | null 
   }
 
   return new Set(normalized);
+}
+
+function toSourceRef(sheetId: string | null | undefined, gid: string | null | undefined): string | null {
+  const normalizedSheetId = normalizeWhitespace(sheetId ?? "");
+  const normalizedGid = normalizeWhitespace(gid ?? "");
+  if (!normalizedSheetId || !normalizedGid) {
+    return null;
+  }
+  return `${normalizedSheetId}:${normalizedGid}`;
 }
 
 function toColumnRef(indexZeroBased: number): string {
@@ -402,11 +419,6 @@ type CellWriteTarget = {
   attendanceRatio: number;
 };
 
-type MemberTarget = {
-  memberId: string;
-  rowNumber: number;
-};
-
 async function writeAttendanceCellsWithConcurrency(params: {
   writes: CellWriteTarget[];
   concurrency: number;
@@ -445,16 +457,26 @@ async function writeAttendanceCellsWithConcurrency(params: {
 function pickMemberRowNumber(
   memberId: string,
   membersById: Map<string, MemberRow>,
-  fallbackRowsByMemberId: Map<string, number>,
+  fallbackRows: FallbackRowMaps,
+  sourceSheetId: string | null,
+  sourceGid: string | null,
 ): number | null {
   const direct = membersById.get(memberId)?.source_row_number;
   if (typeof direct === "number" && Number.isInteger(direct) && direct > 0) {
     return direct;
   }
 
-  const fallback = fallbackRowsByMemberId.get(memberId) ?? null;
-  if (typeof fallback === "number" && Number.isInteger(fallback) && fallback > 0) {
-    return fallback;
+  const sourceRef = toSourceRef(sourceSheetId, sourceGid);
+  if (sourceRef) {
+    const scopedFallback = fallbackRows.bySourceRef.get(sourceRef)?.get(memberId) ?? null;
+    if (typeof scopedFallback === "number" && Number.isInteger(scopedFallback) && scopedFallback > 0) {
+      return scopedFallback;
+    }
+  }
+
+  const globalFallback = fallbackRows.byMemberId.get(memberId) ?? null;
+  if (typeof globalFallback === "number" && Number.isInteger(globalFallback) && globalFallback > 0) {
+    return globalFallback;
   }
 
   return null;
@@ -467,7 +489,7 @@ async function loadEvents(
 ): Promise<EventRow[]> {
   let query = supabaseAdmin
     .from("events")
-    .select("event_id,title,event_date,source_header,source_gid")
+    .select("event_id,title,event_date,source_header,source_sheet_id,source_gid")
     .order("event_date", { ascending: true })
     .limit(MAX_EVENTS_PER_RUN);
 
@@ -527,10 +549,12 @@ async function loadMembers(supabaseAdmin: ReturnType<typeof createClient>): Prom
 
 async function loadFallbackRows(
   supabaseAdmin: ReturnType<typeof createClient>,
-): Promise<Map<string, number>> {
+  sourceSheetId: string,
+): Promise<FallbackRowMaps> {
   const { data, error } = await supabaseAdmin
     .from("sheet_member_rows")
-    .select("member_id,source_row_number,source_updated_at,updated_at")
+    .select("member_id,source_sheet_id,source_gid,source_row_number,source_updated_at,updated_at")
+    .eq("source_sheet_id", sourceSheetId)
     .order("source_updated_at", { ascending: false, nullsFirst: false })
     .order("updated_at", { ascending: false, nullsFirst: false })
     .limit(5000)
@@ -540,17 +564,37 @@ async function loadFallbackRows(
     throw new HttpError(500, "sheet_member_rows_load_failed", error.message);
   }
 
-  const result = new Map<string, number>();
+  const byMemberId = new Map<string, number>();
+  const bySourceRef = new Map<string, Map<string, number>>();
+
   for (const row of data ?? []) {
     const memberId = normalizeWhitespace(row.member_id);
-    if (!memberId || result.has(memberId)) {
+    if (!memberId) {
       continue;
     }
-    if (Number.isInteger(row.source_row_number) && row.source_row_number > 0) {
-      result.set(memberId, row.source_row_number);
+
+    if (!Number.isInteger(row.source_row_number) || row.source_row_number <= 0) {
+      continue;
+    }
+
+    const sourceRef = toSourceRef(row.source_sheet_id, row.source_gid);
+    if (sourceRef) {
+      const scopedMap = bySourceRef.get(sourceRef) ?? new Map<string, number>();
+      if (!scopedMap.has(memberId)) {
+        scopedMap.set(memberId, row.source_row_number);
+      }
+      bySourceRef.set(sourceRef, scopedMap);
+    }
+
+    if (!byMemberId.has(memberId)) {
+      byMemberId.set(memberId, row.source_row_number);
     }
   }
-  return result;
+
+  return {
+    bySourceRef,
+    byMemberId,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -633,33 +677,38 @@ Deno.serve(async (request) => {
       });
     }
 
-    const [members, fallbackRowsByMemberId, attendanceEntries] = await Promise.all([
+    const [members, fallbackRows, attendanceEntries] = await Promise.all([
       loadMembers(supabaseAdmin),
-      loadFallbackRows(supabaseAdmin),
+      loadFallbackRows(supabaseAdmin, TARGET_ATTENDANCE_SHEET_ID),
       loadAttendanceEntries(supabaseAdmin, events.map((event) => event.event_id)),
     ]);
 
     const membersById = new Map(members.map((member) => [member.member_id, member]));
-    const memberTargets = members
-      .map((member) => {
-        const rowNumber = pickMemberRowNumber(member.member_id, membersById, fallbackRowsByMemberId);
-        return rowNumber ? { memberId: member.member_id, rowNumber } : null;
-      })
-      .filter((row): row is MemberTarget => row !== null)
-      .sort((a, b) => a.rowNumber - b.rowNumber);
+    const filteredMemberIds = members
+      .map((member) => member.member_id)
+      .filter((memberId) => !memberIdFilter || memberIdFilter.has(memberId))
+      .sort((left, right) => {
+        const leftRow = membersById.get(left)?.source_row_number;
+        const rightRow = membersById.get(right)?.source_row_number;
+        const leftHasRow = typeof leftRow === "number" && Number.isInteger(leftRow) && leftRow > 0;
+        const rightHasRow = typeof rightRow === "number" && Number.isInteger(rightRow) && rightRow > 0;
+        if (leftHasRow && rightHasRow && leftRow !== rightRow) {
+          return leftRow - rightRow;
+        }
+        if (leftHasRow !== rightHasRow) {
+          return leftHasRow ? -1 : 1;
+        }
+        return left.localeCompare(right);
+      });
 
-    const filteredMemberTargets = memberIdFilter
-      ? memberTargets.filter((memberTarget) => memberIdFilter.has(memberTarget.memberId))
-      : memberTargets;
-
-    const pagedMemberTargets = overwriteMissingWithZero
+    const pagedMemberIds = overwriteMissingWithZero
       ? (memberLimit > 0
-        ? filteredMemberTargets.slice(memberOffset, memberOffset + memberLimit)
-        : filteredMemberTargets.slice(memberOffset))
-      : filteredMemberTargets;
+        ? filteredMemberIds.slice(memberOffset, memberOffset + memberLimit)
+        : filteredMemberIds.slice(memberOffset))
+      : filteredMemberIds;
 
     const hasMoreMemberPages = overwriteMissingWithZero &&
-      (memberOffset + pagedMemberTargets.length < filteredMemberTargets.length);
+      (memberOffset + pagedMemberIds.length < filteredMemberIds.length);
 
     const attendanceByEventId = new Map<string, Map<string, number>>();
     for (const entry of attendanceEntries) {
@@ -694,11 +743,26 @@ Deno.serve(async (request) => {
 
       const eventEntries = attendanceByEventId.get(event.event_id) ?? new Map<string, number>();
       if (overwriteMissingWithZero) {
-        const writes: CellWriteTarget[] = pagedMemberTargets.map((memberTarget) => ({
-          memberId: memberTarget.memberId,
-          rowNumber: memberTarget.rowNumber,
-          attendanceRatio: eventEntries.get(memberTarget.memberId) ?? 0,
-        }));
+        const writes: CellWriteTarget[] = [];
+        for (const memberId of pagedMemberIds) {
+          const rowNumber = pickMemberRowNumber(
+            memberId,
+            membersById,
+            fallbackRows,
+            TARGET_ATTENDANCE_SHEET_ID,
+            ensuredSheet.gid,
+          );
+          if (!rowNumber) {
+            missingRows.add(memberId);
+            continue;
+          }
+
+          writes.push({
+            memberId,
+            rowNumber,
+            attendanceRatio: eventEntries.get(memberId) ?? 0,
+          });
+        }
 
         if (!dryRun) {
           await writeAttendanceCellsWithConcurrency({
@@ -720,7 +784,13 @@ Deno.serve(async (request) => {
             continue;
           }
 
-          const rowNumber = pickMemberRowNumber(memberId, membersById, fallbackRowsByMemberId);
+          const rowNumber = pickMemberRowNumber(
+            memberId,
+            membersById,
+            fallbackRows,
+            TARGET_ATTENDANCE_SHEET_ID,
+            ensuredSheet.gid,
+          );
           if (!rowNumber) {
             missingRows.add(memberId);
             continue;
@@ -762,10 +832,10 @@ Deno.serve(async (request) => {
       member_filter_count: memberIdFilter?.size ?? 0,
       member_offset: memberOffset,
       member_limit: memberLimit,
-      selected_member_targets_count: pagedMemberTargets.length,
-      total_member_targets_count: filteredMemberTargets.length,
+      selected_member_targets_count: pagedMemberIds.length,
+      total_member_targets_count: filteredMemberIds.length,
       has_more_member_pages: hasMoreMemberPages,
-      next_member_offset: hasMoreMemberPages ? memberOffset + pagedMemberTargets.length : null,
+      next_member_offset: hasMoreMemberPages ? memberOffset + pagedMemberIds.length : null,
       missing_member_row_mappings: Array.from(missingRows).slice(0, 100),
       missing_member_row_mappings_count: missingRows.size,
     });

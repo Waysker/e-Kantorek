@@ -5,6 +5,26 @@
 This plan converts the current attendance system into a safer and easier-to-maintain baseline.
 Priority order: security/integrity first, then flow stability, then frontend maintainability, then docs/ops hygiene.
 
+## Implementation Status (2026-04-29)
+
+- `Phase 0`: completed
+- `Phase 1`: completed (`023_atomic_enqueue_batch_rpc.sql` + batch handler refactor)
+- `Phase 2`: completed (`022_harden_dedupe_queue_preservation.sql` finalizes open-queue preservation)
+- `Phase 3`: not started
+- `Phase 4`: in progress
+- `Phase 5`: in progress
+
+### Completed Highlights
+
+1. Security hardening and role/RPC lock-down (`015`, `016`, `017`, `019` migrations).
+2. Queue stale-processing reclaim (`020` migration).
+3. Export row mapping scoped by `(sheet_id, gid, member_id)` in `supabase_to_sheet_export`.
+4. Supporting indexes for export/queue/attendance hot paths (`021` migration).
+5. Dedupe queue-intent preservation/dead-letter fallback (`022` migration).
+6. Atomic batch enqueue RPC (`023` migration) used by `attendance_write_sheet_first` batch mode.
+7. Automated smoke (`smoke_attendance_db_first`) and dedicated workflow trigger.
+8. Dedicated CI typecheck workflow (`.github/workflows/ci-typecheck.yml`).
+
 ## Phase 0: Security Hotfix (immediate)
 
 ### Goals

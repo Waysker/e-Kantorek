@@ -1,19 +1,16 @@
-# ORAGH App Prototype
+# ORAGH App
 
 ## Current Phase
 
-This app is a read-only visual prototype.
+Current baseline is an authenticated app with attendance management and sync/export pipelines.
 
-Current data setup:
+Current operating model:
 
-- `Feed` uses local fixture content
-- `Events`, `Users`, and `Attendance` currently come from a normalized local snapshot
-- that snapshot is the boundary between the app UI and the temporary forum integration
-- leader/admin users now have a web-only PoC setup screen for attendance workbook import
-
-That boundary is intentional.
-
-The UI should not depend directly on legacy forum fields or markup.
+- source of truth for attendance is Supabase DB, fed by sheet sync (`sheet_to_supabase_sync`)
+- manager writes from app use `attendance_write_sheet_first` in `db_first` mode
+- DB -> sheet export is handled by `supabase_to_sheet_export`
+- a separate reference sheet can sync into DB; copy sheet can be overwritten from DB for validation
+- forum snapshot integration still exists as a separate data pipeline and fallback path
 
 ## Key Directories
 
@@ -93,6 +90,7 @@ npm run smoke:attendance:db-first
 ```
 
 Secrets ownership reference: `../docs/secrets-runtime-matrix.md`
+Ops runbook: `../docs/attendance-ops-runbook.md`
 
 ## Authentication (Supabase)
 
@@ -117,9 +115,14 @@ Notes:
 - UI localization defaults to Polish (`pl`); set `EXPO_PUBLIC_APP_LOCALE=en` to preview English copy
 - Data source for events snapshot remains Supabase/local fallback as before
 
-## Runtime Note
+## Runtime Baseline
 
-The scaffold was created successfully, `npm run typecheck` passes, and the web runtime now boots locally.
+Current baseline (as of 2026-04-29):
+
+- `npm run typecheck` passes locally
+- GitHub Pages deploys from `.github/workflows/web-deploy-pages.yml`
+- smoke workflow exists at `.github/workflows/smoke-attendance-db-first.yml`
+- CI typecheck workflow exists at `.github/workflows/ci-typecheck.yml`
 
 Current verified environment:
 
@@ -157,7 +160,7 @@ To prepare a real sync:
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
 3. Run `npm.cmd run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
-4. Apply `supabase/migrations/010_attendance_sync_foundation.sql` through `013_attendance_sheet_first_write_path.sql`
+4. Apply `supabase/migrations/010_attendance_sync_foundation.sql` through `023_atomic_enqueue_batch_rpc.sql`
 5. Configure/deploy Edge Functions from `docs/sheet-sync-setup.md`
 6. Run `npm.cmd run forum:sync`
 7. Optionally publish snapshot with `npm.cmd run forum:publish`
@@ -186,6 +189,13 @@ Cloud-ready mode:
   - `supabase/migrations/012_sheet_sync_upsert_enablement.sql`
 - Sheet-first write path foundation (queue + mapping + worker scheduler):
   - `supabase/migrations/013_attendance_sheet_first_write_path.sql`
+- Write-path and export hardening:
+  - `supabase/migrations/018_dedupe_events_by_source_cell.sql`
+  - `supabase/migrations/019_security_hardening_roles_and_rpc_privileges.sql`
+  - `supabase/migrations/020_queue_reclaim_stale_processing.sql`
+  - `supabase/migrations/021_supporting_indexes_export_queue_and_attendance.sql`
+  - `supabase/migrations/022_harden_dedupe_queue_preservation.sql`
+  - `supabase/migrations/023_atomic_enqueue_batch_rpc.sql`
 - Supabase Edge Function dry-run setup: `../docs/sheet-sync-setup.md`
 - Supabase Edge Function write path:
   - `supabase/functions/attendance_write_sheet_first/index.ts`

@@ -1481,6 +1481,65 @@ async function enqueueAttendanceChange(
   return updatedRow;
 }
 
+async function enqueueAttendanceChangeBatchAtomic(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  payload: {
+    eventId: string;
+    requestedByProfileId: string;
+    requestedByLabel: string;
+    source: string;
+    sourceSheetId?: string | null;
+    sourceGid?: string | null;
+    sourceColumn?: string | null;
+    changes: Array<{
+      memberId: string;
+      attendanceRatio: number;
+      requestedRawValue: string;
+      requestNote: string | null;
+    }>;
+  },
+): Promise<QueueRow[]> {
+  const rpcPayload = {
+    p_event_id: payload.eventId,
+    p_requested_by_profile_id: payload.requestedByProfileId,
+    p_requested_by_label: payload.requestedByLabel,
+    p_source: payload.source,
+    p_source_sheet_id: payload.sourceSheetId ?? null,
+    p_source_gid: payload.sourceGid ?? null,
+    p_source_column: payload.sourceColumn ?? null,
+    p_changes: payload.changes.map((change) => ({
+      member_id: change.memberId,
+      attendance_ratio: change.attendanceRatio,
+      requested_raw_value: change.requestedRawValue,
+      request_note: change.requestNote,
+    })),
+  };
+
+  const { data, error } = await supabaseAdmin.rpc("enqueue_attendance_change_batch", rpcPayload);
+  if (error) {
+    const errorMessage = normalizeWhitespace(error.message ?? "Unknown");
+    if (errorMessage.includes("attendance_change_already_processing")) {
+      throw new HttpError(
+        409,
+        "attendance_change_already_processing",
+        "An attendance change for this member/event is already being processed.",
+      );
+    }
+    if (
+      errorMessage.includes("missing_changes") ||
+      errorMessage.includes("invalid_batch_member_id") ||
+      errorMessage.includes("missing_event_id") ||
+      errorMessage.includes("missing_requested_by_profile_id")
+    ) {
+      throw new HttpError(422, "invalid_batch_enqueue_payload", errorMessage);
+    }
+    throw new HttpError(500, "attendance_change_enqueue_batch_failed", errorMessage);
+  }
+
+  const rows = Array.isArray(data) ? data as QueueRow[] : [];
+  return rows.sort((a, b) => a.id - b.id);
+}
+
 function normalizeProfileRole(rawRole: string | null): "member" | "section" | "board" | "admin" {
   const normalized = normalizeWhitespace(rawRole ?? "").toLowerCase();
   if (normalized === "admin") {
@@ -2206,7 +2265,26 @@ async function handleEnqueueBatchMode(
     });
   }
 
-  await ensureMembersExist(supabaseAdmin, parsedChanges.map((change) => change.memberId));
+  const dedupedChanges = new Map<string, {
+    attendanceRatio: number;
+    requestedRawValue: string;
+    requestNote: string | null;
+  }>();
+  for (const change of parsedChanges) {
+    dedupedChanges.set(change.memberId, {
+      attendanceRatio: change.attendanceRatio,
+      requestedRawValue: change.requestedRawValue,
+      requestNote: change.requestNote,
+    });
+  }
+  const normalizedChanges = Array.from(dedupedChanges.entries()).map(([memberId, value]) => ({
+    memberId,
+    attendanceRatio: value.attendanceRatio,
+    requestedRawValue: value.requestedRawValue,
+    requestNote: value.requestNote,
+  }));
+
+  await ensureMembersExist(supabaseAdmin, normalizedChanges.map((change) => change.memberId));
 
   const resolvedEvent = await resolveCanonicalEventId(supabaseAdmin, {
     eventIdInput,
@@ -2219,23 +2297,16 @@ async function handleEnqueueBatchMode(
   const sourceGid = normalizeWhitespace(eventSourceSnapshot.source_gid ?? "") || null;
   const sourceColumn = normalizeWhitespace(eventSourceSnapshot.source_column ?? "") || null;
 
-  const queueRows: QueueRow[] = [];
-  for (const change of parsedChanges) {
-    const queueRow = await enqueueAttendanceChange(supabaseAdmin, {
-      memberId: change.memberId,
-      eventId,
-      attendanceRatio: change.attendanceRatio,
-      requestedRawValue: change.requestedRawValue,
-      requestedByProfileId: profile.id,
-      requestedByLabel: profile.full_name,
-      requestNote: change.requestNote,
-      source,
-      sourceSheetId,
-      sourceGid,
-      sourceColumn,
-    });
-    queueRows.push(queueRow);
-  }
+  const queueRows = await enqueueAttendanceChangeBatchAtomic(supabaseAdmin, {
+    eventId,
+    requestedByProfileId: profile.id,
+    requestedByLabel: profile.full_name,
+    source,
+    sourceSheetId,
+    sourceGid,
+    sourceColumn,
+    changes: normalizedChanges,
+  });
 
   await supabaseAdmin.from("change_journal").insert({
     entity_type: "attendance_change_queue",
@@ -2255,8 +2326,8 @@ async function handleEnqueueBatchMode(
       source_sheet_id: sourceSheetId,
       source_gid: sourceGid,
       source_column: sourceColumn,
-      change_count: parsedChanges.length,
-      member_ids: parsedChanges.map((change) => change.memberId),
+      change_count: normalizedChanges.length,
+      member_ids: normalizedChanges.map((change) => change.memberId),
       queue_ids: queueRows.map((row) => row.id),
     },
   });
@@ -2265,7 +2336,7 @@ async function handleEnqueueBatchMode(
     status: "queued",
     queued_count: queueRows.length,
     queue_ids: queueRows.map((row) => row.id),
-    member_ids: parsedChanges.map((change) => change.memberId),
+    member_ids: normalizedChanges.map((change) => change.memberId),
     actor_member_id: actorMemberId,
     profile_role: profileRole,
     source,

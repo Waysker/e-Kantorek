@@ -6,6 +6,8 @@ This document describes how to run the new dry-run sync pipeline:
 - Supabase Edge Function `sheet_to_supabase_sync`
 - Supabase Cron every 5 minutes
 
+Current baseline expects migrations through `023_atomic_enqueue_batch_rpc.sql` to be applied.
+
 ## 1. Apply migrations
 
 Run migrations so required tables/functions exist:
