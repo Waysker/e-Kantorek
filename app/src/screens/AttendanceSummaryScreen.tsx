@@ -55,6 +55,7 @@ type SyncRunRow = {
   source_ref: string | null;
   summary: {
     source_refs?: unknown;
+    csv_urls?: unknown;
   } | null;
 };
 
@@ -169,7 +170,22 @@ function parseSheetIdFromSourceRef(sourceRef: unknown): string | null {
   return normalizeWhitespace(normalized.slice(0, separatorIndex)) || null;
 }
 
-function resolveReferenceSheetIdFromSyncRun(syncRun: SyncRunRow | null): string | null {
+function parseSheetIdFromCsvUrl(csvUrl: unknown): string | null {
+  const normalized = normalizeWhitespace(csvUrl);
+  if (!normalized) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(normalized);
+    const match = parsedUrl.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+    return match?.[1] ? normalizeWhitespace(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveSheetIdFromSingleSyncRun(syncRun: SyncRunRow | null): string | null {
   if (!syncRun) {
     return null;
   }
@@ -190,12 +206,55 @@ function resolveReferenceSheetIdFromSyncRun(syncRun: SyncRunRow | null): string 
     }
   }
 
-  const uniqueCandidates = Array.from(new Set(candidates));
-  if (uniqueCandidates.length !== 1) {
+  const csvUrls = syncRun.summary?.csv_urls;
+  if (Array.isArray(csvUrls)) {
+    for (const csvUrl of csvUrls) {
+      const sheetId = parseSheetIdFromCsvUrl(csvUrl);
+      if (sheetId) {
+        candidates.push(sheetId);
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
     return null;
   }
 
-  return uniqueCandidates[0];
+  const counts = new Map<string, number>();
+  for (const candidate of candidates) {
+    counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
+  }
+
+  const ranked = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
+  if (ranked.length === 0) {
+    return null;
+  }
+
+  if (ranked.length === 1) {
+    return ranked[0][0];
+  }
+
+  return ranked[0][1] > ranked[1][1] ? ranked[0][0] : null;
+}
+
+function resolveReferenceSheetFromSyncRuns(
+  syncRuns: SyncRunRow[],
+): { sheetId: string; finishedAt: string } | null {
+  for (const syncRun of syncRuns) {
+    const finishedAt = normalizeWhitespace(syncRun.finished_at);
+    if (!finishedAt) {
+      continue;
+    }
+
+    const sheetId = resolveSheetIdFromSingleSyncRun(syncRun);
+    if (!sheetId) {
+      continue;
+    }
+
+    return { sheetId, finishedAt };
+  }
+
+  return null;
 }
 
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
@@ -261,7 +320,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       setErrorMessage(null);
 
       try {
-        const [membersResult, latestSyncRunResult] = await Promise.all([
+        const [membersResult, syncRunsResult] = await Promise.all([
           supabaseAuthClient
             .from("members")
             .select("member_id,full_name,instrument")
@@ -275,8 +334,8 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
             .eq("status", "success")
             .not("finished_at", "is", null)
             .order("started_at", { ascending: false })
-            .limit(1)
-            .maybeSingle<SyncRunRow>(),
+            .limit(30)
+            .returns<SyncRunRow[]>(),
         ]);
 
         if (isDisposed) {
@@ -287,35 +346,25 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           throw new Error(membersResult.error.message);
         }
 
-        if (latestSyncRunResult.error) {
-          throw new Error(latestSyncRunResult.error.message);
+        if (syncRunsResult.error) {
+          throw new Error(syncRunsResult.error.message);
         }
 
         const members = ((membersResult.data ?? []) as MemberRow[]).filter(
           (member) => normalizeWhitespace(member.member_id).length > 0,
         );
-        const latestSyncFinishedAt = normalizeWhitespace(latestSyncRunResult.data?.finished_at ?? "");
-        if (!latestSyncFinishedAt) {
+        const syncRunResolution = resolveReferenceSheetFromSyncRuns(syncRunsResult.data ?? []);
+        if (!syncRunResolution) {
           throw new Error(
             tr(
-              "Brak zakończonego synca ref -> DB (sheet_to_supabase_sync). Nie liczę podsumowania z niezweryfikowanego stanu.",
-              "No completed ref -> DB sync (sheet_to_supabase_sync). Summary is blocked for unverified state.",
+              "Nie udało się ustalić ref sheet ID z historii udanych synców ref -> DB.",
+              "Could not resolve ref sheet ID from successful ref -> DB sync history.",
             ),
           );
         }
 
-        const referenceSheetId = resolveReferenceSheetIdFromSyncRun(
-          latestSyncRunResult.data ?? null,
-        );
-
-        if (!referenceSheetId) {
-          throw new Error(
-            tr(
-              "Nie udało się ustalić ref sheet ID z ostatniego udanego synca.",
-              "Could not resolve ref sheet ID from the latest successful sync.",
-            ),
-          );
-        }
+        const referenceSheetId = syncRunResolution.sheetId;
+        const latestSyncFinishedAt = syncRunResolution.finishedAt;
 
         setEffectiveReferenceSheetId(referenceSheetId);
 
