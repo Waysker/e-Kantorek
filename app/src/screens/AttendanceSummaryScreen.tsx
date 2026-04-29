@@ -50,7 +50,7 @@ type SectionSummary = {
   members: MemberSummaryRow[];
 };
 
-type ScopePreset = "season" | "30d" | "90d" | "last_month" | "last_3_months" | "ytd" | "all";
+type ScopePreset = "season" | "30d" | "90d" | "current_month" | "previous_month" | "last_3_months" | "ytd" | "all";
 type SortMode = "alpha" | "points_section" | "points_all";
 
 type SyncRunRow = {
@@ -121,8 +121,12 @@ function getPresetScope(preset: ScopePreset): { startDate: string; endDate: stri
     };
   }
 
-  if (preset === "last_month" || preset === "last_3_months") {
-    if (preset === "last_month") {
+  if (preset === "current_month" || preset === "previous_month" || preset === "last_3_months") {
+    if (preset === "current_month") {
+      return getCalendarMonthBounds(now.getFullYear(), now.getMonth());
+    }
+
+    if (preset === "previous_month") {
       return getCalendarMonthBounds(now.getFullYear(), now.getMonth() - 1);
     }
 
@@ -500,8 +504,11 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           <Pressable style={styles.presetButton} onPress={() => applyPreset("90d")}>
             <Text style={styles.presetButtonLabel}>{tr("90 dni", "90 days")}</Text>
           </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("last_month")}>
-            <Text style={styles.presetButtonLabel}>{tr("Ostatni miesiąc", "Last month")}</Text>
+          <Pressable style={styles.presetButton} onPress={() => applyPreset("current_month")}>
+            <Text style={styles.presetButtonLabel}>{tr("Aktualny miesiąc", "Current month")}</Text>
+          </Pressable>
+          <Pressable style={styles.presetButton} onPress={() => applyPreset("previous_month")}>
+            <Text style={styles.presetButtonLabel}>{tr("Poprzedni miesiąc", "Previous month")}</Text>
           </Pressable>
           <Pressable style={styles.presetButton} onPress={() => applyPreset("last_3_months")}>
             <Text style={styles.presetButtonLabel}>{tr("Ostatnie 3 miesiące", "Last 3 months")}</Text>
