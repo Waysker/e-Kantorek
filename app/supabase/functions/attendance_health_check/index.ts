@@ -17,7 +17,8 @@ type QueueRow = {
   claimed_at: string | null;
   attempt_count: number | null;
   last_error: string | null;
-  updated_at: string | null;
+  enqueued_at: string | null;
+  processed_at: string | null;
 };
 
 class HttpError extends Error {
@@ -133,9 +134,9 @@ async function loadDeadLetterRows(
 ): Promise<QueueRow[]> {
   const { data, error } = await supabaseAdmin
     .from("attendance_change_queue")
-    .select("id,member_id,event_id,claimed_at,attempt_count,last_error,updated_at")
+    .select("id,member_id,event_id,claimed_at,attempt_count,last_error,enqueued_at,processed_at")
     .eq("status", "dead_letter")
-    .order("updated_at", { ascending: false })
+    .order("processed_at", { ascending: false })
     .limit(rowLimit)
     .returns<QueueRow[]>();
 
@@ -154,7 +155,7 @@ async function loadStaleProcessingRows(
   const cutoffIso = minutesAgoIso(staleWindowMinutes);
   const { data, error } = await supabaseAdmin
     .from("attendance_change_queue")
-    .select("id,member_id,event_id,claimed_at,attempt_count,last_error,updated_at")
+    .select("id,member_id,event_id,claimed_at,attempt_count,last_error,enqueued_at,processed_at")
     .eq("status", "processing")
     .lt("claimed_at", cutoffIso)
     .order("claimed_at", { ascending: true })
