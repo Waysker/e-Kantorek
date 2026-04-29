@@ -1,0 +1,114 @@
+name: Attendance Health Check
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 */2 * * *"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/attendance-health-check.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/attendance-health-check.yml"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: attendance-health-check-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger Supabase attendance health check
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN: ${{ secrets.ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN }}
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping attendance health check on pull_request because SUPABASE_PROJECT_REF is unavailable."
+              exit 0
+            fi
+            echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
+            exit 1
+          fi
+          if [ -z "$ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping attendance health check on pull_request because ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN is unavailable (likely fork PR)."
+              exit 0
+            fi
+            echo "::error::ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN is missing (repo secret)."
+            exit 1
+          fi
+
+          health_check_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/attendance_health_check"
+          payload='{"failureWindowMinutes":150,"staleProcessingMinutes":15,"rowLimit":50}'
+
+          raw_response=""
+          max_attempts=3
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            if raw_response="$(curl -sS --max-time 90 --connect-timeout 20 -X POST "$health_check_url" \
+              -H "Authorization: Bearer $ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              -w '\n%{http_code}')"; then
+              break
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::Attendance health check request failed after $attempt attempts."
+              exit 1
+            fi
+            sleep_seconds=$((attempt * 10))
+            echo "::warning::Attendance health check request failed (attempt $attempt/$max_attempts). Retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+            attempt=$((attempt + 1))
+          done
+
+          http_status="${raw_response##*$'\n'}"
+          response_body="${raw_response%$'\n'*}"
+
+          echo "$response_body"
+          echo "HTTP status: $http_status"
+
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            error_code="$(echo "$response_body" | jq -r '.error // empty' 2>/dev/null || true)"
+            error_message="$(echo "$response_body" | jq -r '.message // empty' 2>/dev/null || true)"
+            if [ -n "$error_code" ] || [ -n "$error_message" ]; then
+              echo "::error::Attendance health check failed (HTTP $http_status): ${error_code:-unknown_error} ${error_message}"
+            else
+              echo "::error::Attendance health check failed (HTTP $http_status) with non-JSON or unexpected body."
+            fi
+            exit 1
+          fi
+
+          status="$(echo "$response_body" | jq -r '.status // empty' 2>/dev/null || true)"
+          if [ -z "$status" ]; then
+            echo "::error::Attendance health check returned 2xx but body is not valid JSON status payload."
+            echo "$response_body"
+            exit 1
+          fi
+          if [ "$status" != "ok" ]; then
+            echo "::error::Attendance health check returned status=${status:-empty}."
+            if echo "$response_body" | jq -e . >/dev/null 2>&1; then
+              echo "$response_body" | jq .
+            else
+              echo "$response_body"
+            fi
+            exit 1
+          fi

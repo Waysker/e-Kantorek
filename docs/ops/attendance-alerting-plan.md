@@ -14,14 +14,15 @@ Alerting for the attendance runtime:
 
 Condition:
 
-- any `sheet_to_supabase_sync` run with `status='failed'` in the last 15 minutes.
+- any `sheet_to_supabase_sync` run with `status='failed'` in the last 150 minutes
+  (aligned with scheduled health-check cadence + buffer).
 
 ```sql
 select id, started_at, finished_at, error_message, summary
 from public.sync_runs
 where pipeline_name = 'sheet_to_supabase_sync'
   and status = 'failed'
-  and started_at >= now() - interval '15 minutes'
+  and started_at >= now() - interval '150 minutes'
 order by started_at desc;
 ```
 
@@ -41,13 +42,13 @@ where status = 'dead_letter';
 
 Condition:
 
-- queue rows in `processing` older than 10 minutes (reclaim should normally prevent this).
+- queue rows in `processing` older than 15 minutes (reclaim should normally prevent this).
 
 ```sql
 select id, member_id, event_id, claimed_at, attempt_count, last_error
 from public.attendance_change_queue
 where status = 'processing'
-  and claimed_at < now() - interval '10 minutes'
+  and claimed_at < now() - interval '15 minutes'
 order by claimed_at asc;
 ```
 
@@ -65,10 +66,38 @@ order by created_at desc
 limit 200;
 ```
 
+## Automated Health Check
+
+The canonical operational check is the Supabase function `attendance_health_check`, triggered from GitHub Actions.
+
+It verifies:
+
+1. recent failed `sheet_to_supabase_sync` runs
+2. queue rows in `dead_letter`
+3. stale queue rows still stuck in `processing`
+
+Workflow:
+
+- `.github/workflows/attendance-health-check.yml`
+
+Required secret:
+
+- `ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN`
+
+Recommended schedule:
+
+- every 2 hours, plus manual dispatch when investigating incidents
+
+Recommended payload thresholds:
+
+- `failureWindowMinutes=150`
+- `staleProcessingMinutes=15`
+- `rowLimit=50`
+
 ## Alert Severity
 
 - `P1`:
-  - repeated sync failures for 15+ minutes
+  - repeated sync failures for 150+ minutes
   - dead-letter count increasing
   - smoke regression failing on `main`
 - `P2`:
@@ -85,13 +114,16 @@ limit 200;
   - write + rollback on fixed attendance row
   - optional export trigger requirement
   - sync response contract check (`dryRun=true`) with data-quality gates
+- health checks:
+  - scheduled and manual runtime read-only verification of sync failure, dead-letter, and stale processing conditions
 
 ## Recommended Escalation Path
 
 1. Check `sync_runs` and `sync_issues`.
 2. Check queue status (`queued`/`processing`/`dead_letter`).
-3. Trigger manual smoke run from GitHub Actions.
-4. If failure persists, disable risky writes temporarily:
+3. Trigger manual `Attendance Health Check` from GitHub Actions.
+4. Trigger manual smoke run from GitHub Actions.
+5. If failure persists, disable risky writes temporarily:
   - set `EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED=false` in web deploy context
   - keep sync ingress active until incident is resolved.
 

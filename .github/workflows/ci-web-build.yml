@@ -6,6 +6,12 @@ on:
     paths:
       - "app/**"
       - ".github/workflows/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
@@ -16,6 +22,7 @@ env:
 jobs:
   web-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: app

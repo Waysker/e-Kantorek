@@ -12,9 +12,14 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
+concurrency:
+  group: forum-sync-publish
+  cancel-in-progress: true
+
 jobs:
   sync-publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: app
@@ -59,4 +64,18 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
           ORAGH_INSTRUMENT_OVERRIDES_KEY: ${{ vars.ORAGH_INSTRUMENT_OVERRIDES_KEY || vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
-        run: npm run forum:sync:publish
+        run: |
+          max_attempts=2
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            if npm run forum:sync:publish; then
+              exit 0
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::Forum sync publish failed after $attempt attempts."
+              exit 1
+            fi
+            echo "::warning::Forum sync publish failed (attempt $attempt/$max_attempts). Retrying in 20s."
+            sleep 20
+            attempt=$((attempt + 1))
+          done

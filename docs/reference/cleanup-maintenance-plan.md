@@ -15,6 +15,8 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 - `Phase 5`: completed
 - `Phase 6`: completed (`docs/reference/phase-6-maintainability-plan.md`)
 - `Phase 6 Postmortem`: `docs/reference/phase-6-postmortem.md`
+- `Phase 7`: completed (`docs/reference/phase-7-operations-hardening-plan.md`)
+- `Phase 7 Postmortem`: `docs/reference/phase-7-postmortem.md`
 
 ### Completed Highlights
 

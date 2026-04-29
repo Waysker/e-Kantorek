@@ -27,9 +27,17 @@ limit 20;
 ```
 
 ```sql
-select severity, code, message, source_ref, gid, column_ref, row_number, created_at
-from public.sync_issues
-order by created_at desc
+select
+  i.severity,
+  i.code,
+  i.message,
+  r.source_ref,
+  i.column_ref,
+  i.row_number,
+  i.created_at
+from public.sync_issues i
+left join public.sync_runs r on r.id = i.run_id
+order by i.created_at desc
 limit 200;
 ```
 
@@ -135,7 +143,8 @@ Supabase secrets:
 - `ATTENDANCE_WRITE_SOURCE_MODE=db_first`
 - `ATTENDANCE_WRITE_TRIGGER_DB_EXPORT=true`
 - `DB_TO_SHEET_EXPORT_URL`
-- `DB_TO_SHEET_EXPORT_AUTH_TOKEN` (or `DB_TO_SHEET_EXPORT_TOKEN`)
+- `DB_TO_SHEET_EXPORT_AUTH_TOKEN` (recommended; `DB_TO_SHEET_EXPORT_TOKEN` supported for compatibility)
+- `ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN`
 
 GitHub (for smoke workflow):
 

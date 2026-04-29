@@ -9,20 +9,23 @@
 
 ## Start Here (Current Baseline)
 
-1. `docs/reference/phase-6-maintainability-plan.md`
-2. `docs/reference/phase-6-postmortem.md`
-3. `docs/reference/cleanup-maintenance-plan.md`
-4. `docs/ops/sheet-sync-setup.md`
-5. `docs/ops/attendance-ops-runbook.md`
-6. `docs/ops/function-errors-runbook.md`
-7. `docs/ops/attendance-alerting-plan.md`
-8. `docs/ops/pr-ops-checklist.md`
-9. `docs/ops/secrets-runtime-matrix.md`
-10. `docs/ops/smoke-attendance-db-first-hybrid.md`
-11. `docs/contracts/attendance-sheet-contract.md`
+1. `docs/reference/phase-7-operations-hardening-plan.md`
+2. `docs/reference/phase-7-postmortem.md`
+3. `docs/reference/phase-6-maintainability-plan.md`
+4. `docs/reference/phase-6-postmortem.md`
+5. `docs/reference/cleanup-maintenance-plan.md`
+6. `docs/ops/sheet-sync-setup.md`
+7. `docs/ops/attendance-ops-runbook.md`
+8. `docs/ops/function-errors-runbook.md`
+9. `docs/ops/attendance-alerting-plan.md`
+10. `docs/ops/pr-ops-checklist.md`
+11. `docs/ops/secrets-runtime-matrix.md`
+12. `docs/ops/smoke-attendance-db-first-hybrid.md`
+13. `docs/contracts/attendance-sheet-contract.md`
 
 ## Scope Notes
 
 - Runtime source of truth: Supabase DB (`db_first`) with controlled export to copy sheet.
 - Reference sheet remains ingress-only (sync to DB), not an active write target from app.
 - Smoke checks are hybrid: execution in Supabase function, trigger from GitHub Actions.
+- Attendance health checks are hybrid too: the function reads operational tables in Supabase and the workflow triggers it on schedule or manually.

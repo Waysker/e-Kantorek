@@ -108,6 +108,7 @@ const DB_TO_SHEET_EXPORT_URL =
   Deno.env.get("DB_TO_SHEET_EXPORT_URL") ??
   Deno.env.get("SUPABASE_TO_SHEET_EXPORT_URL");
 const DB_TO_SHEET_EXPORT_TOKEN =
+  Deno.env.get("DB_TO_SHEET_EXPORT_AUTH_TOKEN") ??
   Deno.env.get("DB_TO_SHEET_EXPORT_TOKEN") ??
   Deno.env.get("SUPABASE_TO_SHEET_EXPORT_TOKEN");
 const CORS_ALLOWED_ORIGINS = parseCorsAllowedOrigins(Deno.env.get("ATTENDANCE_WRITE_CORS_ALLOWED_ORIGINS"));

@@ -26,9 +26,11 @@ Use this checklist for PRs that touch at least one of:
 - [ ] `CI Typecheck` passes.
 - [ ] `CI Web Build` passes.
 - [ ] `CI Edge Functions Check` passes (if function code changed).
+- [ ] `npm run edge:check` passes locally before opening the PR.
 - [ ] `Smoke Attendance DB-First` passes with:
   - `SMOKE_CHECK_SYNC_CONTRACT=true`
   - `SMOKE_REQUIRE_EXPORT_TRIGGER_OK=true`
+- [ ] `Attendance Health Check` passes on manual dispatch after deploys touching pipeline/runtime logic.
 
 ## 4) Ops Verifications (Post-Deploy)
 

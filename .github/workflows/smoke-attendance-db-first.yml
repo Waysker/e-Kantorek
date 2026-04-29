@@ -24,12 +24,13 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 concurrency:
-  group: smoke-attendance-db-first
+  group: smoke-attendance-db-first-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   smoke-db-first:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
 
     steps:
       - name: Trigger Supabase smoke function
@@ -72,11 +73,26 @@ jobs:
           smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
           payload="{\"requireExportTriggerOk\":${require_export},\"checkSyncContract\":${check_sync_contract}}"
 
-          raw_response="$(curl -sS -X POST "$smoke_url" \
-            -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            -w '\n%{http_code}')"
+          raw_response=""
+          max_attempts=3
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            if raw_response="$(curl -sS --max-time 120 --connect-timeout 20 -X POST "$smoke_url" \
+              -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              -w '\n%{http_code}')"; then
+              break
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::Smoke function request failed after $attempt attempts."
+              exit 1
+            fi
+            sleep_seconds=$((attempt * 10))
+            echo "::warning::Smoke function request failed (attempt $attempt/$max_attempts). Retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+            attempt=$((attempt + 1))
+          done
 
           http_status="${raw_response##*$'\n'}"
           response_body="${raw_response%$'\n'*}"
@@ -95,4 +111,18 @@ jobs:
             exit 1
           fi
 
-          echo "$response_body" | jq -e '.status == "ok"' >/dev/null
+          status="$(echo "$response_body" | jq -r '.status // empty' 2>/dev/null || true)"
+          if [ -z "$status" ]; then
+            echo "::error::Smoke function returned 2xx but body is not valid JSON status payload."
+            echo "$response_body"
+            exit 1
+          fi
+          if [ "$status" != "ok" ]; then
+            echo "::error::Smoke function returned status=${status}."
+            if echo "$response_body" | jq -e . >/dev/null 2>&1; then
+              echo "$response_body" | jq .
+            else
+              echo "$response_body"
+            fi
+            exit 1
+          fi

@@ -28,6 +28,7 @@ Documentation map: `../docs/README.md`
 ## Commands
 
 - `npm run typecheck`
+- `npm run edge:check`
 - `npm run start`
 - `npm run web`
 - `npm run web:build`
