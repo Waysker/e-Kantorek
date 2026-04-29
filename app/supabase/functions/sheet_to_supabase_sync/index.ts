@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+type SupabaseAdminClient = SupabaseClient<any, "public", any>;
 
 type IssueSeverity = "warning" | "error";
 
@@ -593,24 +595,25 @@ async function discoverSheetSourcesViaApi(sheetId: string, apiKey: string): Prom
   };
 
   const candidates = payload.sheets ?? [];
-  const sources = candidates
-    .map((sheet) => {
-      const props = sheet.properties ?? {};
-      if (typeof props.sheetId !== "number") {
-        return null;
-      }
-      if (!INCLUDE_HIDDEN_DISCOVERED_SHEETS && props.hidden) {
-        return null;
-      }
-      return {
-        sheetId,
-        gid: String(props.sheetId),
-        sourceRef: `${sheetId}:${String(props.sheetId)}`,
-        label: normalizeWhitespace(props.title ?? "") || undefined,
-        sortIndex: typeof props.index === "number" ? props.index : Number.MAX_SAFE_INTEGER,
-      };
-    })
-    .filter((item): item is SheetSource & { sortIndex: number } => item !== null)
+  const sortableSources: Array<SheetSource & { sortIndex: number }> = [];
+  for (const sheet of candidates) {
+    const props = sheet.properties ?? {};
+    if (typeof props.sheetId !== "number") {
+      continue;
+    }
+    if (!INCLUDE_HIDDEN_DISCOVERED_SHEETS && props.hidden) {
+      continue;
+    }
+    sortableSources.push({
+      sheetId,
+      gid: String(props.sheetId),
+      sourceRef: `${sheetId}:${String(props.sheetId)}`,
+      label: normalizeWhitespace(props.title ?? "") || undefined,
+      sortIndex: typeof props.index === "number" ? props.index : Number.MAX_SAFE_INTEGER,
+    });
+  }
+
+  const sources = sortableSources
     .sort((a, b) => a.sortIndex - b.sortIndex)
     .map(({ sortIndex: _sortIndex, ...source }) => source);
 
@@ -1130,21 +1133,12 @@ function buildPreflight(
         details: rawColumn.parsed.suggestion ? { suggested_iso_date: rawColumn.parsed.suggestion } : {},
       });
     } else {
-      if (rawColumn.parsed.reason === "missing_date_token") {
-        const eventIndex = events.length;
-        missingDateEventIndexes.push(eventIndex);
-        missingDateEventContextByIndex.set(eventIndex, {
-          columnRef: rawColumn.columnRef,
-          header: rawColumn.header,
-        });
-      } else {
-        issues.push({
-          severity: "warning",
-          code: rawColumn.parsed.reason,
-          message: `Invalid or missing date token in ${rawColumn.columnRef} (${rawColumn.header}).`,
-          column_ref: rawColumn.columnRef,
-        });
-      }
+      const eventIndex = events.length;
+      missingDateEventIndexes.push(eventIndex);
+      missingDateEventContextByIndex.set(eventIndex, {
+        columnRef: rawColumn.columnRef,
+        header: rawColumn.header,
+      });
     }
 
     const title = normalizeWhitespace(columnOverride?.title ?? "") || eventTitleFromHeader(rawColumn.header);
@@ -1343,7 +1337,7 @@ function buildPreflight(
 }
 
 async function insertIssues(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   runId: string,
   issues: SyncIssue[],
 ): Promise<void> {
@@ -1368,7 +1362,7 @@ async function insertIssues(
 }
 
 async function upsertInBatches(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   tableName: string,
   rows: Record<string, unknown>[],
   onConflict: string,
@@ -1395,7 +1389,7 @@ function toPostgrestInList(values: string[]): string {
 }
 
 async function pruneStaleAttendanceEntries(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventIds: string[],
   attendanceEntries: AttendanceEntryRecord[],
 ): Promise<number> {
