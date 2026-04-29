@@ -129,9 +129,9 @@ Role model:
 Attendance summary panel source of truth:
 
 - `Profile -> Attendance summary` computes only from events with
-  `events.source_sheet_id == EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID`.
-- If this env var is missing, the panel intentionally refuses to compute
-  (to prevent mixing ref/copy/test data).
+  `events.source_sheet_id == <reference sheet id inferred from latest successful sync>`.
+- Panel always infers ref sheet ID from latest successful
+  `sheet_to_supabase_sync` run (`sync_runs`) and filters by that ID.
 
 Role management hardening:
 

@@ -50,9 +50,13 @@ type SectionSummary = {
 
 type ScopePreset = "season" | "30d" | "90d" | "ytd" | "all";
 
-const REFERENCE_SHEET_ID = normalizeWhitespace(
-  process.env.EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID ?? "",
-);
+type SyncRunRow = {
+  finished_at: string | null;
+  source_ref: string | null;
+  summary: {
+    source_refs?: unknown;
+  } | null;
+};
 
 function normalizeWhitespace(value: unknown): string {
   return String(value ?? "")
@@ -153,6 +157,47 @@ function compareSectionLabels(left: string, right: string): number {
   return left.localeCompare(right, "pl");
 }
 
+function parseSheetIdFromSourceRef(sourceRef: unknown): string | null {
+  const normalized = normalizeWhitespace(sourceRef);
+  if (!normalized) {
+    return null;
+  }
+  const separatorIndex = normalized.indexOf(":");
+  if (separatorIndex <= 0) {
+    return null;
+  }
+  return normalizeWhitespace(normalized.slice(0, separatorIndex)) || null;
+}
+
+function resolveReferenceSheetIdFromSyncRun(syncRun: SyncRunRow | null): string | null {
+  if (!syncRun) {
+    return null;
+  }
+
+  const candidates: string[] = [];
+  const directSourceSheetId = parseSheetIdFromSourceRef(syncRun.source_ref);
+  if (directSourceSheetId) {
+    candidates.push(directSourceSheetId);
+  }
+
+  const sourceRefs = syncRun.summary?.source_refs;
+  if (Array.isArray(sourceRefs)) {
+    for (const sourceRef of sourceRefs) {
+      const sheetId = parseSheetIdFromSourceRef(sourceRef);
+      if (sheetId) {
+        candidates.push(sheetId);
+      }
+    }
+  }
+
+  const uniqueCandidates = Array.from(new Set(candidates));
+  if (uniqueCandidates.length !== 1) {
+    return null;
+  }
+
+  return uniqueCandidates[0];
+}
+
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
   const defaultScope = useMemo(() => getDefaultSeasonScope(), []);
   const [scopeStartDate, setScopeStartDate] = useState(defaultScope.startDate);
@@ -163,6 +208,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [sections, setSections] = useState<SectionSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [effectiveReferenceSheetId, setEffectiveReferenceSheetId] = useState("-");
 
   const applyPreset = useCallback((preset: ScopePreset) => {
     const next = getPresetScope(preset);
@@ -211,24 +257,11 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         return;
       }
 
-      if (!REFERENCE_SHEET_ID) {
-        setErrorMessage(
-          tr(
-            "Brak EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID. Panel liczy tylko dane z ref attendance.",
-            "Missing EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID. This panel computes only from ref attendance data.",
-          ),
-        );
-        setSections([]);
-        setTotalEvents(0);
-        setIsLoading(false);
-        return;
-      }
-
       setIsLoading(true);
       setErrorMessage(null);
 
       try {
-        const [membersResult, eventsResult, latestSyncRunResult] = await Promise.all([
+        const [membersResult, latestSyncRunResult] = await Promise.all([
           supabaseAuthClient
             .from("members")
             .select("member_id,full_name,instrument")
@@ -236,21 +269,14 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
             .order("instrument", { ascending: true })
             .order("full_name", { ascending: true }),
           supabaseAuthClient
-            .from("events")
-            .select("event_id")
-            .eq("source_sheet_id", REFERENCE_SHEET_ID)
-            .gte("event_date", scopeStartDate)
-            .lte("event_date", scopeEndDate)
-            .order("event_date", { ascending: true }),
-          supabaseAuthClient
             .from("sync_runs")
-            .select("finished_at")
+            .select("finished_at,source_ref,summary")
             .eq("pipeline_name", "sheet_to_supabase_sync")
             .eq("status", "success")
             .not("finished_at", "is", null)
             .order("started_at", { ascending: false })
             .limit(1)
-            .maybeSingle<{ finished_at: string }>(),
+            .maybeSingle<SyncRunRow>(),
         ]);
 
         if (isDisposed) {
@@ -261,9 +287,6 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           throw new Error(membersResult.error.message);
         }
 
-        if (eventsResult.error) {
-          throw new Error(eventsResult.error.message);
-        }
         if (latestSyncRunResult.error) {
           throw new Error(latestSyncRunResult.error.message);
         }
@@ -279,6 +302,33 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
               "No completed ref -> DB sync (sheet_to_supabase_sync). Summary is blocked for unverified state.",
             ),
           );
+        }
+
+        const referenceSheetId = resolveReferenceSheetIdFromSyncRun(
+          latestSyncRunResult.data ?? null,
+        );
+
+        if (!referenceSheetId) {
+          throw new Error(
+            tr(
+              "Nie udało się ustalić ref sheet ID z ostatniego udanego synca.",
+              "Could not resolve ref sheet ID from the latest successful sync.",
+            ),
+          );
+        }
+
+        setEffectiveReferenceSheetId(referenceSheetId);
+
+        const eventsResult = await supabaseAuthClient
+          .from("events")
+          .select("event_id")
+          .eq("source_sheet_id", referenceSheetId)
+          .gte("event_date", scopeStartDate)
+          .lte("event_date", scopeEndDate)
+          .order("event_date", { ascending: true });
+
+        if (eventsResult.error) {
+          throw new Error(eventsResult.error.message);
         }
 
         const eventIds = (eventsResult.data ?? [])
@@ -370,6 +420,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       } catch (error) {
         setSections([]);
         setTotalEvents(0);
+        setEffectiveReferenceSheetId("-");
         setErrorMessage(
           error instanceof Error
             ? error.message
@@ -401,7 +452,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           )}
         </Text>
         <Text style={styles.cardSecondary}>
-          {tr("Ref sheet", "Ref sheet")}: {REFERENCE_SHEET_ID || "-"}
+          {tr("Ref sheet", "Ref sheet")}: {effectiveReferenceSheetId}
         </Text>
         <Pressable style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonLabel}>{tr("← Wróć do profilu", "← Back to profile")}</Text>
