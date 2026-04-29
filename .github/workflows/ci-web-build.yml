@@ -1,6 +1,7 @@
 name: CI Web Build
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "app/**"

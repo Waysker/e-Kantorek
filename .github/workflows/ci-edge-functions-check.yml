@@ -1,6 +1,7 @@
 name: CI Edge Functions Check
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "app/supabase/functions/**"
