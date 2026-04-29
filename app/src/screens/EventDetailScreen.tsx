@@ -29,6 +29,8 @@ export function EventDetailScreen({
 }: EventDetailScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
+  const usingUpdatesAsDiscussion = event.comments.length === 0 && event.updates.length > 0;
+  const discussionEntries = usingUpdatesAsDiscussion ? event.updates : event.comments;
 
   return (
     <ScrollView
@@ -55,7 +57,7 @@ export function EventDetailScreen({
             ) : null}
             <Text style={styles.cardBody}>{event.description}</Text>
 
-            {event.updates.length > 0 ? (
+            {event.updates.length > 0 && !usingUpdatesAsDiscussion ? (
               event.updates.map((update) => (
                 <View key={update.id} style={styles.updateBlock}>
                   <Text style={styles.updateMeta}>
@@ -66,7 +68,12 @@ export function EventDetailScreen({
               ))
             ) : (
               <Text style={styles.cardSecondary}>
-                {tr(
+                {usingUpdatesAsDiscussion
+                  ? tr(
+                      "Aktualizacje organizatorów są widoczne niżej w sekcji komentarzy (fallback danych).",
+                      "Organizer updates are shown in the comments section below (data fallback).",
+                    )
+                  : tr(
                   "Brak osobnych aktualizacji organizatorów w tym wątku.",
                   "No separate organizer updates were imported from this thread yet.",
                 )}
@@ -107,8 +114,8 @@ export function EventDetailScreen({
             <Text style={styles.cardTitle}>
               {tr("Dyskusja członków", "Member discussion")}
             </Text>
-            {event.comments.length > 0 ? (
-              event.comments.map((comment) => (
+            {discussionEntries.length > 0 ? (
+              discussionEntries.map((comment) => (
                 <View key={comment.id} style={styles.commentRow}>
                   <Text style={styles.updateMeta}>
                     {comment.authorName} - {formatRelativeLabel(comment.createdAt)}

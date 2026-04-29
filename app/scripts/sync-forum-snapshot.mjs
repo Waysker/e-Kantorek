@@ -678,7 +678,11 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
     if (!bodyText) {
       return;
     }
-    const authorLink = $(element).find('a[href*="member.php?action=profile"]').first();
+    const authorLink = $(element)
+      .find(
+        '.post_author a[href*="member.php?action=profile"], .author_information a[href*="member.php?action=profile"], .author a[href*="member.php?action=profile"], a[href*="member.php?action=profile"]',
+      )
+      .first();
     const authorUrl = authorLink.attr("href");
     posts.push({
       postId: id.replace("post_", ""),
