@@ -283,7 +283,7 @@ function parseNumericRatio(rawValue: unknown): number | null {
   if (!Number.isFinite(parsed)) {
     return null;
   }
-  if (parsed < 0 || parsed > 1) {
+  if (parsed < 0 || parsed > 4) {
     return null;
   }
   return Number(parsed.toFixed(4));

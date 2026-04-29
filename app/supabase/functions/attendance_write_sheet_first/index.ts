@@ -714,8 +714,8 @@ function parseAttendanceRatioInput(input: unknown): { ratio: number; rawValue: s
     if (!Number.isFinite(input)) {
       throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be a finite number.");
     }
-    if (input < 0 || input > 1) {
-      throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be between 0 and 1.");
+    if (input < 0 || input > 4) {
+      throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be between 0 and 4.");
     }
     return {
       ratio: Number(input.toFixed(4)),
@@ -735,9 +735,21 @@ function parseAttendanceRatioInput(input: unknown): { ratio: number; rawValue: s
     throw new HttpError(422, "invalid_attendance_ratio", `Cannot parse attendance ratio value: ${normalized}`);
   }
 
-  const ratio = usesPercent || parsed > 1 ? parsed / 100 : parsed;
-  if (ratio < 0 || ratio > 1) {
-    throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be between 0 and 1.");
+  let ratio: number;
+  if (usesPercent) {
+    ratio = parsed / 100;
+  } else if (parsed <= 1) {
+    ratio = parsed;
+  } else if (parsed <= 4) {
+    ratio = parsed;
+  } else if (parsed <= 100) {
+    ratio = parsed / 100;
+  } else {
+    throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be between 0 and 4.");
+  }
+
+  if (ratio < 0 || ratio > 4) {
+    throw new HttpError(422, "invalid_attendance_ratio", "attendanceRatio must be between 0 and 4.");
   }
 
   return {

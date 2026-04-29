@@ -104,6 +104,17 @@ type SheetMemberRowRecord = {
   source_updated_at: string;
 };
 
+type ExistingMemberRecord = {
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  full_name: string;
+  instrument: string;
+  is_active: boolean;
+  source_row_number: number | null;
+  source_updated_at: string | null;
+};
+
 type PreflightResult = {
   issues: SyncIssue[];
   events: EventColumn[];
@@ -230,6 +241,78 @@ function slugify(value: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+}
+
+function normalizeNameKey(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function memberGlobalRowKey(sourceSheetId: string, sourceRowNumber: number): string {
+  return `${sourceSheetId}::${sourceRowNumber}`;
+}
+
+function damerauLevenshteinDistanceAtMostOne(left: string, right: string): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  const leftLength = left.length;
+  const rightLength = right.length;
+  if (Math.abs(leftLength - rightLength) > 1) {
+    return false;
+  }
+
+  if (leftLength === rightLength) {
+    const mismatches: number[] = [];
+    for (let index = 0; index < leftLength; index += 1) {
+      if (left[index] !== right[index]) {
+        mismatches.push(index);
+        if (mismatches.length > 2) {
+          return false;
+        }
+      }
+    }
+
+    if (mismatches.length === 1) {
+      return true;
+    }
+    if (mismatches.length === 2) {
+      const first = mismatches[0];
+      const second = mismatches[1];
+      if (second === first + 1 && left[first] === right[second] && left[second] === right[first]) {
+        return true;
+      }
+      return false;
+    }
+    return false;
+  }
+
+  const shorter = leftLength < rightLength ? left : right;
+  const longer = leftLength < rightLength ? right : left;
+  let shorterIndex = 0;
+  let longerIndex = 0;
+  let mismatchUsed = false;
+
+  while (shorterIndex < shorter.length && longerIndex < longer.length) {
+    if (shorter[shorterIndex] === longer[longerIndex]) {
+      shorterIndex += 1;
+      longerIndex += 1;
+      continue;
+    }
+
+    if (mismatchUsed) {
+      return false;
+    }
+    mismatchUsed = true;
+    longerIndex += 1;
+  }
+
+  return true;
 }
 
 function toColumnRef(indexZeroBased: number): string {
@@ -849,18 +932,32 @@ function parseAttendanceRatio(rawValue: string): { ratio: number | null; error?:
 
   const normalized = trimmed.replace(/\s+/g, "").replace(",", ".");
   const asPercent = normalized.endsWith("%");
-  const number = Number(asPercent ? normalized.slice(0, -1) : normalized);
+  const numericToken = asPercent ? normalized.slice(0, -1) : normalized;
+  const number = Number(numericToken);
 
   if (!Number.isFinite(number)) {
     return { ratio: null, error: "not_a_number" };
   }
 
-  let ratio = asPercent ? number / 100 : number;
-  if (!asPercent && number > 1 && number <= 100) {
+  // Rule:
+  // - explicit percent (`%`) is always percentage,
+  // - values <= 1 are regular attendance ratios,
+  // - values > 1 and <= 4 are treated as bonus points,
+  // - larger values up to 100 are interpreted as percent shorthand (25 -> 0.25).
+  let ratio: number;
+  if (asPercent) {
     ratio = number / 100;
+  } else if (number <= 1) {
+    ratio = number;
+  } else if (number <= 4) {
+    ratio = number;
+  } else if (number <= 100) {
+    ratio = number / 100;
+  } else {
+    return { ratio: null, error: "out_of_range" };
   }
 
-  if (ratio < 0 || ratio > 1) {
+  if (ratio < 0 || ratio > 4) {
     return { ratio: null, error: "out_of_range" };
   }
 
@@ -1625,6 +1722,396 @@ async function alignEventIdsToExistingSourceCells(
   };
 }
 
+async function alignMemberIdsToExistingRowIdentity(
+  supabaseAdmin: SupabaseAdminClient,
+  members: MemberRecord[],
+  attendanceEntries: AttendanceEntryRecord[],
+  sheetMemberRows: SheetMemberRowRecord[],
+): Promise<{
+  members: MemberRecord[];
+  attendanceEntries: AttendanceEntryRecord[];
+  sheetMemberRows: SheetMemberRowRecord[];
+  remappedMemberIdsCount: number;
+  remappedMemberPairs: Array<{ from_member_id: string; to_member_id: string }>;
+  staleSheetMemberRowsToDelete: Array<{ member_id: string; source_sheet_id: string; source_gid: string }>;
+}> {
+  if (members.length === 0 || sheetMemberRows.length === 0) {
+    return {
+      members,
+      attendanceEntries,
+      sheetMemberRows,
+      remappedMemberIdsCount: 0,
+      remappedMemberPairs: [],
+      staleSheetMemberRowsToDelete: [],
+    };
+  }
+
+  const memberById = new Map(members.map((member) => [member.member_id, member]));
+  const sourceSheetIds = Array.from(new Set(sheetMemberRows.map((row) => row.source_sheet_id)));
+  const sourceRowNumbers = Array.from(new Set(sheetMemberRows.map((row) => row.source_row_number)));
+
+  const { data: existingSheetRowsData, error: existingSheetRowsError } = await supabaseAdmin
+    .from("sheet_member_rows")
+    .select("member_id,source_sheet_id,source_gid,source_row_number,source_updated_at,updated_at")
+    .in("source_sheet_id", sourceSheetIds)
+    .in("source_row_number", sourceRowNumbers);
+
+  if (existingSheetRowsError) {
+    throw new Error(`Failed to load existing sheet_member_rows for member reconciliation: ${existingSheetRowsError.message}`);
+  }
+
+  const existingSheetRows = (existingSheetRowsData ?? []) as Array<{
+    member_id: string;
+    source_sheet_id: string;
+    source_gid: string;
+    source_row_number: number;
+    source_updated_at?: string | null;
+    updated_at?: string | null;
+  }>;
+
+  if (existingSheetRows.length === 0) {
+    return {
+      members,
+      attendanceEntries,
+      sheetMemberRows,
+      remappedMemberIdsCount: 0,
+      remappedMemberPairs: [],
+      staleSheetMemberRowsToDelete: [],
+    };
+  }
+
+  const candidateCountsByRow = new Map<string, Map<string, number>>();
+  const candidateMemberIds = new Set<string>();
+
+  for (const row of existingSheetRows) {
+    if (!row.member_id || !row.source_sheet_id || !Number.isInteger(row.source_row_number) || row.source_row_number <= 0) {
+      continue;
+    }
+    const rowKey = memberGlobalRowKey(row.source_sheet_id, row.source_row_number);
+    const candidateCounts = candidateCountsByRow.get(rowKey) ?? new Map<string, number>();
+    candidateCounts.set(row.member_id, (candidateCounts.get(row.member_id) ?? 0) + 1);
+    candidateCountsByRow.set(rowKey, candidateCounts);
+    candidateMemberIds.add(row.member_id);
+  }
+
+  if (candidateMemberIds.size === 0) {
+    return {
+      members,
+      attendanceEntries,
+      sheetMemberRows,
+      remappedMemberIdsCount: 0,
+      remappedMemberPairs: [],
+      staleSheetMemberRowsToDelete: [],
+    };
+  }
+
+  const candidateMemberIdList = Array.from(candidateMemberIds);
+  const { data: existingMembersData, error: existingMembersError } = await supabaseAdmin
+    .from("members")
+    .select("member_id,first_name,last_name,full_name,instrument,is_active,source_row_number,source_updated_at")
+    .in("member_id", candidateMemberIdList);
+  if (existingMembersError) {
+    throw new Error(`Failed to load existing members for reconciliation: ${existingMembersError.message}`);
+  }
+
+  const existingMemberById = new Map<string, ExistingMemberRecord>();
+  for (const row of (existingMembersData ?? []) as ExistingMemberRecord[]) {
+    existingMemberById.set(row.member_id, row);
+  }
+
+  const { data: profileLinksData, error: profileLinksError } = await supabaseAdmin
+    .from("profile_member_links")
+    .select("member_id")
+    .in("member_id", candidateMemberIdList);
+  if (profileLinksError) {
+    throw new Error(`Failed to load profile_member_links for reconciliation: ${profileLinksError.message}`);
+  }
+  const hasProfileLink = new Set(
+    ((profileLinksData ?? []) as Array<{ member_id: string }>).map((row) => row.member_id).filter(Boolean),
+  );
+
+  const { data: attendanceCountsData, error: attendanceCountsError } = await supabaseAdmin
+    .from("attendance_entries")
+    .select("member_id")
+    .in("member_id", candidateMemberIdList);
+  if (attendanceCountsError) {
+    throw new Error(`Failed to load attendance_entries for reconciliation: ${attendanceCountsError.message}`);
+  }
+  const attendanceCountByMemberId = new Map<string, number>();
+  for (const row of (attendanceCountsData ?? []) as Array<{ member_id: string }>) {
+    if (!row.member_id) {
+      continue;
+    }
+    attendanceCountByMemberId.set(row.member_id, (attendanceCountByMemberId.get(row.member_id) ?? 0) + 1);
+  }
+
+  const remapMemberId = new Map<string, string>();
+  for (const row of sheetMemberRows) {
+    const incomingMember = memberById.get(row.member_id);
+    if (!incomingMember) {
+      continue;
+    }
+    const rowKey = memberGlobalRowKey(row.source_sheet_id, row.source_row_number);
+    const candidateCounts = candidateCountsByRow.get(rowKey);
+    if (!candidateCounts || candidateCounts.size === 0) {
+      continue;
+    }
+
+    const incomingFirstName = normalizeNameKey(incomingMember.first_name);
+    const incomingLastName = normalizeNameKey(incomingMember.last_name);
+    const incomingInstrumentKey = normalizeInstrumentKey(incomingMember.instrument);
+    if (!incomingFirstName || !incomingLastName || !incomingInstrumentKey) {
+      continue;
+    }
+
+    const rankedCandidates = Array.from(candidateCounts.entries())
+      .map(([memberId, count]) => {
+        const existingMember = existingMemberById.get(memberId);
+        if (!existingMember) {
+          return null;
+        }
+        if (normalizeInstrumentKey(existingMember.instrument) !== incomingInstrumentKey) {
+          return null;
+        }
+        const candidateFirstName = normalizeNameKey(existingMember.first_name);
+        if (candidateFirstName !== incomingFirstName) {
+          return null;
+        }
+        const candidateLastName = normalizeNameKey(existingMember.last_name);
+        if (!damerauLevenshteinDistanceAtMostOne(candidateLastName, incomingLastName)) {
+          return null;
+        }
+        return {
+          memberId,
+          count,
+          hasProfile: hasProfileLink.has(memberId),
+          attendanceCount: attendanceCountByMemberId.get(memberId) ?? 0,
+        };
+      })
+      .filter((value): value is { memberId: string; count: number; hasProfile: boolean; attendanceCount: number } =>
+        value !== null
+      )
+      .sort((left, right) => {
+        if (left.count !== right.count) {
+          return right.count - left.count;
+        }
+        if (left.hasProfile !== right.hasProfile) {
+          return left.hasProfile ? -1 : 1;
+        }
+        if (left.attendanceCount !== right.attendanceCount) {
+          return right.attendanceCount - left.attendanceCount;
+        }
+        return left.memberId.localeCompare(right.memberId);
+      });
+
+    const best = rankedCandidates[0];
+    if (!best || best.memberId === row.member_id) {
+      continue;
+    }
+
+    const alreadyMappedTarget = remapMemberId.get(row.member_id);
+    if (alreadyMappedTarget && alreadyMappedTarget !== best.memberId) {
+      continue;
+    }
+    remapMemberId.set(row.member_id, best.memberId);
+  }
+
+  if (remapMemberId.size === 0) {
+    return {
+      members,
+      attendanceEntries,
+      sheetMemberRows,
+      remappedMemberIdsCount: 0,
+      remappedMemberPairs: [],
+      staleSheetMemberRowsToDelete: [],
+    };
+  }
+
+  const staleSheetMemberRowsToDelete = new Map<string, { member_id: string; source_sheet_id: string; source_gid: string }>();
+  for (const row of sheetMemberRows) {
+    const mappedMemberId = remapMemberId.get(row.member_id);
+    if (!mappedMemberId || mappedMemberId === row.member_id) {
+      continue;
+    }
+    const staleKey = `${row.member_id}::${row.source_sheet_id}::${row.source_gid}`;
+    staleSheetMemberRowsToDelete.set(staleKey, {
+      member_id: row.member_id,
+      source_sheet_id: row.source_sheet_id,
+      source_gid: row.source_gid,
+    });
+  }
+
+  const normalizedMembersById = new Map<string, MemberRecord>();
+  for (const member of members) {
+    const mappedMemberId = remapMemberId.get(member.member_id) ?? member.member_id;
+    const existingMember = mappedMemberId !== member.member_id ? existingMemberById.get(mappedMemberId) : undefined;
+    const candidateRecord: MemberRecord = existingMember
+      ? {
+        member_id: mappedMemberId,
+        first_name: existingMember.first_name,
+        last_name: existingMember.last_name,
+        full_name: existingMember.full_name,
+        instrument: canonicalizeInstrumentLabel(existingMember.instrument, member.instrument),
+        is_active: true,
+        source_row_number: member.source_row_number,
+        source_updated_at: member.source_updated_at,
+      }
+      : {
+        ...member,
+        member_id: mappedMemberId,
+      };
+
+    const previous = normalizedMembersById.get(mappedMemberId);
+    if (!previous) {
+      normalizedMembersById.set(mappedMemberId, candidateRecord);
+      continue;
+    }
+
+    if (normalizeWhitespace(candidateRecord.source_updated_at) > normalizeWhitespace(previous.source_updated_at)) {
+      normalizedMembersById.set(mappedMemberId, candidateRecord);
+    }
+  }
+
+  const dedupedAttendanceByMemberEvent = new Map<string, AttendanceEntryRecord>();
+  for (const entry of attendanceEntries) {
+    const mappedMemberId = remapMemberId.get(entry.member_id) ?? entry.member_id;
+    const key = `${mappedMemberId}::${entry.event_id}`;
+    const previous = dedupedAttendanceByMemberEvent.get(key);
+    if (!previous) {
+      dedupedAttendanceByMemberEvent.set(key, {
+        ...entry,
+        member_id: mappedMemberId,
+      });
+      continue;
+    }
+    if (normalizeWhitespace(entry.source_updated_at) > normalizeWhitespace(previous.source_updated_at)) {
+      dedupedAttendanceByMemberEvent.set(key, {
+        ...entry,
+        member_id: mappedMemberId,
+      });
+    }
+  }
+
+  const dedupedSheetMemberRows = new Map<string, SheetMemberRowRecord>();
+  for (const row of sheetMemberRows) {
+    const mappedMemberId = remapMemberId.get(row.member_id) ?? row.member_id;
+    const key = `${mappedMemberId}::${row.source_sheet_id}::${row.source_gid}`;
+    const previous = dedupedSheetMemberRows.get(key);
+    if (!previous) {
+      dedupedSheetMemberRows.set(key, {
+        ...row,
+        member_id: mappedMemberId,
+      });
+      continue;
+    }
+    if (normalizeWhitespace(row.source_updated_at) > normalizeWhitespace(previous.source_updated_at)) {
+      dedupedSheetMemberRows.set(key, {
+        ...row,
+        member_id: mappedMemberId,
+      });
+    }
+  }
+
+  return {
+    members: Array.from(normalizedMembersById.values()),
+    attendanceEntries: Array.from(dedupedAttendanceByMemberEvent.values()),
+    sheetMemberRows: Array.from(dedupedSheetMemberRows.values()),
+    remappedMemberIdsCount: remapMemberId.size,
+    remappedMemberPairs: Array.from(remapMemberId.entries()).map(([from_member_id, to_member_id]) => ({
+      from_member_id,
+      to_member_id,
+    })),
+    staleSheetMemberRowsToDelete: Array.from(staleSheetMemberRowsToDelete.values()),
+  };
+}
+
+async function pruneStaleSheetMemberRows(
+  supabaseAdmin: SupabaseAdminClient,
+  rowsToDelete: Array<{ member_id: string; source_sheet_id: string; source_gid: string }>,
+): Promise<number> {
+  if (rowsToDelete.length === 0) {
+    return 0;
+  }
+
+  let deletedCount = 0;
+  for (const row of rowsToDelete) {
+    const { data, error } = await supabaseAdmin
+      .from("sheet_member_rows")
+      .delete()
+      .eq("member_id", row.member_id)
+      .eq("source_sheet_id", row.source_sheet_id)
+      .eq("source_gid", row.source_gid)
+      .select("member_id");
+    if (error) {
+      throw new Error(
+        `Failed to prune stale sheet_member_rows for ${row.member_id}/${row.source_sheet_id}/${row.source_gid}: ${error.message}`,
+      );
+    }
+    deletedCount += data?.length ?? 0;
+  }
+
+  return deletedCount;
+}
+
+async function deactivateOrphanedRemappedMembers(
+  supabaseAdmin: SupabaseAdminClient,
+  remappedMemberPairs: Array<{ from_member_id: string; to_member_id: string }>,
+): Promise<number> {
+  const candidateMemberIds = Array.from(
+    new Set(remappedMemberPairs.map((pair) => normalizeWhitespace(pair.from_member_id)).filter(Boolean)),
+  );
+  if (candidateMemberIds.length === 0) {
+    return 0;
+  }
+
+  const [{ data: profileLinksData, error: profileLinksError }, { data: attendanceData, error: attendanceError }, {
+    data: sheetRowsData,
+    error: sheetRowsError,
+  }] = await Promise.all([
+    supabaseAdmin.from("profile_member_links").select("member_id").in("member_id", candidateMemberIds),
+    supabaseAdmin.from("attendance_entries").select("member_id").in("member_id", candidateMemberIds),
+    supabaseAdmin.from("sheet_member_rows").select("member_id").in("member_id", candidateMemberIds),
+  ]);
+
+  if (profileLinksError) {
+    throw new Error(`Failed to inspect profile_member_links for remapped members: ${profileLinksError.message}`);
+  }
+  if (attendanceError) {
+    throw new Error(`Failed to inspect attendance_entries for remapped members: ${attendanceError.message}`);
+  }
+  if (sheetRowsError) {
+    throw new Error(`Failed to inspect sheet_member_rows for remapped members: ${sheetRowsError.message}`);
+  }
+
+  const blockedByProfile = new Set(
+    ((profileLinksData ?? []) as Array<{ member_id: string }>).map((row) => row.member_id).filter(Boolean),
+  );
+  const blockedByAttendance = new Set(
+    ((attendanceData ?? []) as Array<{ member_id: string }>).map((row) => row.member_id).filter(Boolean),
+  );
+  const blockedBySheetRows = new Set(
+    ((sheetRowsData ?? []) as Array<{ member_id: string }>).map((row) => row.member_id).filter(Boolean),
+  );
+
+  const toDeactivate = candidateMemberIds.filter((memberId) =>
+    !blockedByProfile.has(memberId) && !blockedByAttendance.has(memberId) && !blockedBySheetRows.has(memberId)
+  );
+
+  if (toDeactivate.length === 0) {
+    return 0;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("members")
+    .update({ is_active: false })
+    .in("member_id", toDeactivate)
+    .select("member_id");
+  if (error) {
+    throw new Error(`Failed to deactivate remapped orphan members: ${error.message}`);
+  }
+  return data?.length ?? 0;
+}
+
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse({ error: "method_not_allowed" }, 405);
@@ -1860,7 +2347,7 @@ Deno.serve(async (request) => {
       }
     }
 
-    const mergedPreflight: PreflightResult = {
+    let mergedPreflight: PreflightResult = {
       issues: mergedIssues,
       events: Array.from(mergedEventsMap.values()),
       members: Array.from(mergedMembersMap.values()),
@@ -1872,6 +2359,30 @@ Deno.serve(async (request) => {
         attendanceCellsEmpty: totalAttendanceCellsEmpty,
       },
     };
+
+    const memberIdentityAlignment = await alignMemberIdsToExistingRowIdentity(
+      supabaseAdmin,
+      mergedPreflight.members,
+      mergedPreflight.attendanceEntries,
+      Array.from(mergedSheetMemberRowsMap.values()),
+    );
+    mergedPreflight = {
+      ...mergedPreflight,
+      members: memberIdentityAlignment.members,
+      attendanceEntries: memberIdentityAlignment.attendanceEntries,
+      stats: {
+        ...mergedPreflight.stats,
+        participants: memberIdentityAlignment.members.length,
+        attendanceCellsFilled: memberIdentityAlignment.attendanceEntries.length,
+      },
+    };
+    mergedSheetMemberRowsMap.clear();
+    for (const row of memberIdentityAlignment.sheetMemberRows) {
+      mergedSheetMemberRowsMap.set(
+        `${row.member_id}::${row.source_sheet_id}::${row.source_gid}`,
+        row,
+      );
+    }
 
     if (processedAttendanceSources === 0) {
       mergedPreflight.issues.push({
@@ -1912,6 +2423,9 @@ Deno.serve(async (request) => {
       events_upsert_candidates: mergedPreflight.events.length,
       attendance_upsert_candidates: mergedPreflight.attendanceEntries.length,
       sheet_member_rows_upsert_candidates: mergedSheetMemberRowsMap.size,
+      members_remapped_to_existing_row_identity: memberIdentityAlignment.remappedMemberIdsCount,
+      stale_sheet_member_rows_pruned_after_member_remap: 0,
+      remapped_members_deactivated: 0,
       attendance_entries_skipped_due_to_invalid_events: 0,
     };
     if (effectiveSources.length === 1) {
@@ -1986,6 +2500,14 @@ Deno.serve(async (request) => {
         Array.from(finalValidEventIds),
         finalValidAttendanceEntries,
       );
+      const prunedStaleSheetMemberRows = await pruneStaleSheetMemberRows(
+        supabaseAdmin,
+        memberIdentityAlignment.staleSheetMemberRowsToDelete,
+      );
+      const deactivatedRemappedMembers = await deactivateOrphanedRemappedMembers(
+        supabaseAdmin,
+        memberIdentityAlignment.remappedMemberPairs,
+      );
 
       await supabaseAdmin.from("change_journal").insert({
         entity_type: "sync_run",
@@ -1999,6 +2521,9 @@ Deno.serve(async (request) => {
           attendance_entries_upserted: finalValidAttendanceEntries.length,
           attendance_entries_pruned: prunedAttendanceEntries,
           events_remapped_to_existing_source_cell: alignedBySourceCells.remappedEventIdsCount,
+          members_remapped_to_existing_row_identity: memberIdentityAlignment.remappedMemberIdsCount,
+          stale_sheet_member_rows_pruned_after_member_remap: prunedStaleSheetMemberRows,
+          remapped_members_deactivated: deactivatedRemappedMembers,
           source_ref: sourceRef,
           source_refs: effectiveSources.map((source) => source.sourceRef),
         },
@@ -2012,6 +2537,9 @@ Deno.serve(async (request) => {
       summary.attendance_entries_skipped_due_to_invalid_events =
         mergedPreflight.attendanceEntries.length - validAttendanceEntriesInitial.length;
       summary.attendance_entries_pruned = prunedAttendanceEntries;
+      summary.members_remapped_to_existing_row_identity = memberIdentityAlignment.remappedMemberIdsCount;
+      summary.stale_sheet_member_rows_pruned_after_member_remap = prunedStaleSheetMemberRows;
+      summary.remapped_members_deactivated = deactivatedRemappedMembers;
       summary.stale_rows_not_pruned = false;
     }
 
