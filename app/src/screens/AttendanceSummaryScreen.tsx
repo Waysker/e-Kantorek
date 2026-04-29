@@ -49,7 +49,7 @@ type SectionSummary = {
   members: MemberSummaryRow[];
 };
 
-type ScopePreset = "season" | "30d" | "90d" | "ytd" | "all";
+type ScopePreset = "season" | "30d" | "90d" | "last_month" | "last_3_months" | "ytd" | "all";
 type SortMode = "alpha" | "points_section" | "points_all";
 
 type SyncRunRow = {
@@ -105,6 +105,16 @@ function getPresetScope(preset: ScopePreset): { startDate: string; endDate: stri
     const dayOffset = preset === "30d" ? 29 : 89;
     const start = new Date(now);
     start.setDate(now.getDate() - dayOffset);
+    return {
+      startDate: toIsoDateLocal(start),
+      endDate,
+    };
+  }
+
+  if (preset === "last_month" || preset === "last_3_months") {
+    const monthOffset = preset === "last_month" ? 1 : 3;
+    const start = new Date(now);
+    start.setMonth(start.getMonth() - monthOffset);
     return {
       startDate: toIsoDateLocal(start),
       endDate,
@@ -470,6 +480,12 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           </Pressable>
           <Pressable style={styles.presetButton} onPress={() => applyPreset("90d")}>
             <Text style={styles.presetButtonLabel}>{tr("90 dni", "90 days")}</Text>
+          </Pressable>
+          <Pressable style={styles.presetButton} onPress={() => applyPreset("last_month")}>
+            <Text style={styles.presetButtonLabel}>{tr("Ostatni miesiąc", "Last month")}</Text>
+          </Pressable>
+          <Pressable style={styles.presetButton} onPress={() => applyPreset("last_3_months")}>
+            <Text style={styles.presetButtonLabel}>{tr("Ostatnie 3 miesiące", "Last 3 months")}</Text>
           </Pressable>
           <Pressable style={styles.presetButton} onPress={() => applyPreset("ytd")}>
             <Text style={styles.presetButtonLabel}>{tr("Rok", "YTD")}</Text>
