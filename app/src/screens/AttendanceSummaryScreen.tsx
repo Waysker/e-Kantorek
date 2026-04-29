@@ -50,6 +50,7 @@ type SectionSummary = {
 };
 
 type ScopePreset = "season" | "30d" | "90d" | "ytd" | "all";
+type SortMode = "alpha" | "points_section" | "points_all";
 
 type SyncRunRow = {
   finished_at: string | null;
@@ -154,6 +155,17 @@ function compareSectionLabels(left: string, right: string): number {
   return left.localeCompare(right, "pl");
 }
 
+function compareMembersByName(left: MemberSummaryRow, right: MemberSummaryRow): number {
+  return left.fullName.localeCompare(right.fullName, "pl");
+}
+
+function compareMembersByPoints(left: MemberSummaryRow, right: MemberSummaryRow): number {
+  if (left.points !== right.points) {
+    return right.points - left.points;
+  }
+  return compareMembersByName(left, right);
+}
+
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
   const { width: viewportWidth } = useWindowDimensions();
   const isDesktopLayout = viewportWidth >= tokens.breakpoints.desktop;
@@ -181,6 +193,32 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
   const [latestRefSyncAt, setLatestRefSyncAt] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("alpha");
+
+  const displaySections = useMemo<SectionSummary[]>(() => {
+    if (sortMode === "alpha") {
+      return sections;
+    }
+
+    if (sortMode === "points_section") {
+      return sections.map((section) => ({
+        ...section,
+        members: [...section.members].sort(compareMembersByPoints),
+      }));
+    }
+
+    const allMembers = sections
+      .flatMap((section) => section.members)
+      .sort(compareMembersByPoints);
+
+    return allMembers.length > 0
+      ? [{
+        key: "all-members",
+        label: tr("Wszyscy", "All members"),
+        members: allMembers,
+      }]
+      : [];
+  }, [sections, sortMode]);
 
   const applyPreset = useCallback((preset: ScopePreset) => {
     const next = getPresetScope(preset);
@@ -370,8 +408,8 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           .map(([label, rows]) => ({
             key: normalizeInstrumentKey(label),
             label,
-            members: [...rows].sort((left, right) => left.fullName.localeCompare(right.fullName, "pl")),
-          }));
+              members: [...rows].sort(compareMembersByName),
+            }));
 
         setSections(nextSections);
       } catch (error) {
@@ -480,6 +518,42 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         <Text style={styles.cardSecondary}>
           {tr("Liczba wydarzeń w zakresie", "Number of events in scope")}: {totalEvents}
         </Text>
+        <View style={styles.sortRow}>
+          <Pressable
+            style={[styles.presetButton, sortMode === "alpha" && styles.presetButtonActive]}
+            onPress={() => setSortMode("alpha")}
+          >
+            <Text style={[styles.presetButtonLabel, sortMode === "alpha" && styles.presetButtonLabelActive]}>
+              {tr("A-Z", "A-Z")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.presetButton, sortMode === "points_section" && styles.presetButtonActive]}
+            onPress={() => setSortMode("points_section")}
+          >
+            <Text
+              style={[
+                styles.presetButtonLabel,
+                sortMode === "points_section" && styles.presetButtonLabelActive,
+              ]}
+            >
+              {tr("Punkty sekcje", "Points by section")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.presetButton, sortMode === "points_all" && styles.presetButtonActive]}
+            onPress={() => setSortMode("points_all")}
+          >
+            <Text
+              style={[
+                styles.presetButtonLabel,
+                sortMode === "points_all" && styles.presetButtonLabelActive,
+              ]}
+            >
+              {tr("Punkty wszyscy", "Points all")}
+            </Text>
+          </Pressable>
+        </View>
 
         {isLoading ? (
           <View style={styles.loadingWrap}>
@@ -499,14 +573,14 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           </View>
         ) : null}
 
-        {!isLoading && !errorMessage && sections.length === 0 ? (
+        {!isLoading && !errorMessage && displaySections.length === 0 ? (
           <Text style={styles.cardBody}>
             {tr("Brak muzyków lub danych do policzenia w tym zakresie.", "No members or no data to compute in this scope.")}
           </Text>
         ) : null}
 
         {!isLoading && !errorMessage
-          ? sections.map((section) => (
+          ? displaySections.map((section) => (
               <View key={section.key} style={styles.sectionBlock}>
                 <Text style={styles.sectionLabel}>{section.label}</Text>
                 <View
@@ -629,6 +703,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
   },
+  presetButtonActive: {
+    backgroundColor: tokens.colors.brand,
+    borderColor: tokens.colors.brand,
+  },
+  presetButtonLabelActive: {
+    color: tokens.colors.surface,
+  },
   scopeInputsRow: {
     marginTop: tokens.spacing.md,
     flexDirection: "row",
@@ -673,6 +754,12 @@ const styles = StyleSheet.create({
   loadingWrap: {
     marginTop: tokens.spacing.md,
     alignItems: "flex-start",
+  },
+  sortRow: {
+    marginTop: tokens.spacing.sm,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: tokens.spacing.xs,
   },
   errorBox: {
     marginTop: tokens.spacing.md,
