@@ -126,6 +126,13 @@ Role model:
 - `board`: can manage factual attendance
 - `admin`: can manage factual attendance + change user roles
 
+Attendance summary panel source of truth:
+
+- `Profile -> Attendance summary` computes only from events with
+  `events.source_sheet_id == EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID`.
+- If this env var is missing, the panel intentionally refuses to compute
+  (to prevent mixing ref/copy/test data).
+
 Role management hardening:
 
 - `supabase/migrations/019_security_hardening_roles_and_rpc_privileges.sql`

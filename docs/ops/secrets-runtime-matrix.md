@@ -20,6 +20,7 @@ Keep every variable in the runtime where it is consumed.
 |---|---|---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | public config | web/app build | GitHub Variable or Secret | Required for Pages/web builds. |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public config | web/app build | GitHub Variable or Secret | Publishable key, still safe as public client config. |
+| `EXPO_PUBLIC_ATTENDANCE_REFERENCE_SHEET_ID` | public config | web/app build | GitHub Variable or Secret | Required by attendance summary panel; enforces ref-only source filter. |
 | `ORAGH_FORUM_USERNAME` | secret | GitHub forum sync workflow | GitHub Secret | Runner-side sync login. |
 | `ORAGH_FORUM_PASSWORD` | secret | GitHub forum sync workflow | GitHub Secret | Runner-side sync login. |
 | `SUPABASE_URL` | secret-ish config | GitHub forum publish workflow | GitHub Secret | Used by publish scripts in CI. |

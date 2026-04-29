@@ -43,6 +43,7 @@ export function ProfileScreen({
   onSignOut,
   canManageActualAttendance,
   onOpenAttendanceManager,
+  onOpenAttendanceSummary,
   canManageRoles,
   onOpenRoleManagement,
 }: {
@@ -53,6 +54,7 @@ export function ProfileScreen({
   onSignOut?: () => Promise<void>;
   canManageActualAttendance?: boolean;
   onOpenAttendanceManager?: () => void;
+  onOpenAttendanceSummary?: () => void;
   canManageRoles?: boolean;
   onOpenRoleManagement?: () => void;
 }) {
@@ -111,6 +113,28 @@ export function ProfileScreen({
           <Pressable style={styles.manageButton} onPress={onOpenAttendanceManager}>
             <Text style={styles.manageButtonLabel}>
               {tr("Otwórz rejestr", "Open register")}
+            </Text>
+          </Pressable>
+        </SurfaceCard>
+      ) : null}
+
+      {canManageActualAttendance && onOpenAttendanceSummary ? (
+        <SurfaceCard variant="default">
+          <Text style={styles.cardEyebrow}>
+            {tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}
+          </Text>
+          <Text style={styles.cardTitle}>
+            {tr("Podsumowanie obecności", "Attendance summary")}
+          </Text>
+          <Text style={styles.cardBody}>
+            {tr(
+              "Lista orkiestrantów pogrupowana sekcjami z procentem i sumą punktów dla wybranego zakresu. Źródło: ref attendance.",
+              "Orchestra members grouped by section with attendance percentage and total points for selected scope. Source: ref attendance.",
+            )}
+          </Text>
+          <Pressable style={styles.manageButton} onPress={onOpenAttendanceSummary}>
+            <Text style={styles.manageButtonLabel}>
+              {tr("Otwórz podsumowanie", "Open summary")}
             </Text>
           </Pressable>
         </SurfaceCard>

@@ -25,6 +25,7 @@ import { EventsScreen } from "./src/screens/EventsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
 import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
+import { AttendanceSummaryScreen } from "./src/screens/AttendanceSummaryScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
@@ -102,6 +103,7 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     candidate.name === "events" ||
     candidate.name === "profile" ||
     candidate.name === "attendanceManager" ||
+    candidate.name === "attendanceSummary" ||
     candidate.name === "roleManagement"
   ) {
     return true;
@@ -716,6 +718,11 @@ export default function App() {
                 ? () => pushRoute({ name: "attendanceManager" })
                 : undefined
             }
+            onOpenAttendanceSummary={
+              canManageAttendance
+                ? () => pushRoute({ name: "attendanceSummary" })
+                : undefined
+            }
             canManageRoles={canManageRoles}
             onOpenRoleManagement={
               canManageRoles
@@ -727,6 +734,15 @@ export default function App() {
       case "attendanceManager":
         return canManageAttendance ? (
           <AttendanceManagerScreen onBack={() => goBack({ name: "profile" })} />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "profile" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
+        );
+      case "attendanceSummary":
+        return canManageAttendance ? (
+          <AttendanceSummaryScreen onBack={() => goBack({ name: "profile" })} />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "profile" })}
