@@ -18,13 +18,16 @@ Supabase secrets (function runtime):
 - `SMOKE_ATTENDANCE_EVENT_ID`
 - `SMOKE_ATTENDANCE_MEMBER_ID`
 - optional `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK`
+- optional `SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT` (default `false`; can be enabled per call/workflow)
 - `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
+- `SHEET_SYNC_FUNCTION_AUTH_TOKEN` (required only when sync contract check is enabled)
 
 GitHub settings (trigger only):
 
 - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
 - variable: `SUPABASE_PROJECT_REF`
 - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+- optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (defaults to `true` in workflow)
 
 ## What Smoke Validates
 
@@ -32,6 +35,7 @@ GitHub settings (trigger only):
 2. Attendance write through `attendance_write_sheet_first` (`mode=enqueue_batch`, `db_first`).
 3. DB assertion that value changed.
 4. Rollback assertion that original value was restored.
+5. Optional contract check of `sheet_to_supabase_sync` (`dryRun=true`), including response shape validation.
 
 ## Workflow
 

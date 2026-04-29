@@ -157,6 +157,7 @@ GitHub workflow inputs:
 - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
 - variable: `SUPABASE_PROJECT_REF`
 - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+- optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (default `true` in workflow; enables extra sync contract check)
 
 Manual trigger:
 
@@ -165,7 +166,7 @@ curl -sS -X POST \
   "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
   -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
-  -d '{"requireExportTriggerOk":false}'
+  -d '{"requireExportTriggerOk":false,"checkSyncContract":true}'
 ```
 
 Local fallback smoke (debug only):

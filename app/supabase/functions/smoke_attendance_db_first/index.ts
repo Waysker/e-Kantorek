@@ -50,9 +50,15 @@ const DEFAULT_REQUIRE_EXPORT_TRIGGER_OK = parseBooleanEnv(
   Deno.env.get("SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK"),
   false,
 );
+const DEFAULT_CHECK_SYNC_CONTRACT = parseBooleanEnv(
+  Deno.env.get("SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT"),
+  false,
+);
 const ATTENDANCE_WRITE_FUNCTION_URL =
   normalizeWhitespace(Deno.env.get("SMOKE_ATTENDANCE_WRITE_FUNCTION_URL") ?? "") ||
   normalizeWhitespace(Deno.env.get("EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL") ?? "");
+const SHEET_SYNC_FUNCTION_URL =
+  normalizeWhitespace(Deno.env.get("SMOKE_SHEET_SYNC_FUNCTION_URL") ?? "");
 
 function normalizeWhitespace(value: unknown): string {
   return String(value ?? "")
@@ -132,6 +138,15 @@ function deriveAttendanceWriteFunctionUrl(supabaseUrl: string): string {
   return `https://${projectRef}.functions.supabase.co/attendance_write_sheet_first`;
 }
 
+function deriveSheetSyncFunctionUrl(supabaseUrl: string): string {
+  const base = new URL(supabaseUrl);
+  const projectRef = base.hostname.split(".")[0] ?? "";
+  if (!projectRef) {
+    throw new HttpError(500, "invalid_supabase_url", "Could not derive project ref from SUPABASE_URL.");
+  }
+  return `https://${projectRef}.functions.supabase.co/sheet_to_supabase_sync`;
+}
+
 function parseNumericRatio(rawValue: unknown): number | null {
   if (rawValue === null || rawValue === undefined) {
     return null;
@@ -198,6 +213,97 @@ async function callAttendanceWrite(params: {
   }
 
   return payload as Record<string, unknown>;
+}
+
+type SyncContractCheckResult = {
+  http_status: number;
+  run_id: string;
+  status: "dry_run" | "success" | "failed";
+  dry_run: boolean;
+};
+
+async function verifySheetSyncContract(params: {
+  functionUrl: string;
+  functionAuthToken: string;
+  runTag: string;
+}): Promise<SyncContractCheckResult> {
+  const response = await fetch(params.functionUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.functionAuthToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      trigger: "smoke_contract",
+      dryRun: true,
+      smokeRunTag: params.runTag,
+    }),
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (response.status !== 200 && response.status !== 422) {
+    throw new HttpError(
+      502,
+      "sync_contract_http_status_unexpected",
+      `sheet_to_supabase_sync returned unexpected status ${response.status}.`,
+      {
+        response_status: response.status,
+        response_payload: payload,
+      },
+    );
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new HttpError(
+      502,
+      "sync_contract_invalid_payload",
+      "sheet_to_supabase_sync returned invalid JSON payload.",
+      { response_status: response.status },
+    );
+  }
+
+  const asRecord = payload as Record<string, unknown>;
+  const runId = normalizeWhitespace(asRecord.run_id ?? "");
+  const status = normalizeWhitespace(asRecord.status ?? "");
+  const dryRun = asRecord.dry_run;
+  const summary = asRecord.summary;
+
+  if (!runId) {
+    throw new HttpError(502, "sync_contract_missing_run_id", "sheet_to_supabase_sync payload missing run_id.", {
+      response_payload: payload,
+    });
+  }
+
+  if (status !== "dry_run" && status !== "success" && status !== "failed") {
+    throw new HttpError(502, "sync_contract_invalid_status", `Unexpected sync status: ${status || "empty"}.`, {
+      response_payload: payload,
+    });
+  }
+
+  if (dryRun !== true) {
+    throw new HttpError(502, "sync_contract_invalid_dry_run", "Expected dry_run=true in sync contract smoke response.", {
+      response_payload: payload,
+    });
+  }
+
+  if (!summary || typeof summary !== "object") {
+    throw new HttpError(502, "sync_contract_missing_summary", "Sync response is missing summary object.", {
+      response_payload: payload,
+    });
+  }
+
+  return {
+    http_status: response.status,
+    run_id: runId,
+    status,
+    dry_run: true,
+  };
 }
 
 async function loadProfile(
@@ -293,6 +399,10 @@ Deno.serve(async (request) => {
     const requireExportTriggerOk = parseBooleanInput(
       body.requireExportTriggerOk ?? body.require_export_trigger_ok,
       DEFAULT_REQUIRE_EXPORT_TRIGGER_OK,
+    );
+    const checkSyncContract = parseBooleanInput(
+      body.checkSyncContract ?? body.check_sync_contract,
+      DEFAULT_CHECK_SYNC_CONTRACT,
     );
     const overrideTemporaryRatio = parseNumericRatio(
       body.temporaryRatio ?? body.temporary_ratio ?? body.testRatio ?? body.test_ratio,
@@ -411,6 +521,25 @@ Deno.serve(async (request) => {
         );
       }
 
+      let syncContractCheck: SyncContractCheckResult | null = null;
+      if (checkSyncContract) {
+        const sheetSyncFunctionAuthToken = normalizeWhitespace(Deno.env.get("SHEET_SYNC_FUNCTION_AUTH_TOKEN") ?? "");
+        if (!sheetSyncFunctionAuthToken) {
+          throw new HttpError(
+            500,
+            "missing_sheet_sync_auth_token",
+            "SHEET_SYNC_FUNCTION_AUTH_TOKEN is required for sync contract smoke check.",
+          );
+        }
+
+        const sheetSyncUrl = SHEET_SYNC_FUNCTION_URL || deriveSheetSyncFunctionUrl(SUPABASE_URL);
+        syncContractCheck = await verifySheetSyncContract({
+          functionUrl: sheetSyncUrl,
+          functionAuthToken: sheetSyncFunctionAuthToken,
+          runTag,
+        });
+      }
+
       return jsonResponse({
         status: "ok",
         smoke_run_tag: runTag,
@@ -423,6 +552,8 @@ Deno.serve(async (request) => {
         original_ratio: originalRatio,
         temporary_ratio: temporaryRatio,
         require_export_trigger_ok: requireExportTriggerOk,
+        check_sync_contract: checkSyncContract,
+        sync_contract_check: syncContractCheck,
       });
     } catch (error) {
       if (!restoreAttempted) {

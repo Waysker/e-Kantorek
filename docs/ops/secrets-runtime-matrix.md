@@ -40,6 +40,7 @@ Keep every variable in the runtime where it is consumed.
 | `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` | secret | smoke trigger auth | Supabase Secret + GitHub Secret | Only intentionally duplicated secret. |
 | `SUPABASE_PROJECT_REF` | config | smoke workflow trigger | GitHub Variable | Non-sensitive project ref for function URL. |
 | `SMOKE_REQUIRE_EXPORT_TRIGGER_OK` | config | smoke workflow trigger | GitHub Variable | Optional strict smoke mode. |
+| `SMOKE_CHECK_SYNC_CONTRACT` | config | smoke workflow trigger | GitHub Variable | Optional gate that enables sync contract check (`true` by default in workflow). |
 
 ## Hybrid Smoke Model
 
@@ -52,6 +53,7 @@ Design:
 1. Smoke logic and test credentials stay in Supabase function runtime.
 2. GitHub has only trigger token + project ref.
 3. Smoke run writes and rolls back the same fixed row to stay idempotent.
+4. Optional sync contract check reuses `SHEET_SYNC_FUNCTION_AUTH_TOKEN` from Supabase runtime only.
 
 ## Rotation Policy
 

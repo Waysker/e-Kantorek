@@ -12,7 +12,7 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 - `Phase 2`: completed (`022_harden_dedupe_queue_preservation.sql` finalizes open-queue preservation)
 - `Phase 3`: completed
 - `Phase 4`: completed
-- `Phase 5`: in progress
+- `Phase 5`: completed
 
 ### Completed Highlights
 
@@ -31,6 +31,7 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 13. `app/README.md` refreshed to current role/write-path runtime and updated docs references.
 14. Canonical GitHub vs Supabase ownership matrix updated (`docs/ops/secrets-runtime-matrix.md`).
 15. Dedicated function-error remediation runbook + hybrid smoke model doc added.
+16. Smoke quality gate workflow now optionally verifies `sheet_to_supabase_sync` response contract (`dryRun=true`) in addition to db_first rollback check.
 
 ## Phase 0: Security Hotfix (immediate)
 

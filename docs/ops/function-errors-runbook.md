@@ -64,6 +64,8 @@ order by status;
 | `smoke_attendance_db_first` | `smoke_write_failed` | Attendance write call in smoke failed. | Check write function logs and role of smoke user (`section`/`board`/`admin`). |
 | `smoke_attendance_db_first` | `smoke_write_not_applied` | Expected row value was not changed by smoke write. | Validate fixed smoke target (`event_id`,`member_id`) and queue worker/export path. |
 | `smoke_attendance_db_first` | `smoke_rollback_failed` | Smoke could not restore original value. | Immediate manual rollback in DB, then fix function and rerun smoke. |
+| `smoke_attendance_db_first` | `missing_sheet_sync_auth_token` | Sync contract check enabled, but function has no sync auth token. | Set `SHEET_SYNC_FUNCTION_AUTH_TOKEN` in Supabase secrets or disable `checkSyncContract` for smoke call. |
+| `smoke_attendance_db_first` | `sync_contract_http_status_unexpected` / `sync_contract_invalid_payload` / `sync_contract_missing_run_id` / `sync_contract_invalid_status` / `sync_contract_invalid_dry_run` / `sync_contract_missing_summary` | `sheet_to_supabase_sync` contract check failed. | Inspect `sheet_to_supabase_sync` logs and response payload; validate auth token, payload contract, and function deployment version. |
 
 ## Platform-Level Errors Seen in Client Calls
 

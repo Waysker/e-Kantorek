@@ -74,6 +74,7 @@ GitHub Actions trigger setup:
   - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
   - variable: `SUPABASE_PROJECT_REF`
   - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
+  - optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (defaults to `true`, validates `sheet_to_supabase_sync` response contract)
 
 Manual trigger:
 

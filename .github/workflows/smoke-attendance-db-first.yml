@@ -32,6 +32,7 @@ jobs:
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN: ${{ secrets.SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN }}
           SMOKE_REQUIRE_EXPORT_TRIGGER_OK: ${{ vars.SMOKE_REQUIRE_EXPORT_TRIGGER_OK || 'false' }}
+          SMOKE_CHECK_SYNC_CONTRACT: ${{ vars.SMOKE_CHECK_SYNC_CONTRACT || 'true' }}
         run: |
           if [ -z "$SUPABASE_PROJECT_REF" ]; then
             if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
@@ -56,8 +57,14 @@ jobs:
             *) require_export=false ;;
           esac
 
+          normalized_contract_flag="$(echo "${SMOKE_CHECK_SYNC_CONTRACT:-true}" | tr '[:upper:]' '[:lower:]')"
+          case "$normalized_contract_flag" in
+            1|true|yes|on) check_sync_contract=true ;;
+            *) check_sync_contract=false ;;
+          esac
+
           smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
-          payload="{\"requireExportTriggerOk\":${require_export}}"
+          payload="{\"requireExportTriggerOk\":${require_export},\"checkSyncContract\":${check_sync_contract}}"
 
           response="$(curl -sS --fail-with-body -X POST "$smoke_url" \
             -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
