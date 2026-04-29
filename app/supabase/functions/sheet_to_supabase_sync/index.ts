@@ -179,6 +179,24 @@ function normalizeWhitespace(value: unknown): string {
     .trim();
 }
 
+function parseNonNegativeIntegerInput(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    if (!/^\d+$/.test(trimmed)) {
+      return null;
+    }
+    const parsed = Number(trimmed);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function normalizeInstrumentKey(value: unknown): string {
   return normalizeWhitespace(value)
     .normalize("NFD")
@@ -1467,11 +1485,50 @@ Deno.serve(async (request) => {
     );
   }
 
+  const sourceOffsetWasProvided = body.sourceOffset !== undefined;
+  const sourceLimitWasProvided = body.sourceLimit !== undefined;
+  const sourceOffset = sourceOffsetWasProvided ? parseNonNegativeIntegerInput(body.sourceOffset) : 0;
+  const sourceLimit = sourceLimitWasProvided ? parseNonNegativeIntegerInput(body.sourceLimit) : null;
+
+  if (sourceOffset === null) {
+    return jsonResponse(
+      {
+        error: "invalid_source_offset",
+        message: "`sourceOffset` must be a non-negative integer.",
+      },
+      400,
+    );
+  }
+
+  if (sourceLimitWasProvided && (sourceLimit === null || sourceLimit <= 0)) {
+    return jsonResponse(
+      {
+        error: "invalid_source_limit",
+        message: "`sourceLimit` must be a positive integer.",
+      },
+      400,
+    );
+  }
+
+  const effectiveSources = sourceLimit === null
+    ? sources.slice(sourceOffset)
+    : sources.slice(sourceOffset, sourceOffset + sourceLimit);
+  if (effectiveSources.length === 0) {
+    return jsonResponse(
+      {
+        error: "missing_sheet_source",
+        message: "No sources left after applying sourceOffset/sourceLimit.",
+      },
+      400,
+    );
+  }
+  const sourceSliceApplied = sourceOffset > 0 || sourceLimit !== null;
+
   const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
-  const sourceRef = sources.length === 1 ? sources[0].sourceRef : `multi:${sources.length}`;
+  const sourceRef = effectiveSources.length === 1 ? effectiveSources[0].sourceRef : `multi:${effectiveSources.length}`;
   const { data: runStart, error: runStartError } = await supabaseAdmin
     .from("sync_runs")
     .insert({
@@ -1485,8 +1542,12 @@ Deno.serve(async (request) => {
         dry_run_requested: requestedDryRun ?? null,
         dry_run_effective: dryRun,
         source_resolution_mode: sourceResolutionMode,
-        sources_count: sources.length,
-        sources: sources.map((source) => ({
+        sources_count: effectiveSources.length,
+        sources_total_count: sources.length,
+        source_slice_applied: sourceSliceApplied,
+        source_slice_offset: sourceOffset,
+        source_slice_limit: sourceLimit,
+        sources: effectiveSources.map((source) => ({
           source_ref: source.sourceRef,
           sheet_id: source.sheetId,
           gid: source.gid,
@@ -1508,7 +1569,7 @@ Deno.serve(async (request) => {
   }
 
   const runId = runStart.id as string;
-  const csvUrls = sources.map((source) =>
+  const csvUrls = effectiveSources.map((source) =>
     `https://docs.google.com/spreadsheets/d/${source.sheetId}/gviz/tq?tqx=out:csv&gid=${source.gid}`
   );
 
@@ -1525,8 +1586,8 @@ Deno.serve(async (request) => {
     let processedAttendanceSources = 0;
     let skippedNonAttendanceSources = 0;
 
-    for (let index = 0; index < sources.length; index += 1) {
-      const source = sources[index];
+    for (let index = 0; index < effectiveSources.length; index += 1) {
+      const source = effectiveSources[index];
       const csvUrl = csvUrls[index];
       const response = await fetch(csvUrl, {
         headers: {
@@ -1648,12 +1709,16 @@ Deno.serve(async (request) => {
     const summary: Record<string, unknown> = {
       trigger,
       source_resolution_mode: sourceResolutionMode,
-      sources_count: sources.length,
+      sources_count: effectiveSources.length,
+      sources_total_count: sources.length,
+      source_slice_applied: sourceSliceApplied,
+      source_slice_offset: sourceOffset,
+      source_slice_limit: sourceLimit,
       attendance_sources_processed: processedAttendanceSources,
       sources_skipped_non_attendance_layout: skippedNonAttendanceSources,
       global_dominant_year: globalDominantYear,
-      source_refs: sources.map((source) => source.sourceRef),
-      source_labels: sources.map((source) => source.label ?? source.sourceRef),
+      source_refs: effectiveSources.map((source) => source.sourceRef),
+      source_labels: effectiveSources.map((source) => source.label ?? source.sourceRef),
       dry_run_effective: dryRun,
       participants: mergedPreflight.stats.participants,
       events: mergedPreflight.stats.events,
@@ -1665,8 +1730,9 @@ Deno.serve(async (request) => {
       events_upsert_candidates: mergedPreflight.events.length,
       attendance_upsert_candidates: mergedPreflight.attendanceEntries.length,
       sheet_member_rows_upsert_candidates: mergedSheetMemberRowsMap.size,
+      attendance_entries_skipped_due_to_invalid_events: 0,
     };
-    if (sources.length === 1) {
+    if (effectiveSources.length === 1) {
       summary.csv_url = csvUrls[0];
     } else {
       summary.csv_urls = csvUrls;
@@ -1742,7 +1808,7 @@ Deno.serve(async (request) => {
           attendance_entries_upserted: validAttendanceEntries.length,
           attendance_entries_pruned: prunedAttendanceEntries,
           source_ref: sourceRef,
-          source_refs: sources.map((source) => source.sourceRef),
+          source_refs: effectiveSources.map((source) => source.sourceRef),
         },
       });
 

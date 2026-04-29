@@ -12,6 +12,11 @@ Detailed function error mapping:
 
 - `docs/ops/function-errors-runbook.md`
 
+Related operational docs:
+
+- `docs/ops/attendance-alerting-plan.md`
+- `docs/ops/pr-ops-checklist.md`
+
 ## Quick Health Checks
 
 ```sql

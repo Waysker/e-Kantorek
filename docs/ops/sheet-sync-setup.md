@@ -121,6 +121,30 @@ curl -sS \
   }'
 ```
 
+Canary mode (subset of sources, useful for large workbook rollout):
+
+```bash
+curl -sS \
+  -X POST \
+  "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
+  -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trigger":"manual_canary",
+    "dryRun":true,
+    "sourceOffset":0,
+    "sourceLimit":2
+  }'
+```
+
+`sourceOffset` must be non-negative, `sourceLimit` must be positive.
+When set, response summary includes:
+
+- `sources_total_count`
+- `source_slice_applied`
+- `source_slice_offset`
+- `source_slice_limit`
+
 Expected:
 
 - response includes `run_id`
@@ -180,6 +204,18 @@ Local fallback smoke (debug only):
 - `app/scripts/smoke-attendance-db-first.mjs`
 - `npm run smoke:attendance:db-first`
 
+## 3b. Staging integration check (`sync -> db -> export`)
+
+Use this sequence on staging after function/migration changes:
+
+1. Trigger `sheet_to_supabase_sync` with `dryRun=true` (or small canary slice).
+2. Trigger `smoke_attendance_db_first` with:
+   - `requireExportTriggerOk=true`
+   - `checkSyncContract=true`
+3. Verify latest `change_journal` has `attendance_write_db_applied_batch`.
+4. Verify no unexpected `failed` row in latest `sync_runs`.
+
+This confirms ingress parsing, DB write path, export trigger, and rollback safety in one pass.
 ## 4. Schedule every 5 minutes
 
 Run in SQL editor:
@@ -247,6 +283,8 @@ Related docs:
 - `docs/contracts/attendance-sheet-contract.md`
 - `docs/ops/attendance-ops-runbook.md`
 - `docs/ops/function-errors-runbook.md`
+- `docs/ops/attendance-alerting-plan.md`
+- `docs/ops/pr-ops-checklist.md`
 - `docs/ops/secrets-runtime-matrix.md`
 
 ## Legacy sheet-first path (optional): management panel -> queue -> Google Sheet -> sync

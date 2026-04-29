@@ -45,6 +45,8 @@ order by status;
 | Function | Error / Code | Meaning | Action |
 |---|---|---|---|
 | `sheet_to_supabase_sync` | `missing_sheet_source` | Function has no sheet source configuration. | Set `ATTENDANCE_SHEET_ID` or `ATTENDANCE_SHEET_SOURCES_JSON`; if auto-discovery is intended, set `ATTENDANCE_SHEET_AUTO_DISCOVER_SOURCES=true` and `ATTENDANCE_SHEET_ID`. |
+| `sheet_to_supabase_sync` | `invalid_source_offset` | `sourceOffset` is not a non-negative integer. | Pass integer `>=0` or remove parameter. |
+| `sheet_to_supabase_sync` | `invalid_source_limit` | `sourceLimit` is not a positive integer. | Pass integer `>0` or remove parameter. |
 | `sheet_to_supabase_sync` | `unauthorized` | Missing/invalid bearer token. | Use `SHEET_SYNC_FUNCTION_AUTH_TOKEN`; verify cron payload uses the same token. |
 | `sheet_to_supabase_sync` | `run_start_failed` | Could not create `sync_runs` row. | Check DB connectivity/service key env and table grants. |
 | `sheet_to_supabase_sync` | `no_attendance_sources_processed` | All discovered tabs were skipped as non-attendance layout. | Validate tab layout against contract; pin explicit `ATTENDANCE_SHEET_SOURCES_JSON` for attendance tabs. |

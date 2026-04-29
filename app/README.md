@@ -174,12 +174,12 @@ To prepare a real sync:
 
 1. Set `ORAGH_FORUM_USERNAME` and `ORAGH_FORUM_PASSWORD`
 2. Review `forum-sync.config.json`
-3. Run `npm.cmd run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
+3. Run `npm run attendance:preflight -- --sheet-id <id> --gid <gid> --strict`
 4. Apply `supabase/migrations/010_attendance_sync_foundation.sql` through `023_atomic_enqueue_batch_rpc.sql`
 5. Configure/deploy Edge Functions from `../docs/ops/sheet-sync-setup.md`
-6. Run `npm.cmd run forum:sync`
-7. Optionally publish snapshot with `npm.cmd run forum:publish`
-8. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
+6. Run `npm run forum:sync`
+7. Optionally publish snapshot with `npm run forum:publish`
+8. Recommended one-shot trigger: `npm run forum:sync:publish`
 
 The current sync auto-discovers dated concert threads from both `Dzial Koncert` (`fid=27`) and `Propozycje koncertow` (`fid=50`), filtered to the configured `eventYear`, unless `eventThreadUrls` is filled explicitly. It writes authenticated raw HTML into `.cache/forum-sync`, fetches poll results from `Ankieta`, parses setlist-like posts, and writes `.cache/forum-sync/snapshot.json`.
 To explicitly refresh local fallback TypeScript snapshot, run sync with `FORUM_SYNC_WRITE_LOCAL_SNAPSHOT=1`.
@@ -229,8 +229,8 @@ Cloud-ready mode:
 
 Scheduling / trigger:
 
-- Manual trigger: run `npm.cmd run forum:sync:publish` from the `app` directory.
-- Scheduled trigger (Windows Task Scheduler): run `cmd.exe /d /c "cd /d C:\Users\Waysker\Documents\New project\app && npm.cmd run forum:sync:publish >> .cache\forum-sync\scheduler.log 2>&1"` on your preferred cadence.
+- Manual trigger: run `npm run forum:sync:publish` from the `app` directory.
+- Scheduled trigger (Windows Task Scheduler, legacy): run `cmd.exe /d /c "cd /d C:\Users\Waysker\Documents\New project\app && npm.cmd run forum:sync:publish >> .cache\forum-sync\scheduler.log 2>&1"` on your preferred cadence.
 - Cloud trigger (recommended): use GitHub Actions workflow at `.github/workflows/forum-sync-publish.yml`.
 
 GitHub Actions setup:

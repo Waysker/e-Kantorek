@@ -49,6 +49,84 @@ Additional parser behavior:
 
 Invalid date tokens (without successful inference or override) produce validation issues and should be treated as contract violations.
 
+## Function Response Contract (Pinned Fields)
+
+`sheet_to_supabase_sync` response MUST include:
+
+- top-level:
+  - `run_id` (string UUID)
+  - `status` (`success` | `dry_run` | `failed`)
+  - `dry_run` (boolean)
+  - `summary` (object when `status != failed`)
+- summary core fields:
+  - `errors_count` (number)
+  - `warnings_count` (number)
+  - `attendance_entries_skipped_due_to_invalid_events` (number, `0` in dry-run)
+  - `source_resolution_mode`
+  - `sources_count`
+  - `sources_total_count`
+  - `source_slice_applied`
+  - `source_slice_offset`
+  - `source_slice_limit`
+
+Pinned example (`dry_run=true`):
+
+```json
+{
+  "run_id": "c5e9e607-d2e8-411d-9909-6fcafe2974e2",
+  "status": "dry_run",
+  "dry_run": true,
+  "summary": {
+    "trigger": "smoke_contract",
+    "source_resolution_mode": "auto_discovered",
+    "sources_count": 9,
+    "sources_total_count": 9,
+    "source_slice_applied": false,
+    "source_slice_offset": 0,
+    "source_slice_limit": null,
+    "errors_count": 0,
+    "warnings_count": 65,
+    "attendance_entries_skipped_due_to_invalid_events": 0
+  }
+}
+```
+
+`smoke_attendance_db_first` response MUST include:
+
+- `status` = `ok` for successful run
+- rollback proof fields:
+  - `original_ratio`
+  - `temporary_ratio`
+- when `checkSyncContract=true`:
+  - `sync_contract_check.http_status`
+  - `sync_contract_check.status`
+  - `sync_contract_check.errors_count`
+  - `sync_contract_check.attendance_entries_skipped_due_to_invalid_events`
+
+Pinned smoke example:
+
+```json
+{
+  "status": "ok",
+  "smoke_run_tag": "smoke_attendance_db_first:83c5b39f-82c6-4af4-9898-41da91e9fa6e",
+  "mode": "db_first",
+  "event_id": "evt-2026-04-14-proba",
+  "member_id": "member-depczynska-julia-flety",
+  "original_ratio": 1,
+  "temporary_ratio": 0.5,
+  "require_export_trigger_ok": true,
+  "check_sync_contract": true,
+  "sync_contract_check": {
+    "http_status": 200,
+    "status": "dry_run",
+    "dry_run": true,
+    "errors_count": 0,
+    "attendance_entries_skipped_due_to_invalid_events": 0,
+    "warnings_count": 65
+  }
+}
+```
+
 ## Data Quality Checklist
 
 Run this checklist before each publish:

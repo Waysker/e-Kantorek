@@ -344,6 +344,7 @@ type SyncContractCheckResult = {
   dry_run: boolean;
   errors_count: number;
   attendance_entries_skipped_due_to_invalid_events: number;
+  attendance_entries_skipped_due_to_invalid_events_inferred: boolean;
   warnings_count: number | null;
   warning_breakdown_available: boolean;
 };
@@ -445,9 +446,11 @@ async function verifySheetSyncContract(params: {
     );
   }
 
-  const skippedInvalidEventsCount = parseNonNegativeInteger(
+  const skippedInvalidEventsCountRaw = parseNonNegativeInteger(
     summaryRecord.attendance_entries_skipped_due_to_invalid_events,
   );
+  const skippedInvalidEventsCountInferred = skippedInvalidEventsCountRaw === null && status === "dry_run";
+  const skippedInvalidEventsCount = skippedInvalidEventsCountRaw ?? (skippedInvalidEventsCountInferred ? 0 : null);
   if (skippedInvalidEventsCount === null) {
     throw new HttpError(
       502,
@@ -518,6 +521,7 @@ async function verifySheetSyncContract(params: {
     dry_run: true,
     errors_count: errorsCount,
     attendance_entries_skipped_due_to_invalid_events: skippedInvalidEventsCount,
+    attendance_entries_skipped_due_to_invalid_events_inferred: skippedInvalidEventsCountInferred,
     warnings_count: warningsCount,
     warning_breakdown_available: !!warningBreakdown,
   };

@@ -13,7 +13,7 @@ Focus areas:
 
 ## Status (2026-04-29)
 
-- `Phase 6`: in progress
+- `Phase 6`: completed
 
 ## Goals
 
@@ -66,3 +66,22 @@ Focus areas:
    - `status=ok`
    - `sync_contract_check.status in {dry_run, success}`
 5. Verify `sync_runs` latest entries have no unexpected `failed` status after deployment.
+
+## Delivered
+
+1. PR CI gates now include:
+   - `CI Typecheck`
+   - `CI Web Build`
+   - `CI Edge Functions Check`
+2. `smoke_attendance_db_first` enforces sync quality checks (`errors_count`, skipped-invalid-events, optional warnings policy).
+3. `sheet_to_supabase_sync` response contract stabilized:
+   - `attendance_entries_skipped_due_to_invalid_events` present also in `dry_run`
+   - canary source slicing via `sourceOffset` / `sourceLimit`
+4. Docs aligned:
+   - role taxonomy (`member/section/board/admin`)
+   - migration names
+   - source-of-truth model
+5. New operational docs:
+   - `docs/ops/attendance-alerting-plan.md`
+   - `docs/ops/pr-ops-checklist.md`
+6. Function response contract examples pinned in `docs/contracts/attendance-sheet-contract.md`.
