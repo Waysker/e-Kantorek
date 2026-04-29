@@ -2,6 +2,24 @@ name: Smoke Attendance DB-First
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/smoke-attendance-db-first.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/smoke-attendance-db-first.yml"
+  schedule:
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: smoke-attendance-db-first
+  cancel-in-progress: true
 
 jobs:
   smoke-db-first:
@@ -10,15 +28,24 @@ jobs:
     steps:
       - name: Trigger Supabase smoke function
         env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
           SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
           SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN: ${{ secrets.SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN }}
           SMOKE_REQUIRE_EXPORT_TRIGGER_OK: ${{ vars.SMOKE_REQUIRE_EXPORT_TRIGGER_OK || 'false' }}
         run: |
           if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping smoke on pull_request because SUPABASE_PROJECT_REF is unavailable."
+              exit 0
+            fi
             echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
             exit 1
           fi
           if [ -z "$SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping smoke on pull_request because SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is unavailable (likely fork PR)."
+              exit 0
+            fi
             echo "::error::SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is missing (repo secret)."
             exit 1
           fi
