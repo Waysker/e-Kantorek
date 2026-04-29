@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+
+type SupabaseAdminClient = SupabaseClient<any, "public", any>;
 
 type EventRow = {
   event_id: string;
@@ -483,7 +485,7 @@ function pickMemberRowNumber(
 }
 
 async function loadEvents(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventIdFilter: string | null,
   eventDateFilter: string | null,
 ): Promise<EventRow[]> {
@@ -513,7 +515,7 @@ async function loadEvents(
 }
 
 async function loadAttendanceEntries(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   eventIds: string[],
 ): Promise<AttendanceEntryRow[]> {
   if (eventIds.length === 0) {
@@ -533,7 +535,7 @@ async function loadAttendanceEntries(
   return data ?? [];
 }
 
-async function loadMembers(supabaseAdmin: ReturnType<typeof createClient>): Promise<MemberRow[]> {
+async function loadMembers(supabaseAdmin: SupabaseAdminClient): Promise<MemberRow[]> {
   const { data, error } = await supabaseAdmin
     .from("members")
     .select("member_id,source_row_number,is_active")
@@ -548,7 +550,7 @@ async function loadMembers(supabaseAdmin: ReturnType<typeof createClient>): Prom
 }
 
 async function loadFallbackRows(
-  supabaseAdmin: ReturnType<typeof createClient>,
+  supabaseAdmin: SupabaseAdminClient,
   sourceSheetId: string,
 ): Promise<FallbackRowMaps> {
   const { data, error } = await supabaseAdmin
