@@ -668,12 +668,50 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
   const threadId = new URL(resolvedUrl).searchParams.get("tid") ?? slugify(title);
   const titleDate = parseDateFromTitle(title);
   const posts = [];
-  $('[id^="post_"]').each((_, element) => {
-    const id = $(element).attr("id");
-    if (!id || id.startsWith("post_meta_")) {
+  const seenPostIds = new Set();
+  const postContainers = $(
+    [
+      '[id^="post_"]',
+      '[id^="pid_"]',
+      'div.post',
+      'tr.post',
+      'table[id*="post_"]',
+      'table[id*="pid_"]',
+    ].join(", "),
+  );
+
+  postContainers.each((_, element) => {
+    const elementId = normalizeWhitespace($(element).attr("id") ?? "");
+    const postIdMatch =
+      elementId.match(/(?:^|[-_])post_?(\d+)$/i) ??
+      elementId.match(/(?:^|[-_])pid_?(\d+)$/i);
+    const anchorPostId = $(element).find('a[name^="pid"], a[id^="pid"]').first().attr("name")
+      ?.replace(/^pid/i, "")
+      ?? $(element).find('a[name^="pid"], a[id^="pid"]').first().attr("id")?.replace(/^pid/i, "")
+      ?? null;
+    const postId = normalizeWhitespace(postIdMatch?.[1] ?? anchorPostId ?? "");
+
+    if (!postId || seenPostIds.has(postId)) {
       return;
     }
-    const bodyHtml = $(element).find(".post_body").first().html() ?? "";
+    if (elementId.startsWith("post_meta_")) {
+      return;
+    }
+
+    const bodyHtml = $(element)
+      .find(
+        [
+          ".post_body",
+          ".post_body.scaleimages",
+          ".post_content",
+          ".post_message",
+          'div[id^="pid_"]',
+          'td[id^="pid_"]',
+        ].join(", "),
+      )
+      .first()
+      .html()
+      ?? "";
     const bodyText = htmlToMultilineText(bodyHtml);
     if (!bodyText) {
       return;
@@ -685,7 +723,7 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
       .first();
     const authorUrl = authorLink.attr("href");
     posts.push({
-      postId: id.replace("post_", ""),
+      postId,
       author: {
         uid: authorUrl ? new URL(resolveUrl(baseUrl, authorUrl)).searchParams.get("uid") : null,
         username: normalizeWhitespace(authorLink.text()) || "Unknown member",
@@ -694,6 +732,7 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
       createdAt: parseForumTimestamp(normalizeWhitespace($(element).find(".post_date").first().text()), titleDate),
       bodyText,
     });
+    seenPostIds.add(postId);
   });
   const pollResultsUrl = $('a[href*="polls.php?action=showresults"]').first().attr("href");
   return { threadId, title, titleDate, posts, pollResultsUrl: pollResultsUrl ? resolveUrl(baseUrl, pollResultsUrl) : null };
