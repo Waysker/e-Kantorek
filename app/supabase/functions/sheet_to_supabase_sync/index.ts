@@ -520,9 +520,16 @@ function detectPreferSwapForAmbiguousDateTokens(headers: string[]): {
   preferSwapForAmbiguous: boolean;
   swapOnlyCount: number;
   directOnlyCount: number;
+  ambiguousCount: number;
+  ambiguousDistinctDirectMonths: number;
+  ambiguousDistinctSwappedMonths: number;
+  reason: "swap_only_tokens" | "ambiguous_month_cohesion" | "none";
 } {
   let swapOnlyCount = 0;
   let directOnlyCount = 0;
+  let ambiguousCount = 0;
+  const ambiguousDirectMonths = new Set<number>();
+  const ambiguousSwappedMonths = new Set<number>();
 
   for (const header of headers) {
     const normalized = normalizeWhitespace(header);
@@ -544,13 +551,32 @@ function detectPreferSwapForAmbiguousDateTokens(headers: string[]): {
       swapOnlyCount += 1;
     } else if (directDate && !swappedDate) {
       directOnlyCount += 1;
+    } else if (directDate && swappedDate) {
+      ambiguousCount += 1;
+      ambiguousDirectMonths.add(monthFromIsoDate(directDate));
+      ambiguousSwappedMonths.add(monthFromIsoDate(swappedDate));
     }
   }
 
+  const ambiguousDistinctDirectMonths = ambiguousDirectMonths.size;
+  const ambiguousDistinctSwappedMonths = ambiguousSwappedMonths.size;
+  const preferSwapFromSwapOnly = swapOnlyCount > 0 && directOnlyCount === 0;
+  const preferSwapFromAmbiguousMonthCohesion = !preferSwapFromSwapOnly &&
+    ambiguousCount >= 3 &&
+    ambiguousDistinctSwappedMonths < ambiguousDistinctDirectMonths;
+
   return {
-    preferSwapForAmbiguous: swapOnlyCount > 0 && directOnlyCount === 0,
+    preferSwapForAmbiguous: preferSwapFromSwapOnly || preferSwapFromAmbiguousMonthCohesion,
     swapOnlyCount,
     directOnlyCount,
+    ambiguousCount,
+    ambiguousDistinctDirectMonths,
+    ambiguousDistinctSwappedMonths,
+    reason: preferSwapFromSwapOnly
+      ? "swap_only_tokens"
+      : preferSwapFromAmbiguousMonthCohesion
+      ? "ambiguous_month_cohesion"
+      : "none",
   };
 }
 
@@ -971,6 +997,10 @@ function buildPreflight(
       details: {
         swap_only_count: dateStylePreference.swapOnlyCount,
         direct_only_count: dateStylePreference.directOnlyCount,
+        ambiguous_count: dateStylePreference.ambiguousCount,
+        ambiguous_distinct_direct_months: dateStylePreference.ambiguousDistinctDirectMonths,
+        ambiguous_distinct_swapped_months: dateStylePreference.ambiguousDistinctSwappedMonths,
+        style_inference_reason: dateStylePreference.reason,
       },
     });
   }
