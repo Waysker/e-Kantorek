@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -93,6 +94,15 @@ function getDefaultSeasonScope(todayDate = new Date()): { startDate: string; end
   };
 }
 
+function getCalendarMonthBounds(year: number, monthIndex: number): { startDate: string; endDate: string } {
+  const monthStart = new Date(year, monthIndex, 1);
+  const monthEnd = new Date(year, monthIndex + 1, 0);
+  return {
+    startDate: toIsoDateLocal(monthStart),
+    endDate: toIsoDateLocal(monthEnd),
+  };
+}
+
 function getPresetScope(preset: ScopePreset): { startDate: string; endDate: string } {
   const now = new Date();
   const endDate = toIsoDateLocal(now);
@@ -112,12 +122,15 @@ function getPresetScope(preset: ScopePreset): { startDate: string; endDate: stri
   }
 
   if (preset === "last_month" || preset === "last_3_months") {
-    const monthOffset = preset === "last_month" ? 1 : 3;
-    const start = new Date(now);
-    start.setMonth(start.getMonth() - monthOffset);
+    if (preset === "last_month") {
+      return getCalendarMonthBounds(now.getFullYear(), now.getMonth() - 1);
+    }
+
+    const rangeStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    const rangeEnd = new Date(now.getFullYear(), now.getMonth(), 0);
     return {
-      startDate: toIsoDateLocal(start),
-      endDate,
+      startDate: toIsoDateLocal(rangeStart),
+      endDate: toIsoDateLocal(rangeEnd),
     };
   }
 
@@ -191,6 +204,12 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     }
     return 740;
   }, [isDesktopLayout, viewportWidth]);
+  const webDateInputProps = useMemo(() => {
+    if (Platform.OS !== "web") {
+      return {};
+    }
+    return { type: "date" };
+  }, []);
 
   const defaultScope = useMemo(() => getDefaultSeasonScope(), []);
   const [scopeStartDate, setScopeStartDate] = useState(defaultScope.startDate);
@@ -499,22 +518,26 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           <View style={styles.scopeInputBlock}>
             <Text style={styles.scopeInputLabel}>{tr("Od", "From")}</Text>
             <TextInput
+              {...(webDateInputProps as any)}
               value={startDateInput}
               onChangeText={setStartDateInput}
               placeholder="YYYY-MM-DD"
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
               style={styles.scopeInput}
             />
           </View>
           <View style={styles.scopeInputBlock}>
             <Text style={styles.scopeInputLabel}>{tr("Do", "To")}</Text>
             <TextInput
+              {...(webDateInputProps as any)}
               value={endDateInput}
               onChangeText={setEndDateInput}
               placeholder="YYYY-MM-DD"
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
               style={styles.scopeInput}
             />
           </View>
