@@ -668,62 +668,20 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
   const threadId = new URL(resolvedUrl).searchParams.get("tid") ?? slugify(title);
   const titleDate = parseDateFromTitle(title);
   const posts = [];
-  const seenPostIds = new Set();
-  const postContainers = $(
-    [
-      '[id^="post_"]',
-      '[id^="pid_"]',
-      'div.post',
-      'tr.post',
-      'table[id*="post_"]',
-      'table[id*="pid_"]',
-    ].join(", "),
-  );
-
-  postContainers.each((_, element) => {
-    const elementId = normalizeWhitespace($(element).attr("id") ?? "");
-    const postIdMatch =
-      elementId.match(/(?:^|[-_])post_?(\d+)$/i) ??
-      elementId.match(/(?:^|[-_])pid_?(\d+)$/i);
-    const anchorPostId = $(element).find('a[name^="pid"], a[id^="pid"]').first().attr("name")
-      ?.replace(/^pid/i, "")
-      ?? $(element).find('a[name^="pid"], a[id^="pid"]').first().attr("id")?.replace(/^pid/i, "")
-      ?? null;
-    const postId = normalizeWhitespace(postIdMatch?.[1] ?? anchorPostId ?? "");
-
-    if (!postId || seenPostIds.has(postId)) {
+  $('[id^="post_"]').each((_, element) => {
+    const id = $(element).attr("id");
+    if (!id || id.startsWith("post_meta_")) {
       return;
     }
-    if (elementId.startsWith("post_meta_")) {
-      return;
-    }
-
-    const bodyHtml = $(element)
-      .find(
-        [
-          ".post_body",
-          ".post_body.scaleimages",
-          ".post_content",
-          ".post_message",
-          'div[id^="pid_"]',
-          'td[id^="pid_"]',
-        ].join(", "),
-      )
-      .first()
-      .html()
-      ?? "";
+    const bodyHtml = $(element).find(".post_body").first().html() ?? "";
     const bodyText = htmlToMultilineText(bodyHtml);
     if (!bodyText) {
       return;
     }
-    const authorLink = $(element)
-      .find(
-        '.post_author a[href*="member.php?action=profile"], .author_information a[href*="member.php?action=profile"], .author a[href*="member.php?action=profile"], a[href*="member.php?action=profile"]',
-      )
-      .first();
+    const authorLink = $(element).find('a[href*="member.php?action=profile"]').first();
     const authorUrl = authorLink.attr("href");
     posts.push({
-      postId,
+      postId: id.replace("post_", ""),
       author: {
         uid: authorUrl ? new URL(resolveUrl(baseUrl, authorUrl)).searchParams.get("uid") : null,
         username: normalizeWhitespace(authorLink.text()) || "Unknown member",
@@ -732,77 +690,9 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
       createdAt: parseForumTimestamp(normalizeWhitespace($(element).find(".post_date").first().text()), titleDate),
       bodyText,
     });
-    seenPostIds.add(postId);
   });
   const pollResultsUrl = $('a[href*="polls.php?action=showresults"]').first().attr("href");
   return { threadId, title, titleDate, posts, pollResultsUrl: pollResultsUrl ? resolveUrl(baseUrl, pollResultsUrl) : null };
-}
-
-function extractThreadPageNumbers(html, baseUrl, threadUrl) {
-  const resolvedThreadUrl = new URL(resolveUrl(baseUrl, threadUrl));
-  const expectedThreadId = resolvedThreadUrl.searchParams.get("tid");
-  const pages = new Set([1]);
-  const $ = load(html);
-
-  function parseThreadRef(candidateHref) {
-    const resolved = resolveUrl(baseUrl, candidateHref);
-    const candidateUrl = new URL(resolved);
-    const queryThreadId = candidateUrl.searchParams.get("tid");
-    const queryPage = Number.parseInt(candidateUrl.searchParams.get("page") ?? "", 10);
-    if (queryThreadId) {
-      return {
-        threadId: queryThreadId,
-        page: Number.isInteger(queryPage) && queryPage > 0 ? queryPage : null,
-      };
-    }
-
-    const pathMatch = candidateUrl.pathname.match(/thread-(\d+)(?:-page-(\d+))?\.html$/i);
-    if (pathMatch) {
-      return {
-        threadId: pathMatch[1],
-        page: pathMatch[2] ? Number.parseInt(pathMatch[2], 10) : 1,
-      };
-    }
-
-    return { threadId: null, page: null };
-  }
-
-  $('a[href]').each((_, element) => {
-    const href = $(element).attr("href");
-    if (!href) {
-      return;
-    }
-
-    const { threadId, page } = parseThreadRef(href);
-    if (!threadId || !expectedThreadId || threadId !== expectedThreadId) {
-      return;
-    }
-    if (Number.isInteger(page) && page > 1) {
-      pages.add(page);
-    }
-  });
-
-  return Array.from(pages).sort((left, right) => left - right);
-}
-
-function mergeAndSortThreadPosts(parsedPages) {
-  const byPostId = new Map();
-  for (const parsed of parsedPages) {
-    for (const post of parsed.posts) {
-      if (!byPostId.has(post.postId)) {
-        byPostId.set(post.postId, post);
-      }
-    }
-  }
-
-  return Array.from(byPostId.values()).sort((left, right) => {
-    const leftPostId = Number.parseInt(left.postId, 10);
-    const rightPostId = Number.parseInt(right.postId, 10);
-    if (Number.isInteger(leftPostId) && Number.isInteger(rightPostId) && leftPostId !== rightPostId) {
-      return leftPostId - rightPostId;
-    }
-    return left.createdAt.localeCompare(right.createdAt);
-  });
 }
 
 function parsePollResultsPage(html, baseUrl) {
@@ -1222,38 +1112,9 @@ async function main() {
   const rawThreads = [];
   const manifestThreads = [];
   for (const threadConfig of forumDiscovery.threads) {
-    const resolvedThreadUrl = resolveUrl(config.baseUrl, threadConfig.url);
-    const firstThreadPage = await requestHtml({ jar, url: resolvedThreadUrl });
-    const parsedFirstPage = parseThreadPage(firstThreadPage.html, resolvedThreadUrl, config.baseUrl);
-    const pageNumbers = extractThreadPageNumbers(firstThreadPage.html, config.baseUrl, resolvedThreadUrl);
-    const threadCachePaths = [
-      await saveCacheFile(`threads/${parsedFirstPage.threadId}-${sanitizeFileName(parsedFirstPage.title)}-page-1.html`, firstThreadPage.html),
-    ];
-    const parsedPages = [parsedFirstPage];
-
-    for (const pageNumber of pageNumbers) {
-      if (pageNumber === 1) {
-        continue;
-      }
-      const pageUrl = new URL(resolvedThreadUrl);
-      pageUrl.searchParams.set("page", String(pageNumber));
-      const threadPage = await requestHtml({ jar, url: pageUrl.toString() });
-      parsedPages.push(parseThreadPage(threadPage.html, pageUrl.toString(), config.baseUrl));
-      threadCachePaths.push(
-        await saveCacheFile(
-          `threads/${parsedFirstPage.threadId}-${sanitizeFileName(parsedFirstPage.title)}-page-${pageNumber}.html`,
-          threadPage.html,
-        ),
-      );
-    }
-
-    const mergedPosts = mergeAndSortThreadPosts(parsedPages);
-    const pollResultsUrl = parsedPages.find((page) => page.pollResultsUrl)?.pollResultsUrl ?? null;
-    const parsedThread = {
-      ...parsedFirstPage,
-      posts: mergedPosts,
-      pollResultsUrl,
-    };
+    const threadPage = await requestHtml({ jar, url: resolveUrl(config.baseUrl, threadConfig.url) });
+    const parsedThread = parseThreadPage(threadPage.html, resolveUrl(config.baseUrl, threadConfig.url), config.baseUrl);
+    const threadCachePath = await saveCacheFile(`threads/${parsedThread.threadId}-${sanitizeFileName(parsedThread.title)}.html`, threadPage.html);
     let poll = null;
     let pollCachePath = null;
     if (parsedThread.pollResultsUrl) {
@@ -1268,9 +1129,7 @@ async function main() {
       title: parsedThread.title,
       sourceForumUrl: threadConfig.sourceForumUrl,
       sourcePage: threadConfig.sourcePage,
-      cachePath: threadCachePaths[0] ?? null,
-      cachePaths: threadCachePaths,
-      discoveredPages: pageNumbers,
+      cachePath: threadCachePath,
       pollCachePath,
       postCount: parsedThread.posts.length,
       hasSetlistPost: Boolean(parsedThread.posts.find((post) => looksLikeSetlist(post.bodyText))),
