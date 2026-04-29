@@ -10,7 +10,7 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 - `Phase 0`: completed
 - `Phase 1`: completed (`023_atomic_enqueue_batch_rpc.sql` + batch handler refactor)
 - `Phase 2`: completed (`022_harden_dedupe_queue_preservation.sql` finalizes open-queue preservation)
-- `Phase 3`: not started
+- `Phase 3`: completed
 - `Phase 4`: in progress
 - `Phase 5`: in progress
 
@@ -24,6 +24,9 @@ Priority order: security/integrity first, then flow stability, then frontend mai
 6. Atomic batch enqueue RPC (`023` migration) used by `attendance_write_sheet_first` batch mode.
 7. Automated smoke (`smoke_attendance_db_first`) and dedicated workflow trigger.
 8. Dedicated CI typecheck workflow (`.github/workflows/ci-typecheck.yml`).
+9. `AttendanceManagerScreen` loading lifecycle hardened (request-id guards + deterministic loading off).
+10. `AttendanceManagerScreen` section UI split into dedicated components (`SectionGridPanel`, `SectionMembersPanel`) and member rendering switched to `FlatList`.
+11. `AttendanceManagerScreen` data layer extracted to hooks (`useAttendanceBootData`, `useAttendanceEntries`) with list-first bootstrap and lazy snapshot loading.
 
 ## Phase 0: Security Hotfix (immediate)
 

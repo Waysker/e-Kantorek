@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -9,6 +9,15 @@ import {
   useWindowDimensions,
 } from "react-native";
 
+import { SectionGridPanel, type SectionGridTile } from "./attendance-manager/SectionGridPanel";
+import { SectionMembersPanel, type SectionMemberCard } from "./attendance-manager/SectionMembersPanel";
+import { useAttendanceBootData, useAttendanceEntries } from "./attendance-manager/useAttendanceManagerData";
+import type {
+  ForumSnapshotPayload,
+  MemberRow,
+  SessionRow,
+  SnapshotEventDetail,
+} from "./attendance-manager/types";
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { canonicalizeInstrumentLabel, normalizeInstrumentKey } from "../domain/instruments";
 import { tr } from "../i18n";
@@ -20,21 +29,6 @@ type AttendanceManagerScreenProps = {
   onBack: () => void;
 };
 
-type MemberRow = {
-  member_id: string;
-  full_name: string;
-  instrument: string;
-  is_active: boolean;
-};
-
-type SessionRow = {
-  event_id: string;
-  title: string;
-  event_date: string;
-  source_header: string | null;
-  source_column: string | null;
-};
-
 type ManagerSession = {
   key: string;
   event_id: string | null;
@@ -43,11 +37,6 @@ type ManagerSession = {
   source_header: string | null;
   source_column: string | null;
   isVirtual: boolean;
-};
-
-type AttendanceEntryRow = {
-  member_id: string;
-  attendance_ratio: number;
 };
 
 const ATTENDANCE_CYCLE_SEQUENCE = [0, 1, 0.75, 0.5, 0.25] as const;
@@ -69,25 +58,6 @@ type EnqueueResponsePayload = {
   };
   error?: string;
   message?: string;
-};
-
-type SnapshotAttendanceParticipant = {
-  fullName?: string;
-};
-
-type SnapshotAttendanceGroup = {
-  status?: string;
-  participants?: SnapshotAttendanceParticipant[];
-};
-
-type SnapshotEventDetail = {
-  title?: string;
-  startsAt?: string;
-  attendanceGroups?: SnapshotAttendanceGroup[];
-};
-
-type ForumSnapshotPayload = {
-  eventDetailsById?: Record<string, SnapshotEventDetail>;
 };
 
 type CalendarCell = {
@@ -521,23 +491,15 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
 
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [members, setMembers] = useState<MemberRow[]>([]);
-  const [snapshotPayload, setSnapshotPayload] = useState<ForumSnapshotPayload | null>(null);
-  const [entriesByMemberId, setEntriesByMemberId] = useState<Record<string, number>>({});
   const [pendingAttendanceByMemberId, setPendingAttendanceByMemberId] = useState<Record<string, number>>({});
   const [selectedSessionKey, setSelectedSessionKey] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(() => toIsoDateLocal(new Date()));
   const [visibleMonthKey, setVisibleMonthKey] = useState<string>(() => getMonthKeyFromIsoDate(toIsoDateLocal(new Date())));
-  const [isBootLoading, setIsBootLoading] = useState(true);
-  const [isEntriesLoading, setIsEntriesLoading] = useState(false);
   const [isBatchSaving, setIsBatchSaving] = useState(false);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSaveFeedback, setLastSaveFeedback] = useState<SaveFeedback | null>(null);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
-  const bootLoadRequestIdRef = useRef(0);
-  const entriesLoadRequestIdRef = useRef(0);
 
   const canWrite = Boolean(
     ATTENDANCE_WRITE_UI_ENABLED &&
@@ -570,89 +532,38 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     }
     return "49%";
   }, [isDesktop, width]);
-
-  useEffect(() => {
-    let isDisposed = false;
-    const requestId = bootLoadRequestIdRef.current + 1;
-    bootLoadRequestIdRef.current = requestId;
-
-    async function loadBootData() {
-      if (!supabaseAuthClient) {
-        setErrorMessage(tr("Brak konfiguracji Supabase.", "Supabase is not configured."));
-        setIsBootLoading(false);
-        return;
-      }
-
-      setIsBootLoading(true);
-      setErrorMessage(null);
-      try {
-        const [sessionsResult, membersResult, snapshotResult] = await Promise.all([
-          supabaseAuthClient
-            .from("events")
-            .select("event_id,title,event_date,source_header,source_column")
-            .order("event_date", { ascending: false })
-            .limit(500),
-          supabaseAuthClient
-            .from("members")
-            .select("member_id,full_name,instrument,is_active")
-            .eq("is_active", true)
-            .order("instrument", { ascending: true })
-            .order("full_name", { ascending: true }),
-          supabaseAuthClient
-            .from("forum_snapshot_cache")
-            .select("payload")
-            .eq("snapshot_key", "forum")
-            .maybeSingle<{ payload: ForumSnapshotPayload }>(),
-        ]);
-
-        if (isDisposed || requestId !== bootLoadRequestIdRef.current) {
-          return;
-        }
-
-        if (sessionsResult.error) {
-          throw new Error(sessionsResult.error.message);
-        }
-        if (membersResult.error) {
-          throw new Error(membersResult.error.message);
-        }
-
-        const loadedSessionsRaw = (sessionsResult.data ?? []) as SessionRow[];
-        const loadedSessions = filterShadowPlaceholderSessions(loadedSessionsRaw);
-        const loadedMembers = (membersResult.data ?? []) as MemberRow[];
-        setSessions(loadedSessions);
-        setMembers(loadedMembers);
-        setSnapshotPayload(snapshotResult.data?.payload ?? null);
-
-        if (loadedSessions.length > 0) {
-          const defaultSession = chooseDefaultSession(loadedSessions);
-          if (defaultSession) {
-            setSelectedSessionKey(defaultSession.event_id);
-            setSelectedDate(defaultSession.event_date);
-            setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
-          }
-        }
-      } catch (error) {
-        if (isDisposed || requestId !== bootLoadRequestIdRef.current) {
-          return;
-        }
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : tr("Nie udało się wczytać danych startowych.", "Failed to load initial data."),
-        );
-      } finally {
-        if (!isDisposed && requestId === bootLoadRequestIdRef.current) {
-          setIsBootLoading(false);
-        }
-      }
+  const memberGridColumns = useMemo(() => {
+    if (!isDesktop) {
+      return 1;
     }
+    if (width >= 1900) {
+      return 4;
+    }
+    if (width >= 1500) {
+      return 3;
+    }
+    return 2;
+  }, [isDesktop, width]);
 
-    void loadBootData();
-
-    return () => {
-      isDisposed = true;
-    };
+  const handleDefaultSessionResolved = useCallback((defaultSession: SessionRow) => {
+    setSelectedSessionKey(defaultSession.event_id);
+    setSelectedDate(defaultSession.event_date);
+    setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
   }, []);
+
+  const {
+    sessions,
+    members,
+    snapshotPayload,
+    isBootLoading,
+    setSessions,
+  } = useAttendanceBootData({
+    client: supabaseAuthClient,
+    setErrorMessage,
+    normalizeSessions: filterShadowPlaceholderSessions,
+    chooseDefaultSession,
+    onDefaultSession: handleDefaultSessionResolved,
+  });
 
   const sessionsByDate = useMemo(() => {
     const grouped = new Map<string, SessionRow[]>();
@@ -738,63 +649,15 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   }, [selectedSessionKey]);
 
   const selectedCanonicalEventId = selectedSession?.event_id ?? null;
-
-  useEffect(() => {
-    let isDisposed = false;
-    const requestId = entriesLoadRequestIdRef.current + 1;
-    entriesLoadRequestIdRef.current = requestId;
-
-    async function loadEntries() {
-      if (!supabaseAuthClient || !selectedCanonicalEventId) {
-        setEntriesByMemberId({});
-        setIsEntriesLoading(false);
-        return;
-      }
-
-      setIsEntriesLoading(true);
-      setErrorMessage(null);
-      try {
-        const { data, error } = await supabaseAuthClient
-          .from("attendance_entries")
-          .select("member_id,attendance_ratio")
-          .eq("event_id", selectedCanonicalEventId);
-
-        if (isDisposed || requestId !== entriesLoadRequestIdRef.current) {
-          return;
-        }
-
-        if (error) {
-          throw new Error(error.message);
-        }
-
-        const map: Record<string, number> = {};
-        for (const entry of (data ?? []) as AttendanceEntryRow[]) {
-          map[entry.member_id] = Number(entry.attendance_ratio);
-        }
-        setEntriesByMemberId(map);
-      } catch (error) {
-        if (isDisposed || requestId !== entriesLoadRequestIdRef.current) {
-          return;
-        }
-        setEntriesByMemberId({});
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : tr("Nie udało się wczytać wpisów obecności.", "Failed to load attendance entries."),
-        );
-      } finally {
-        if (!isDisposed && requestId === entriesLoadRequestIdRef.current) {
-          setIsEntriesLoading(false);
-        }
-      }
-    }
-
-    void loadEntries();
-
-    return () => {
-      isDisposed = true;
-    };
-  }, [selectedCanonicalEventId]);
+  const {
+    entriesByMemberId,
+    isEntriesLoading,
+    setEntriesByMemberId,
+  } = useAttendanceEntries({
+    client: supabaseAuthClient,
+    selectedCanonicalEventId,
+    setErrorMessage,
+  });
 
   const mergedEntriesByMemberId = useMemo(
     () => ({ ...entriesByMemberId, ...pendingAttendanceByMemberId }),
@@ -845,6 +708,22 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     () => summarizeGroupMarks(selectedSectionMembers, mergedEntriesByMemberId),
     [mergedEntriesByMemberId, selectedSectionMembers],
   );
+  const sectionGridRowsDisplay = useMemo<SectionGridTile[][]>(() => {
+    return sectionGridRows.map((row) =>
+      row.map((item) => {
+        const sectionMembers = item.group?.members ?? [];
+        const summary = summarizeGroupMarks(sectionMembers, mergedEntriesByMemberId);
+        const totalMembers = sectionMembers.length;
+        const markedMembers = Math.max(totalMembers - summary.points000, 0);
+        return {
+          key: item.key,
+          label: item.label,
+          totalMembers,
+          markedMembers,
+        };
+      }),
+    );
+  }, [mergedEntriesByMemberId, sectionGridRows]);
 
   useEffect(() => {
     if (!selectedSectionKey) {
@@ -895,6 +774,61 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
     return hinted;
   }, [memberIdByNormalizedName, selectedSession, snapshotEvents]);
+  const selectedSectionMemberCards = useMemo<SectionMemberCard[]>(() => {
+    const hasSelectedSession = Boolean(selectedSession);
+    const memberCards: SectionMemberCard[] = selectedSectionMembers.map((member) => {
+      const ratio = mergedEntriesByMemberId[member.member_id];
+      const mark = markFromRatio(ratio);
+      const nextRatio = getNextAttendanceRatio(ratio);
+      const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
+      const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
+      const isDisabled = !canWrite || !hasSelectedSession || isBatchSaving;
+
+      return {
+        kind: "member",
+        key: member.member_id,
+        memberId: member.member_id,
+        fullName: member.full_name,
+        mark,
+        nextRatio,
+        isRsvpHinted,
+        hasPendingOverride,
+        isDisabled,
+      };
+    });
+
+    if (memberGridColumns <= 1 || memberCards.length === 0) {
+      return memberCards;
+    }
+
+    const remainder = memberCards.length % memberGridColumns;
+    if (remainder === 0) {
+      return memberCards;
+    }
+
+    const placeholderCount = memberGridColumns - remainder;
+    const placeholderItems: SectionMemberCard[] = Array.from({ length: placeholderCount }).map((_, index) => ({
+      kind: "placeholder",
+      key: `placeholder-${selectedSectionKey ?? "section"}-${index}`,
+    }));
+
+    return [...memberCards, ...placeholderItems];
+  }, [
+    canWrite,
+    isBatchSaving,
+    memberGridColumns,
+    mergedEntriesByMemberId,
+    pendingAttendanceByMemberId,
+    rsvpHintMemberIds,
+    selectedSectionKey,
+    selectedSectionMembers,
+    selectedSession,
+  ]);
+  const selectedSectionSummaryText = useMemo(
+    () =>
+      `1.00: ${selectedSectionSummary.points100} · 0.75: ${selectedSectionSummary.points075} · 0.50: ${selectedSectionSummary.points050} · 0.25: ${selectedSectionSummary.points025} · 0.00: ${selectedSectionSummary.points000}`,
+    [selectedSectionSummary],
+  );
 
   function handleSetAttendance(memberId: string, attendanceRatio: number) {
     if (!selectedSession) {
@@ -1342,132 +1276,27 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
       <SurfaceCard variant="outline">
         {!selectedSection ? (
-          <>
-            <Text style={styles.sectionTitle}>
-              {tr("Sekcje według ustawienia na próbie", "Sections by rehearsal seating")}
-            </Text>
-            <Text style={styles.copy}>
-              {tr(
-                "Wybierz sekcję, aby odklikać obecność jej muzyków. Licznik pokazuje odklikane osoby (wartość > 0) względem składu sekcji.",
-                "Pick a section to mark attendance for its players. Counter shows marked players (value > 0) against section size.",
-              )}
-            </Text>
-
-            <View style={styles.sectionGrid}>
-              {sectionGridRows.map((row, rowIndex) => (
-                <View key={`section-row-${rowIndex}`} style={styles.sectionGridRow}>
-                  {row.map((item) => {
-                    const sectionMembers = item.group?.members ?? [];
-                    const summary = summarizeGroupMarks(sectionMembers, mergedEntriesByMemberId);
-                    const totalMembers = sectionMembers.length;
-                    const markedMembers = Math.max(totalMembers - summary.points000, 0);
-
-                    return (
-                      <Pressable
-                        key={item.key}
-                        onPress={() => setSelectedSectionKey(item.key)}
-                        style={[
-                          styles.sectionTile,
-                          !item.group && styles.sectionTileEmpty,
-                        ]}
-                      >
-                        <Text style={styles.sectionTileLabel}>{item.label}</Text>
-                        <Text style={styles.sectionTileMeta}>
-                          {totalMembers > 0
-                            ? tr(`${markedMembers}/${totalMembers} odklikane`, `${markedMembers}/${totalMembers} marked`)
-                            : tr("Brak składu", "No members")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ))}
-            </View>
-          </>
+          <SectionGridPanel
+            rows={sectionGridRowsDisplay}
+            onSelectSection={setSelectedSectionKey}
+          />
         ) : (
-          <>
-            <View style={styles.instrumentHeader}>
-              <View style={styles.instrumentHeaderTextCol}>
-                <Pressable onPress={() => setSelectedSectionKey(null)} style={styles.sectionBackButton}>
-                  <Text style={styles.sectionBackButtonLabel}>{tr("← Wróć do sekcji", "← Back to sections")}</Text>
-                </Pressable>
-                <Text style={styles.sectionDetailTitle}>{selectedSection.label}</Text>
-                <Text style={styles.instrumentSummary}>
-                  {`1.00: ${selectedSectionSummary.points100} · 0.75: ${selectedSectionSummary.points075} · 0.50: ${selectedSectionSummary.points050} · 0.25: ${selectedSectionSummary.points025} · 0.00: ${selectedSectionSummary.points000}`}
-                </Text>
-              </View>
-            </View>
-
-            {selectedSectionMembers.length === 0 ? (
-              <Text style={styles.copy}>
-                {tr(
-                  "Ta sekcja nie ma jeszcze przypisanych muzyków w aktywnym składzie.",
-                  "This section has no active members assigned yet.",
-                )}
-              </Text>
-            ) : (
-              <View style={[styles.memberRows, isDesktop && styles.memberRowsDesktop]}>
-                {selectedSectionMembers.map((member) => {
-                  const ratio = mergedEntriesByMemberId[member.member_id];
-                  const mark = markFromRatio(ratio);
-                  const nextRatio = getNextAttendanceRatio(ratio);
-                  const isRsvpHinted = rsvpHintMemberIds.has(member.member_id);
-                  const hasPendingOverride = Object.prototype.hasOwnProperty.call(pendingAttendanceByMemberId, member.member_id);
-                  const isTileDisabled = !canWrite || !selectedSession || isBatchSaving;
-
-                  return (
-                    <Pressable
-                      key={member.member_id}
-                      disabled={isTileDisabled}
-                      onPress={() => {
-                        handleSetAttendance(member.member_id, nextRatio);
-                      }}
-                      style={[
-                        styles.memberRow,
-                        isDesktop && styles.memberRowDesktop,
-                        isDesktop && { width: desktopTileWidth },
-                        isRsvpHinted && styles.memberRowHinted,
-                        hasPendingOverride && styles.memberRowPending,
-                        isTileDisabled && styles.memberRowDisabled,
-                      ]}
-                    >
-                      <View style={styles.memberTextCol}>
-                        <View style={styles.memberNameRow}>
-                          <Text numberOfLines={1} style={styles.memberName}>{member.full_name}</Text>
-                          {isRsvpHinted ? (
-                            <Text style={styles.memberHintBadge}>{tr("RSVP", "RSVP")}</Text>
-                          ) : null}
-                        </View>
-                        <Text
-                          style={[
-                            styles.memberMeta,
-                            mark === 1
-                              ? styles.memberMetaPresent
-                              : mark === 0
-                                ? styles.memberMetaAbsent
-                                : null,
-                          ]}
-                        >
-                          {formatMarkLabel(mark)}
-                          {hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
-                        </Text>
-                      </View>
-
-                      <View
-                        style={[
-                          styles.cycleButton,
-                          styles.cycleButtonActive,
-                          mark === 1 ? styles.cycleButtonActiveStrong : null,
-                        ]}
-                      >
-                        <Text style={styles.cycleButtonLabel}>{formatAttendanceValue(mark)}</Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            )}
-          </>
+          <SectionMembersPanel
+            sectionLabel={selectedSection.label}
+            sectionSummaryText={selectedSectionSummaryText}
+            cards={selectedSectionMemberCards}
+            hasMembers={selectedSectionMembers.length > 0}
+            memberGridColumns={memberGridColumns}
+            isDesktop={isDesktop}
+            desktopTileWidth={desktopTileWidth}
+            selectedSessionKey={selectedSessionKey}
+            pendingChangesCount={pendingChangesCount}
+            isBatchSaving={isBatchSaving}
+            onBackToSections={() => setSelectedSectionKey(null)}
+            onSetAttendance={handleSetAttendance}
+            formatMarkLabel={formatMarkLabel}
+            formatAttendanceValue={formatAttendanceValue}
+          />
         )}
       </SurfaceCard>
     </ScrollView>
@@ -1695,78 +1524,6 @@ const styles = StyleSheet.create({
     color: tokens.colors.muted,
     fontSize: 11,
   },
-  sectionGrid: {
-    marginTop: tokens.spacing.sm,
-    gap: tokens.spacing.xs,
-  },
-  sectionGridRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: tokens.spacing.xs,
-  },
-  sectionTile: {
-    flex: 1,
-    minHeight: 84,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surface,
-    justifyContent: "space-between",
-    gap: tokens.spacing.xs,
-  },
-  sectionTileEmpty: {
-    opacity: 0.65,
-    backgroundColor: tokens.colors.surfaceMuted,
-  },
-  sectionTileLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  sectionTileMeta: {
-    color: tokens.colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  instrumentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
-    paddingBottom: tokens.spacing.xs,
-  },
-  instrumentHeaderTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  instrumentTitle: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  instrumentSummary: {
-    fontSize: 11,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  sectionBackButton: {
-    alignSelf: "flex-start",
-    marginBottom: 2,
-  },
-  sectionBackButtonLabel: {
-    color: tokens.colors.brand,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  sectionDetailTitle: {
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
   batchActionsRow: {
     marginTop: tokens.spacing.sm,
     flexDirection: "row",
@@ -1852,98 +1609,6 @@ const styles = StyleSheet.create({
     color: tokens.colors.successInk,
     fontSize: 11,
     lineHeight: 16,
-    fontWeight: "700",
-  },
-  memberRows: {
-    gap: 6,
-  },
-  memberRowsDesktop: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  memberRow: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: tokens.colors.surface,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  memberRowHinted: {
-    backgroundColor: tokens.colors.brandTint,
-    borderColor: tokens.colors.brand,
-  },
-  memberRowPending: {
-    borderColor: tokens.colors.brand,
-  },
-  memberRowDisabled: {
-    opacity: 0.65,
-  },
-  memberRowDesktop: {
-    minHeight: 54,
-  },
-  memberTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  memberNameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  memberName: {
-    flexShrink: 1,
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  memberHintBadge: {
-    fontSize: 10,
-    color: tokens.colors.brand,
-    borderWidth: 1,
-    borderColor: tokens.colors.brand,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    fontWeight: "700",
-  },
-  memberMeta: {
-    fontSize: 11,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  memberMetaPresent: {
-    color: tokens.colors.successInk,
-  },
-  memberMetaAbsent: {
-    color: tokens.colors.dangerInk,
-  },
-  cycleButton: {
-    minWidth: 66,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-  },
-  cycleButtonActive: {
-    borderColor: tokens.colors.brand,
-    backgroundColor: tokens.colors.brandTint,
-  },
-  cycleButtonActiveStrong: {
-    borderColor: tokens.colors.successInk,
-    backgroundColor: tokens.colors.successSurface,
-  },
-  cycleButtonLabel: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.ink,
     fontWeight: "700",
   },
 });
