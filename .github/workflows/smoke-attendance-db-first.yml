@@ -69,10 +69,27 @@ jobs:
           smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
           payload="{\"requireExportTriggerOk\":${require_export},\"checkSyncContract\":${check_sync_contract}}"
 
-          response="$(curl -sS --fail-with-body -X POST "$smoke_url" \
+          raw_response="$(curl -sS -X POST "$smoke_url" \
             -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "$payload")"
+            -d "$payload" \
+            -w '\n%{http_code}')"
 
-          echo "$response"
-          echo "$response" | jq -e '.status == "ok"' >/dev/null
+          http_status="${raw_response##*$'\n'}"
+          response_body="${raw_response%$'\n'*}"
+
+          echo "$response_body"
+          echo "HTTP status: $http_status"
+
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            error_code="$(echo "$response_body" | jq -r '.error // empty' 2>/dev/null || true)"
+            error_message="$(echo "$response_body" | jq -r '.message // empty' 2>/dev/null || true)"
+            if [ -n "$error_code" ] || [ -n "$error_message" ]; then
+              echo "::error::Smoke function failed (HTTP $http_status): ${error_code:-unknown_error} ${error_message}"
+            else
+              echo "::error::Smoke function failed (HTTP $http_status) with non-JSON or unexpected body."
+            fi
+            exit 1
+          fi
+
+          echo "$response_body" | jq -e '.status == "ok"' >/dev/null
