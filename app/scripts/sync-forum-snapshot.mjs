@@ -699,6 +699,73 @@ function parseThreadPage(html, resolvedUrl, baseUrl) {
   return { threadId, title, titleDate, posts, pollResultsUrl: pollResultsUrl ? resolveUrl(baseUrl, pollResultsUrl) : null };
 }
 
+function extractThreadPageNumbers(html, baseUrl, threadUrl) {
+  const resolvedThreadUrl = new URL(resolveUrl(baseUrl, threadUrl));
+  const expectedThreadId = resolvedThreadUrl.searchParams.get("tid");
+  const pages = new Set([1]);
+  const $ = load(html);
+
+  function parseThreadRef(candidateHref) {
+    const resolved = resolveUrl(baseUrl, candidateHref);
+    const candidateUrl = new URL(resolved);
+    const queryThreadId = candidateUrl.searchParams.get("tid");
+    const queryPage = Number.parseInt(candidateUrl.searchParams.get("page") ?? "", 10);
+    if (queryThreadId) {
+      return {
+        threadId: queryThreadId,
+        page: Number.isInteger(queryPage) && queryPage > 0 ? queryPage : null,
+      };
+    }
+
+    const pathMatch = candidateUrl.pathname.match(/thread-(\d+)(?:-page-(\d+))?\.html$/i);
+    if (pathMatch) {
+      return {
+        threadId: pathMatch[1],
+        page: pathMatch[2] ? Number.parseInt(pathMatch[2], 10) : 1,
+      };
+    }
+
+    return { threadId: null, page: null };
+  }
+
+  $('a[href]').each((_, element) => {
+    const href = $(element).attr("href");
+    if (!href) {
+      return;
+    }
+
+    const { threadId, page } = parseThreadRef(href);
+    if (!threadId || !expectedThreadId || threadId !== expectedThreadId) {
+      return;
+    }
+    if (Number.isInteger(page) && page > 1) {
+      pages.add(page);
+    }
+  });
+
+  return Array.from(pages).sort((left, right) => left - right);
+}
+
+function mergeAndSortThreadPosts(parsedPages) {
+  const byPostId = new Map();
+  for (const parsed of parsedPages) {
+    for (const post of parsed.posts) {
+      if (!byPostId.has(post.postId)) {
+        byPostId.set(post.postId, post);
+      }
+    }
+  }
+
+  return Array.from(byPostId.values()).sort((left, right) => {
+    const leftPostId = Number.parseInt(left.postId, 10);
+    const rightPostId = Number.parseInt(right.postId, 10);
+    if (Number.isInteger(leftPostId) && Number.isInteger(rightPostId) && leftPostId !== rightPostId) {
+      return leftPostId - rightPostId;
+    }
+    return left.createdAt.localeCompare(right.createdAt);
+  });
+}
+
 function parsePollResultsPage(html, baseUrl) {
   const $ = load(html);
   const question = normalizeWhitespace($("td.thead strong").first().text().replace(/^Ankieta:\s*/i, ""));
@@ -1116,9 +1183,38 @@ async function main() {
   const rawThreads = [];
   const manifestThreads = [];
   for (const threadConfig of forumDiscovery.threads) {
-    const threadPage = await requestHtml({ jar, url: resolveUrl(config.baseUrl, threadConfig.url) });
-    const parsedThread = parseThreadPage(threadPage.html, resolveUrl(config.baseUrl, threadConfig.url), config.baseUrl);
-    const threadCachePath = await saveCacheFile(`threads/${parsedThread.threadId}-${sanitizeFileName(parsedThread.title)}.html`, threadPage.html);
+    const resolvedThreadUrl = resolveUrl(config.baseUrl, threadConfig.url);
+    const firstThreadPage = await requestHtml({ jar, url: resolvedThreadUrl });
+    const parsedFirstPage = parseThreadPage(firstThreadPage.html, resolvedThreadUrl, config.baseUrl);
+    const pageNumbers = extractThreadPageNumbers(firstThreadPage.html, config.baseUrl, resolvedThreadUrl);
+    const threadCachePaths = [
+      await saveCacheFile(`threads/${parsedFirstPage.threadId}-${sanitizeFileName(parsedFirstPage.title)}-page-1.html`, firstThreadPage.html),
+    ];
+    const parsedPages = [parsedFirstPage];
+
+    for (const pageNumber of pageNumbers) {
+      if (pageNumber === 1) {
+        continue;
+      }
+      const pageUrl = new URL(resolvedThreadUrl);
+      pageUrl.searchParams.set("page", String(pageNumber));
+      const threadPage = await requestHtml({ jar, url: pageUrl.toString() });
+      parsedPages.push(parseThreadPage(threadPage.html, pageUrl.toString(), config.baseUrl));
+      threadCachePaths.push(
+        await saveCacheFile(
+          `threads/${parsedFirstPage.threadId}-${sanitizeFileName(parsedFirstPage.title)}-page-${pageNumber}.html`,
+          threadPage.html,
+        ),
+      );
+    }
+
+    const mergedPosts = mergeAndSortThreadPosts(parsedPages);
+    const pollResultsUrl = parsedPages.find((page) => page.pollResultsUrl)?.pollResultsUrl ?? null;
+    const parsedThread = {
+      ...parsedFirstPage,
+      posts: mergedPosts,
+      pollResultsUrl,
+    };
     let poll = null;
     let pollCachePath = null;
     if (parsedThread.pollResultsUrl) {
@@ -1133,7 +1229,9 @@ async function main() {
       title: parsedThread.title,
       sourceForumUrl: threadConfig.sourceForumUrl,
       sourcePage: threadConfig.sourcePage,
-      cachePath: threadCachePath,
+      cachePath: threadCachePaths[0] ?? null,
+      cachePaths: threadCachePaths,
+      discoveredPages: pageNumbers,
       pollCachePath,
       postCount: parsedThread.posts.length,
       hasSetlistPost: Boolean(parsedThread.posts.find((post) => looksLikeSetlist(post.bodyText))),
