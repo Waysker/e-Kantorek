@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -536,6 +536,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSaveFeedback, setLastSaveFeedback] = useState<SaveFeedback | null>(null);
   const [selectedSectionKey, setSelectedSectionKey] = useState<string | null>(null);
+  const bootLoadRequestIdRef = useRef(0);
+  const entriesLoadRequestIdRef = useRef(0);
 
   const canWrite = Boolean(
     ATTENDANCE_WRITE_UI_ENABLED &&
@@ -570,7 +572,9 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   }, [isDesktop, width]);
 
   useEffect(() => {
-    let isCancelled = false;
+    let isDisposed = false;
+    const requestId = bootLoadRequestIdRef.current + 1;
+    bootLoadRequestIdRef.current = requestId;
 
     async function loadBootData() {
       if (!supabaseAuthClient) {
@@ -581,64 +585,72 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
       setIsBootLoading(true);
       setErrorMessage(null);
+      try {
+        const [sessionsResult, membersResult, snapshotResult] = await Promise.all([
+          supabaseAuthClient
+            .from("events")
+            .select("event_id,title,event_date,source_header,source_column")
+            .order("event_date", { ascending: false })
+            .limit(500),
+          supabaseAuthClient
+            .from("members")
+            .select("member_id,full_name,instrument,is_active")
+            .eq("is_active", true)
+            .order("instrument", { ascending: true })
+            .order("full_name", { ascending: true }),
+          supabaseAuthClient
+            .from("forum_snapshot_cache")
+            .select("payload")
+            .eq("snapshot_key", "forum")
+            .maybeSingle<{ payload: ForumSnapshotPayload }>(),
+        ]);
 
-      const [sessionsResult, membersResult, snapshotResult] = await Promise.all([
-        supabaseAuthClient
-          .from("events")
-          .select("event_id,title,event_date,source_header,source_column")
-          .order("event_date", { ascending: false })
-          .limit(500),
-        supabaseAuthClient
-          .from("members")
-          .select("member_id,full_name,instrument,is_active")
-          .eq("is_active", true)
-          .order("instrument", { ascending: true })
-          .order("full_name", { ascending: true }),
-        supabaseAuthClient
-          .from("forum_snapshot_cache")
-          .select("payload")
-          .eq("snapshot_key", "forum")
-          .maybeSingle<{ payload: ForumSnapshotPayload }>(),
-      ]);
+        if (isDisposed || requestId !== bootLoadRequestIdRef.current) {
+          return;
+        }
 
-      if (isCancelled) {
-        return;
-      }
+        if (sessionsResult.error) {
+          throw new Error(sessionsResult.error.message);
+        }
+        if (membersResult.error) {
+          throw new Error(membersResult.error.message);
+        }
 
-      if (sessionsResult.error) {
-        setErrorMessage(sessionsResult.error.message);
-        setIsBootLoading(false);
-        return;
-      }
-      if (membersResult.error) {
-        setErrorMessage(membersResult.error.message);
-        setIsBootLoading(false);
-        return;
-      }
+        const loadedSessionsRaw = (sessionsResult.data ?? []) as SessionRow[];
+        const loadedSessions = filterShadowPlaceholderSessions(loadedSessionsRaw);
+        const loadedMembers = (membersResult.data ?? []) as MemberRow[];
+        setSessions(loadedSessions);
+        setMembers(loadedMembers);
+        setSnapshotPayload(snapshotResult.data?.payload ?? null);
 
-      const loadedSessionsRaw = (sessionsResult.data ?? []) as SessionRow[];
-      const loadedSessions = filterShadowPlaceholderSessions(loadedSessionsRaw);
-      const loadedMembers = (membersResult.data ?? []) as MemberRow[];
-      setSessions(loadedSessions);
-      setMembers(loadedMembers);
-      setSnapshotPayload(snapshotResult.data?.payload ?? null);
-
-      if (loadedSessions.length > 0) {
-        const defaultSession = chooseDefaultSession(loadedSessions);
-        if (defaultSession) {
-          setSelectedSessionKey(defaultSession.event_id);
-          setSelectedDate(defaultSession.event_date);
-          setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
+        if (loadedSessions.length > 0) {
+          const defaultSession = chooseDefaultSession(loadedSessions);
+          if (defaultSession) {
+            setSelectedSessionKey(defaultSession.event_id);
+            setSelectedDate(defaultSession.event_date);
+            setVisibleMonthKey(getMonthKeyFromIsoDate(defaultSession.event_date));
+          }
+        }
+      } catch (error) {
+        if (isDisposed || requestId !== bootLoadRequestIdRef.current) {
+          return;
+        }
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : tr("Nie udało się wczytać danych startowych.", "Failed to load initial data."),
+        );
+      } finally {
+        if (!isDisposed && requestId === bootLoadRequestIdRef.current) {
+          setIsBootLoading(false);
         }
       }
-
-      setIsBootLoading(false);
     }
 
     void loadBootData();
 
     return () => {
-      isCancelled = true;
+      isDisposed = true;
     };
   }, []);
 
@@ -728,13 +740,14 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   const selectedCanonicalEventId = selectedSession?.event_id ?? null;
 
   useEffect(() => {
-    let isCancelled = false;
+    let isDisposed = false;
+    const requestId = entriesLoadRequestIdRef.current + 1;
+    entriesLoadRequestIdRef.current = requestId;
 
     async function loadEntries() {
       if (!supabaseAuthClient || !selectedCanonicalEventId) {
         setEntriesByMemberId({});
         setIsEntriesLoading(false);
-        setErrorMessage(null);
         return;
       }
 
@@ -746,13 +759,12 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           .select("member_id,attendance_ratio")
           .eq("event_id", selectedCanonicalEventId);
 
-        if (isCancelled) {
+        if (isDisposed || requestId !== entriesLoadRequestIdRef.current) {
           return;
         }
 
         if (error) {
-          setErrorMessage(error.message);
-          return;
+          throw new Error(error.message);
         }
 
         const map: Record<string, number> = {};
@@ -760,8 +772,18 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           map[entry.member_id] = Number(entry.attendance_ratio);
         }
         setEntriesByMemberId(map);
+      } catch (error) {
+        if (isDisposed || requestId !== entriesLoadRequestIdRef.current) {
+          return;
+        }
+        setEntriesByMemberId({});
+        setErrorMessage(
+          error instanceof Error
+            ? error.message
+            : tr("Nie udało się wczytać wpisów obecności.", "Failed to load attendance entries."),
+        );
       } finally {
-        if (!isCancelled) {
+        if (!isDisposed && requestId === entriesLoadRequestIdRef.current) {
           setIsEntriesLoading(false);
         }
       }
@@ -770,7 +792,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     void loadEntries();
 
     return () => {
-      isCancelled = true;
+      isDisposed = true;
     };
   }, [selectedCanonicalEventId]);
 
