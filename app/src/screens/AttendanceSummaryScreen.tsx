@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 
@@ -154,6 +155,21 @@ function compareSectionLabels(left: string, right: string): number {
 }
 
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
+  const { width: viewportWidth } = useWindowDimensions();
+  const isDesktopLayout = viewportWidth >= tokens.breakpoints.desktop;
+  const memberTableMaxWidth = useMemo(() => {
+    if (!isDesktopLayout) {
+      return null;
+    }
+    if (viewportWidth >= 1600) {
+      return 980;
+    }
+    if (viewportWidth >= 1280) {
+      return 860;
+    }
+    return 740;
+  }, [isDesktopLayout, viewportWidth]);
+
   const defaultScope = useMemo(() => getDefaultSeasonScope(), []);
   const [scopeStartDate, setScopeStartDate] = useState(defaultScope.startDate);
   const [scopeEndDate, setScopeEndDate] = useState(defaultScope.endDate);
@@ -493,13 +509,35 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           ? sections.map((section) => (
               <View key={section.key} style={styles.sectionBlock}>
                 <Text style={styles.sectionLabel}>{section.label}</Text>
-                <View style={styles.memberTable}>
+                <View
+                  style={[
+                    styles.memberTable,
+                    isDesktopLayout && styles.memberTableDesktop,
+                    isDesktopLayout && memberTableMaxWidth ? { maxWidth: memberTableMaxWidth } : null,
+                  ]}
+                >
                   {section.members.map((member) => (
-                    <View key={member.memberId} style={styles.memberRow}>
-                      <Text style={styles.memberName}>{member.fullName}</Text>
-                      <View style={styles.memberMetrics}>
-                        <Text style={styles.memberPercent}>{formatPercent(member.percent)}</Text>
-                        <Text style={styles.memberPoints}>
+                    <View
+                      key={member.memberId}
+                      style={[styles.memberRow, isDesktopLayout && styles.memberRowDesktop]}
+                    >
+                      <Text
+                        style={[styles.memberName, isDesktopLayout && styles.memberNameDesktop]}
+                        numberOfLines={1}
+                      >
+                        {member.fullName}
+                      </Text>
+                      <View
+                        style={[styles.memberMetrics, isDesktopLayout && styles.memberMetricsDesktop]}
+                      >
+                        <Text
+                          style={[styles.memberPercent, isDesktopLayout && styles.memberPercentDesktop]}
+                        >
+                          {formatPercent(member.percent)}
+                        </Text>
+                        <Text
+                          style={[styles.memberPoints, isDesktopLayout && styles.memberPointsDesktop]}
+                        >
                           {formatPoints(member.points)} {tr("pkt", "pts")}
                         </Text>
                       </View>
@@ -676,22 +714,44 @@ const styles = StyleSheet.create({
   memberTable: {
     gap: tokens.spacing.xs,
   },
+  memberTableDesktop: {
+    width: "100%",
+    alignSelf: "center",
+  },
   memberRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: tokens.spacing.sm,
     paddingVertical: 4,
+    direction: "ltr",
+  },
+  memberRowDesktop: {
+    justifyContent: "flex-start",
+    gap: tokens.spacing.md,
   },
   memberName: {
     flex: 1,
     fontSize: tokens.typography.body,
     lineHeight: 22,
     color: tokens.colors.ink,
+    textAlign: "left",
+  },
+  memberNameDesktop: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   memberMetrics: {
     alignItems: "flex-end",
     minWidth: 110,
+  },
+  memberMetricsDesktop: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "flex-end",
+    gap: tokens.spacing.md,
+    minWidth: 210,
+    flexShrink: 0,
   },
   memberPercent: {
     fontSize: tokens.typography.body,
@@ -699,9 +759,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: tokens.colors.ink,
   },
+  memberPercentDesktop: {
+    minWidth: 72,
+    textAlign: "right",
+  },
   memberPoints: {
     fontSize: tokens.typography.caption,
     lineHeight: 18,
     color: tokens.colors.muted,
+  },
+  memberPointsDesktop: {
+    minWidth: 84,
+    textAlign: "right",
   },
 });
