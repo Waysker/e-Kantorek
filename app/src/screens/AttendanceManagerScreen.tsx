@@ -1005,12 +1005,6 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       <SurfaceCard variant="default">
         <Text style={styles.cardEyebrow}>{tr("Panel zarządu", "Management panel")}</Text>
         <Text style={styles.title}>{tr("Faktyczna obecność", "Actual attendance")}</Text>
-        <Text style={styles.copy}>
-          {tr(
-            "Klikaj w kafelek orkiestranta, aby przełączać punkty: 0 -> 1 -> 0.75 -> 0.50 -> 0.25. Deklaracje RSVP z eventów są tylko podpowiedzią i nie są źródłem prawdy.",
-            "Click a member tile to cycle points: 0 -> 1 -> 0.75 -> 0.50 -> 0.25. RSVP declarations from events are only hints and are not the source of truth.",
-          )}
-        </Text>
         {!canWrite ? (
           <Text style={[styles.notice, styles.noticeError]}>
             {tr(

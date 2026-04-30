@@ -36,12 +36,6 @@ export function AttendanceWorkspaceScreen({
           <Text style={styles.cardTitle}>
             {tr("Wpisywanie obecności", "Attendance write")}
           </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Panel do odklikiwania faktycznej obecności na próbach i wydarzeniach.",
-              "Panel for marking actual attendance for rehearsals and events.",
-            )}
-          </Text>
           <Pressable style={styles.actionButton} onPress={onOpenAttendanceManager}>
             <Text style={styles.actionButtonLabel}>{tr("Otwórz", "Open")}</Text>
           </Pressable>
@@ -53,12 +47,6 @@ export function AttendanceWorkspaceScreen({
           <Text style={styles.cardEyebrow}>{tr("Sekcyjni i zarząd", "Section and board")}</Text>
           <Text style={styles.cardTitle}>
             {tr("Podsumowanie obecności", "Attendance summary")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Punkty i frekwencja dla wybranego zakresu dat, pogrupowane sekcjami.",
-              "Points and attendance for selected date range, grouped by section.",
-            )}
           </Text>
           <Pressable style={styles.actionButton} onPress={onOpenAttendanceSummary}>
             <Text style={styles.actionButtonLabel}>{tr("Otwórz", "Open")}</Text>

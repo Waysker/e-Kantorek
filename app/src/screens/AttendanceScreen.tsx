@@ -112,10 +112,7 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
       </View>
 
       <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
-        {tr(
-          "To jest tylko deklaracja RSVP z wydarzenia. Faktyczną obecność wpisujesz osobno w panelu zarządu (Profil -> Rejestr faktycznej obecności).",
-          "This is RSVP declaration preview only. Actual attendance is recorded separately in the management panel (Profile -> Actual attendance register).",
-        )}
+        {tr("Stan z forum.", "Forum state.")}
       </Text>
     </View>
   );
@@ -140,12 +137,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
               {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
             </Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
-            <Text style={styles.cardSecondary}>
-              {tr(
-                "Ten ekran pokazuje deklaracje do wydarzenia oraz skład. Faktyczna obecność jest zatwierdzana osobno przez zarząd.",
-                "This screen shows event declarations and roster. Actual attendance is approved separately by management.",
-              )}
-            </Text>
             <AttendanceSummaryStrip summary={event.attendanceSummary} />
           </SurfaceCard>
 
@@ -160,12 +151,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
             {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
           </Text>
           <Text style={styles.screenTitle}>{event.title}</Text>
-          <Text style={styles.cardSecondary}>
-            {tr(
-              "Widok deklaracji do wydarzenia. Faktyczna obecność jest odklikana osobno przez zarząd.",
-              "Event declaration preview. Actual attendance is marked separately by management.",
-            )}
-          </Text>
 
           <View style={styles.mobileSummaryRow}>
             <AttendanceSummaryStrip summary={event.attendanceSummary} compact />
@@ -185,17 +170,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
           {isDesktop
             ? tr("Grupy według instrumentu", "Grouped by instrument")
             : tr("Według instrumentu", "By instrument")}
-        </Text>
-        <Text style={styles.sectionCopy}>
-          {isDesktop
-            ? tr(
-                "To podgląd składu oparty o deklaracje z wydarzenia, pomocny jako podpowiedź przed wpisem faktycznej obecności.",
-                "This roster is based on event declarations and works as a hint before actual attendance is recorded.",
-              )
-            : tr(
-                "To podgląd oparty o deklaracje, nie zatwierdzona faktyczna obecność.",
-                "This preview is declaration-based, not approved actual attendance.",
-              )}
         </Text>
       </View>
 
@@ -225,12 +199,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
                   {tr("Odmowy według instrumentu", "Declined by instrument")}
-                </Text>
-                <Text style={styles.sectionCopy}>
-                  {tr(
-                    "Ten widok jest domyślnie ukryty, żeby skupić się na potwierdzonym składzie.",
-                    "This view is hidden by default to keep focus on the confirmed roster.",
-                  )}
                 </Text>
               </View>
 

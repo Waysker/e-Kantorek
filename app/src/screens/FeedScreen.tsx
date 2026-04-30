@@ -61,18 +61,6 @@ export function FeedScreen({
 
       <SurfaceCard variant="muted">
         <Text style={styles.cardEyebrow}>{tr("Aktualny etap", "Current phase")}</Text>
-        <Text style={styles.cardTitle}>
-          {tr(
-            "Wizualny prototyp z tymczasowymi adapterami danych",
-            "Visual prototype with temporary data adapters",
-          )}
-        </Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Dane z forum obejmują wydarzenia, użytkowników i obecność. Aktualności pozostają testowe do czasu uruchomienia docelowego backendu.",
-            "Forum-backed data is scoped to events, users, and attendance. Feed is still local fixture content until the real app backend exists.",
-          )}
-        </Text>
         <Pressable onPress={onOpenEvents} style={styles.linkAction}>
           <Text style={styles.linkActionLabel}>
             {tr("Przejdź do wydarzeń", "Review event prototype")}

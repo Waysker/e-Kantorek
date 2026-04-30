@@ -21,12 +21,6 @@ export function SectionGridPanel({ rows, onSelectSection }: SectionGridPanelProp
       <Text style={styles.sectionTitle}>
         {tr("Sekcje według ustawienia na próbie", "Sections by rehearsal seating")}
       </Text>
-      <Text style={styles.copy}>
-        {tr(
-          "Wybierz sekcję, aby odklikać obecność jej muzyków. Licznik pokazuje odklikane osoby (wartość > 0) względem składu sekcji.",
-          "Pick a section to mark attendance for its players. Counter shows marked players (value > 0) against section size.",
-        )}
-      </Text>
 
       <View style={styles.sectionGrid}>
         {rows.map((row, rowIndex) => (
@@ -66,12 +60,6 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     color: tokens.colors.ink,
     fontWeight: "700",
-  },
-  copy: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
-    color: tokens.colors.muted,
   },
   sectionGrid: {
     marginTop: tokens.spacing.sm,

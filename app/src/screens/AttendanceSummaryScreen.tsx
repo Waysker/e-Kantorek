@@ -677,12 +677,6 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       <SurfaceCard variant="default">
         <Text style={styles.cardEyebrow}>{tr("Panel obecności", "Attendance panel")}</Text>
         <Text style={styles.cardTitle}>{tr("Podsumowanie sekcyjne", "Section attendance summary")}</Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Panel liczy punktację na podstawie aktualnych danych w DB. Gdy sync ref -> DB jest opóźniony, wyniki mogą chwilowo różnić się od arkusza referencyjnego.",
-            "This panel computes scores from current DB data. If ref -> DB sync is delayed, results can temporarily differ from the reference sheet.",
-          )}
-        </Text>
         <Text style={styles.cardSecondary}>
           {tr("Ostatni sync ref -> DB", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
         </Text>

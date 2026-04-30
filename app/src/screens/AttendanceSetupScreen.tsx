@@ -164,12 +164,6 @@ export function AttendanceSetupScreen({
 
       <SurfaceCard variant="muted">
         <Text style={styles.cardEyebrow}>{tr("Runbook", "Runbook")}</Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Ta wersja PoC nie uruchamia skryptów bezpośrednio z UI. Użyj poniższych komend lokalnie w katalogu app.",
-            "This PoC does not execute scripts directly from UI. Run these commands locally from the app directory.",
-          )}
-        </Text>
         <View style={styles.commandList}>
           {runbookCommands.map((command) => (
             <Text key={command} style={styles.commandText}>
@@ -181,12 +175,6 @@ export function AttendanceSetupScreen({
 
       <SurfaceCard variant="outline">
         <Text style={styles.cardEyebrow}>{tr("Zakres PoC", "PoC scope")}</Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Docelowo ten ekran może dostać upload XLSX i publikację jednym kliknięciem, ale obecnie pełni rolę kontrolnej checklisty operacyjnej.",
-            "Eventually this screen can include one-click XLSX upload and publish, but currently it acts as an operational control checklist.",
-          )}
-        </Text>
       </SurfaceCard>
     </ScrollView>
   );
