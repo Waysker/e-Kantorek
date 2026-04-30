@@ -20,7 +20,7 @@ function formatRoleLabel(role: UserProfile["role"]) {
     return tr("Zarząd", "Board");
   }
   if (role === "section") {
-    return tr("Sekcyjne", "Section leader");
+    return tr("Sekcyjny", "Section leader");
   }
   return tr("Członek", "Member");
 }
