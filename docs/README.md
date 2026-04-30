@@ -15,13 +15,14 @@
 4. `docs/reference/phase-6-postmortem.md`
 5. `docs/reference/cleanup-maintenance-plan.md`
 6. `docs/ops/sheet-sync-setup.md`
-7. `docs/ops/attendance-ops-runbook.md`
-8. `docs/ops/function-errors-runbook.md`
-9. `docs/ops/attendance-alerting-plan.md`
-10. `docs/ops/pr-ops-checklist.md`
-11. `docs/ops/secrets-runtime-matrix.md`
-12. `docs/ops/smoke-attendance-db-first-hybrid.md`
-13. `docs/contracts/attendance-sheet-contract.md`
+7. `docs/ops/web-deploy-staging-production.md`
+8. `docs/ops/attendance-ops-runbook.md`
+9. `docs/ops/function-errors-runbook.md`
+10. `docs/ops/attendance-alerting-plan.md`
+11. `docs/ops/pr-ops-checklist.md`
+12. `docs/ops/secrets-runtime-matrix.md`
+13. `docs/ops/smoke-attendance-db-first-hybrid.md`
+14. `docs/contracts/attendance-sheet-contract.md`
 
 ## Scope Notes
 

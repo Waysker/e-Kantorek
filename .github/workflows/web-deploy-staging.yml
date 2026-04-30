@@ -1,0 +1,73 @@
+name: Deploy Web Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to deploy to staging (branch, tag, or SHA)"
+        required: true
+        default: "main"
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/web-deploy-staging.yml"
+      - ".github/workflows/web-deploy-pages.yml"
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: "web-staging"
+  cancel-in-progress: true
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/staging/
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build Expo web export (staging)
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL_STAGING || secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY_STAGING || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          EXPO_PUBLIC_APP_LOCALE: pl
+          EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED: "true"
+        run: npm run web:build:pages
+
+      - name: Deploy staging to gh-pages/staging
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: app/dist
+          target-folder: staging
+          clean: true
+          commit-message: "deploy(staging): ${{ github.sha }}"

@@ -13,6 +13,7 @@ Keep every variable in the runtime where it is consumed.
 1. Do not duplicate sensitive values across GitHub and Supabase unless a trigger flow explicitly needs it.
 2. If a secret is consumed only by Edge Functions, it must not be stored in GitHub.
 3. Use GitHub `Variables` for non-sensitive values and `Secrets` for sensitive ones.
+4. For web deploys, prefer GitHub Environment-scoped secrets (`staging`, `production`) over repository-wide secrets when possible.
 
 ## Canonical Matrix
 
@@ -20,6 +21,8 @@ Keep every variable in the runtime where it is consumed.
 |---|---|---|---|---|
 | `EXPO_PUBLIC_SUPABASE_URL` | public config | web/app build | GitHub Variable or Secret | Required for Pages/web builds. |
 | `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | public config | web/app build | GitHub Variable or Secret | Publishable key, still safe as public client config. |
+| `EXPO_PUBLIC_SUPABASE_URL_STAGING` | public config | staging web build | GitHub Secret (staging env preferred) | Optional override; if missing, staging deploy falls back to `EXPO_PUBLIC_SUPABASE_URL`. |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY_STAGING` | public config | staging web build | GitHub Secret (staging env preferred) | Optional override; if missing, staging deploy falls back to prod publishable/anon key. |
 | `ORAGH_FORUM_USERNAME` | secret | GitHub forum sync workflow | GitHub Secret | Runner-side sync login. |
 | `ORAGH_FORUM_PASSWORD` | secret | GitHub forum sync workflow | GitHub Secret | Runner-side sync login. |
 | `SUPABASE_URL` | secret-ish config | GitHub forum publish workflow | GitHub Secret | Used by publish scripts in CI. |

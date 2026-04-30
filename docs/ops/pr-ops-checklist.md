@@ -31,6 +31,8 @@ Use this checklist for PRs that touch at least one of:
   - `SMOKE_CHECK_SYNC_CONTRACT=true`
   - `SMOKE_REQUIRE_EXPORT_TRIGGER_OK=true`
 - [ ] `Attendance Health Check` passes on manual dispatch after deploys touching pipeline/runtime logic.
+- [ ] `Deploy Web Staging` completed for `main` commit and staging URL was sanity-checked.
+- [ ] If releasing, `Deploy Web Production` was run manually from the validated ref.
 
 ## 4) Ops Verifications (Post-Deploy)
 

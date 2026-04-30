@@ -143,7 +143,8 @@ Role management hardening:
 Current baseline (as of 2026-04-29):
 
 - `npm run typecheck` passes locally
-- GitHub Pages deploys from `.github/workflows/web-deploy-pages.yml`
+- GitHub Pages staging deploy workflow exists at `.github/workflows/web-deploy-staging.yml`
+- GitHub Pages production promotion workflow exists at `.github/workflows/web-deploy-pages.yml`
 - smoke workflow exists at `.github/workflows/smoke-attendance-db-first.yml`
 - CI typecheck workflow exists at `.github/workflows/ci-typecheck.yml`
 
@@ -259,17 +260,41 @@ Use `../docs/ops/sheet-sync-setup.md` for setup and runbook.
 
 ## Web Hosting (GitHub Pages)
 
-This repo includes `.github/workflows/web-deploy-pages.yml` which exports Expo web (`app/dist`) and deploys it to GitHub Pages on every push to `main` (and manually with `workflow_dispatch`).
-The workflow uses `npm run web:build:pages`, which patches exported `index.html` asset paths to work under GitHub Pages repo subpaths.
+This repo now uses a two-stage web deployment flow:
+
+- `.github/workflows/web-deploy-staging.yml`
+  - deploys automatically on push to `main`
+  - deploys to `gh-pages/staging` (URL suffix: `/staging/`)
+- `.github/workflows/web-deploy-pages.yml`
+  - production promotion, manual only (`workflow_dispatch`)
+  - deploys to `gh-pages` root (main Pages URL)
+
+Both workflows use `npm run web:build:pages`, which patches exported `index.html` asset paths to work under GitHub Pages repo subpaths.
 
 One-time setup in GitHub:
 
-1. `Settings -> Pages -> Source`: select **GitHub Actions**
-2. Add repository secrets:
+1. `Settings -> Pages -> Source`: select **Deploy from a branch**
+2. `Settings -> Pages -> Branch`: select **gh-pages** and `/ (root)`
+3. `Settings -> Environments`: create `staging` and `production`
+   - recommended: require reviewers for `production`
+4. Add repository secrets:
    - `EXPO_PUBLIC_SUPABASE_URL`
    - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   - optional staging overrides:
+     - `EXPO_PUBLIC_SUPABASE_URL_STAGING`
+     - `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY_STAGING`
+5. `Settings -> Actions -> General -> Workflow permissions`: set **Read and write permissions**
+6. Migration from old setup:
+   - run `Deploy Web Production` once (to seed `gh-pages`)
+   - then switch Pages source to `Deploy from a branch` (`gh-pages` / root)
 
-After first successful run, the site will be available under your Pages URL (usually `https://<user>.github.io/<repo>/`).
+Release flow:
+
+1. Merge to `main` -> staging auto-deploy updates `/staging/`.
+2. Validate staging.
+3. Run `Deploy Web Production` manually with the tested `ref` (branch/tag/SHA).
+4. Production URL updates only after manual promotion.
+5. Production workflow allows only refs reachable from `main`.
 
 Instrument override note:
 
