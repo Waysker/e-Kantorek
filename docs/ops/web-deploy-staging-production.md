@@ -70,3 +70,4 @@ Guardrail:
 - Both workflows run `npm ci`, `npm run typecheck`, `npm run web:build:pages`.
 - Build output path patching (`web:build:pages`) keeps static assets valid under repo subpaths.
 - Production deploy preserves `/staging` files in `gh-pages` (`clean-exclude: staging`).
+- Workflows enforce `.nojekyll` on `gh-pages`, required for Expo assets under `/_expo/**`.

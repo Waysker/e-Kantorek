@@ -270,6 +270,7 @@ This repo now uses a two-stage web deployment flow:
   - deploys to `gh-pages` root (main Pages URL)
 
 Both workflows use `npm run web:build:pages`, which patches exported `index.html` asset paths to work under GitHub Pages repo subpaths.
+Workflows also publish `.nojekyll` so GitHub Pages serves Expo assets from `/_expo/**`.
 
 One-time setup in GitHub:
 

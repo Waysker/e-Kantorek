@@ -64,6 +64,9 @@ jobs:
           EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED: "true"
         run: npm run web:build:pages
 
+      - name: Ensure .nojekyll for GitHub Pages
+        run: touch dist/.nojekyll
+
       - name: Deploy production to gh-pages root
         uses: JamesIves/github-pages-deploy-action@v4
         with:

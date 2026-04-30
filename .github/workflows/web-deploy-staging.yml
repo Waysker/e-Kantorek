@@ -63,6 +63,12 @@ jobs:
           EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED: "true"
         run: npm run web:build:pages
 
+      - name: Prepare root metadata for Pages
+        working-directory: .
+        run: |
+          mkdir -p .pages-meta
+          touch .pages-meta/.nojekyll
+
       - name: Deploy staging to gh-pages/staging
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -71,3 +77,11 @@ jobs:
           target-folder: staging
           clean: true
           commit-message: "deploy(staging): ${{ github.sha }}"
+
+      - name: Ensure root .nojekyll on gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: .pages-meta
+          clean: false
+          commit-message: "deploy(staging): ensure .nojekyll"
