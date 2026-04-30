@@ -258,6 +258,14 @@ GitHub Actions setup:
 Attendance sync (`reference -> DB -> copy`) is intentionally Supabase-only (Edge Functions + `pg_cron`).
 Use `../docs/ops/sheet-sync-setup.md` for setup and runbook.
 
+CSV export (`DB -> CSV per tab/month-like source`):
+
+- Edge Function: `supabase/functions/attendance_csv_export/index.ts`
+- Local helper CLI: `npm run attendance:export:csv -- --project-ref <ref> --token <token>`
+- Optional filters:
+  - `--month YYYY-MM` (filters by dominant tab month key)
+  - `--gid <gid>` (repeatable, filters specific source tabs)
+
 ## Web Hosting (GitHub Pages)
 
 This repo now uses a two-stage web deployment flow:

@@ -955,3 +955,32 @@ curl -sS \
 ```
 
 Use `next_member_offset` from response until `has_more_member_pages=false`.
+
+### 4. Deploy DB -> CSV exporter (per source tab/month)
+
+Deploy:
+
+```bash
+supabase functions deploy attendance_csv_export --no-verify-jwt
+```
+
+Auth:
+
+- optional dedicated `ATTENDANCE_CSV_EXPORT_AUTH_TOKEN=<token>`
+- if not set, function accepts `DB_TO_SHEET_EXPORT_AUTH_TOKEN` / `DB_TO_SHEET_EXPORT_TOKEN`
+
+Manual export (all discovered tabs from `ATTENDANCE_SHEET_ID` in function env):
+
+```bash
+curl -sS \
+  -X POST \
+  "https://<project-ref>.functions.supabase.co/attendance_csv_export" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+
+Optional filters:
+
+- `{\"month\":\"2026-04\"}` (dominant month key of source tab)
+- `{\"sourceGids\":[\"1706089954\"]}` (specific tab(s))

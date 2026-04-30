@@ -1,0 +1,27 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.49.4": "d52c4d06946766d328fdd0ac2e007f52bb6d2ef7ce6103ad9f0f57d92b73e978"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@expo/ngrok@^4.1.0",
+        "npm:@react-native-async-storage/async-storage@2.2.0",
+        "npm:@supabase/supabase-js@^2.57.4",
+        "npm:@types/react@~19.2.2",
+        "npm:cheerio@^1.2.0",
+        "npm:expo-status-bar@~55.0.4",
+        "npm:expo@~55.0.8",
+        "npm:react-dom@19.2.0",
+        "npm:react-native-safe-area-context@~5.6.2",
+        "npm:react-native-url-polyfill@3",
+        "npm:react-native-web@0.21",
+        "npm:react-native@0.83.2",
+        "npm:react@19.2.0",
+        "npm:typescript@~5.9.2",
+        "npm:xlsx@~0.18.5"
+      ]
+    }
+  }
+}

@@ -10,6 +10,7 @@
     "web:build": "expo export --platform web",
     "web:build:pages": "expo export --platform web && node ./scripts/patch-web-dist-for-pages.mjs",
     "attendance:preflight": "node ./scripts/attendance-sheet-preflight.mjs",
+    "attendance:export:csv": "node ./scripts/export-attendance-csv.mjs",
     "edge:check": "node ./scripts/edge-functions-check.mjs",
     "typecheck": "tsc --noEmit",
     "forum:sync": "node ./scripts/sync-forum-snapshot.mjs",

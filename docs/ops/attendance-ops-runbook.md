@@ -6,7 +6,8 @@ Runbook for the attendance pipeline:
 
 - `sheet_to_supabase_sync` (reference sheet -> DB),
 - `attendance_write_sheet_first` (app write path, queue worker),
-- `supabase_to_sheet_export` (DB -> copy sheet export).
+- `supabase_to_sheet_export` (DB -> copy sheet export),
+- `attendance_csv_export` (DB -> CSV export per source tab).
 
 Detailed function error mapping:
 

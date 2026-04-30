@@ -9,6 +9,7 @@ Covered functions:
 - `sheet_to_supabase_sync`
 - `attendance_write_sheet_first`
 - `supabase_to_sheet_export`
+- `attendance_csv_export`
 - `smoke_attendance_db_first`
 
 ## Quick Triage Order
@@ -70,6 +71,10 @@ order by status;
 | `supabase_to_sheet_export` | `unauthorized` | Missing/invalid export bearer token. | Use `DB_TO_SHEET_EXPORT_AUTH_TOKEN` (or `DB_TO_SHEET_EXPORT_TOKEN`) consistently in trigger and function config. |
 | `supabase_to_sheet_export` | `apps_script_webhook_failed` | Apps Script endpoint returned non-2xx or failure payload. | Verify web app deployment URL/token, inspect Apps Script execution logs, retry with lower write concurrency. |
 | `supabase_to_sheet_export` | `events_load_failed` / `attendance_entries_load_failed` / `members_load_failed` | Export query failure in DB. | Check table indexes/migrations, service key, and SQL logs for failing relation/permission. |
+| `attendance_csv_export` | `missing_source_sheet_id` | Export source sheet id is not known. | Pass `sourceSheetId` in payload or set `ATTENDANCE_SHEET_ID` in Supabase secrets. |
+| `attendance_csv_export` | `invalid_month` | Invalid `month` filter format. | Use `YYYY-MM` format. |
+| `attendance_csv_export` | `unauthorized` | Missing/invalid export bearer token. | Use `ATTENDANCE_CSV_EXPORT_AUTH_TOKEN` or re-use `DB_TO_SHEET_EXPORT_AUTH_TOKEN`. |
+| `attendance_csv_export` | `events_load_failed` / `sheet_member_rows_load_failed` / `members_load_failed` / `attendance_entries_load_failed` | CSV export query failure in DB. | Check service key env, DB health, and table availability/permissions. |
 | `smoke_attendance_db_first` | `smoke_write_no_session` | Smoke test sign-in failed (no auth session). | Verify smoke user email/password secrets in Supabase. |
 | `smoke_attendance_db_first` | `smoke_write_failed` | Attendance write call in smoke failed. | Check write function logs and role of smoke user (`section`/`board`/`admin`). |
 | `smoke_attendance_db_first` | `smoke_write_not_applied` | Expected row value was not changed by smoke write. | Validate fixed smoke target (`event_id`,`member_id`) and queue worker/export path. |

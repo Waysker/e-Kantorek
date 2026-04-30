@@ -33,6 +33,7 @@ Keep every variable in the runtime where it is consumed.
 | `DB_TO_SHEET_EXPORT_URL` | config | `attendance_write_sheet_first` trigger | Supabase Secret | Full URL to export function. |
 | `DB_TO_SHEET_EXPORT_AUTH_TOKEN` | secret | export trigger/auth | Supabase Secret | Canonical bearer token for export trigger and export function. |
 | `DB_TO_SHEET_EXPORT_TOKEN` | secret | export trigger/auth | Supabase Secret | Backward-compatible alias; keep equal to `DB_TO_SHEET_EXPORT_AUTH_TOKEN` if still used. |
+| `ATTENDANCE_CSV_EXPORT_AUTH_TOKEN` | secret | `attendance_csv_export` auth | Supabase Secret | Optional dedicated token; if unset, function falls back to `DB_TO_SHEET_EXPORT_AUTH_TOKEN`/`DB_TO_SHEET_EXPORT_TOKEN`. |
 | `ATTENDANCE_APPS_SCRIPT_WEBHOOK_URL` | config | write/export webhook calls | Supabase Secret | Apps Script web app URL. |
 | `ATTENDANCE_APPS_SCRIPT_WEBHOOK_TOKEN` | secret | write/export webhook calls | Supabase Secret | Shared secret expected by Apps Script. |
 | `ATTENDANCE_SHEET_ID` | config | sync ingest function | Supabase Secret | Reference sheet ID for ingress sync. |
