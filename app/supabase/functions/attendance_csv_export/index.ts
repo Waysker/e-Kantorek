@@ -37,6 +37,10 @@ type AttendanceEntryRow = {
   source_raw_value: string | null;
 };
 
+type ProfileRoleRow = {
+  role: string | null;
+};
+
 type CsvExport = {
   source_gid: string;
   month_key: string | null;
@@ -74,6 +78,10 @@ const DEFAULT_SOURCE_SHEET_ID =
   Deno.env.get("ATTENDANCE_SHEET_ID") ??
   Deno.env.get("ATTENDANCE_EXPORT_TARGET_SHEET_ID") ??
   "";
+const DEFAULT_ALLOWED_ROLES_CSV_EXPORT = "board,admin";
+const ALLOWED_CSV_EXPORT_ROLES = parseAllowedRoles(
+  Deno.env.get("ATTENDANCE_CSV_EXPORT_ALLOWED_ROLES") ?? DEFAULT_ALLOWED_ROLES_CSV_EXPORT,
+);
 
 const MAX_SOURCE_GIDS_FILTER = 100;
 const MAX_EVENTS = 5000;
@@ -92,6 +100,93 @@ function parseBearerToken(headerValue: string | null): string | null {
 
   const match = headerValue.match(/^Bearer\s+(.+)$/i);
   return match ? match[1].trim() : null;
+}
+
+function normalizeRoleKey(value: unknown): string {
+  return normalizeWhitespace(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizePrimaryRole(value: unknown): "member" | "section" | "board" | "admin" {
+  const normalized = normalizeRoleKey(value);
+
+  if (normalized === "admin") {
+    return "admin";
+  }
+
+  if (normalized === "board" || normalized === "zarzad") {
+    return "board";
+  }
+
+  if (
+    normalized === "section" ||
+    normalized === "leader" ||
+    normalized === "lider" ||
+    normalized === "sekcyjne" ||
+    normalized === "sekcyjny" ||
+    normalized === "sekcyjna" ||
+    normalized === "sekcyjni" ||
+    normalized === "section leader"
+  ) {
+    return "section";
+  }
+
+  return "member";
+}
+
+function parseAllowedRoleToken(value: unknown): "member" | "section" | "board" | "admin" | null {
+  const normalized = normalizeRoleKey(value);
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "member") {
+    return "member";
+  }
+  if (normalized === "admin") {
+    return "admin";
+  }
+  if (normalized === "board" || normalized === "zarzad") {
+    return "board";
+  }
+  if (
+    normalized === "section" ||
+    normalized === "leader" ||
+    normalized === "lider" ||
+    normalized === "sekcyjne" ||
+    normalized === "sekcyjny" ||
+    normalized === "sekcyjna" ||
+    normalized === "sekcyjni" ||
+    normalized === "section leader"
+  ) {
+    return "section";
+  }
+  return null;
+}
+
+function parseAllowedRoles(rawValue: string): Set<"member" | "section" | "board" | "admin"> {
+  const roles = new Set<"member" | "section" | "board" | "admin">();
+  for (const token of rawValue.split(",")) {
+    const trimmed = normalizeWhitespace(token);
+    if (!trimmed) {
+      continue;
+    }
+    const normalized = parseAllowedRoleToken(trimmed);
+    if (!normalized) {
+      continue;
+    }
+    roles.add(normalized);
+  }
+
+  if (roles.size === 0) {
+    roles.add("board");
+    roles.add("admin");
+  }
+
+  return roles;
 }
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -242,6 +337,45 @@ function jsonResponse(body: unknown, status = 200): Response {
       "Content-Type": "application/json",
     },
   });
+}
+
+async function authorizeRequestToken(params: {
+  supabaseAdmin: SupabaseAdminClient;
+  bearerToken: string | null;
+}): Promise<void> {
+  const token = params.bearerToken;
+
+  if (!token) {
+    throw new HttpError(401, "unauthorized", "Missing bearer token.");
+  }
+
+  if (FUNCTION_AUTH_TOKEN && token === FUNCTION_AUTH_TOKEN) {
+    return;
+  }
+
+  const { data: authData, error: authError } = await params.supabaseAdmin.auth.getUser(token);
+  if (authError || !authData.user) {
+    throw new HttpError(401, "unauthorized", "Invalid bearer token.");
+  }
+
+  const { data: profileData, error: profileError } = await params.supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", authData.user.id)
+    .maybeSingle<ProfileRoleRow>();
+
+  if (profileError) {
+    throw new HttpError(500, "profile_role_load_failed", profileError.message);
+  }
+
+  const normalizedRole = normalizePrimaryRole(profileData?.role);
+  if (!ALLOWED_CSV_EXPORT_ROLES.has(normalizedRole)) {
+    throw new HttpError(
+      403,
+      "forbidden_role",
+      `Role ${normalizedRole} cannot export attendance CSV.`,
+    );
+  }
 }
 
 async function loadEvents(
@@ -466,11 +600,28 @@ Deno.serve(async (request) => {
     );
   }
 
-  if (FUNCTION_AUTH_TOKEN) {
-    const token = parseBearerToken(request.headers.get("authorization"));
-    if (token !== FUNCTION_AUTH_TOKEN) {
-      return jsonResponse({ error: "unauthorized" }, 401);
-    }
+  const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+  const bearerToken = parseBearerToken(request.headers.get("authorization"));
+
+  try {
+    await authorizeRequestToken({ supabaseAdmin, bearerToken });
+  } catch (error) {
+    const knownError = error instanceof HttpError
+      ? error
+      : new HttpError(
+        401,
+        "unauthorized",
+        error instanceof Error ? error.message : "Unauthorized",
+      );
+    return jsonResponse(
+      {
+        error: knownError.code,
+        message: knownError.message,
+      },
+      knownError.status,
+    );
   }
 
   let body: Record<string, unknown> = {};
@@ -495,10 +646,6 @@ Deno.serve(async (request) => {
     const sourceGidsFilter = parseSourceGidsFilter(body);
     const monthFilter = parseMonthKey(body.month ?? body.month_key ?? "");
     const includeInactiveMembers = parseBoolean(body.includeInactiveMembers ?? body.include_inactive_members, true);
-
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
 
     const events = await loadEvents(supabaseAdmin, sourceSheetId, sourceGidsFilter);
     if (events.length === 0) {

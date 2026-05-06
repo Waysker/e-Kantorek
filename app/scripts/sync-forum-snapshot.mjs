@@ -29,6 +29,26 @@ const DEFAULT_CONFIG = {
 const FALLBACK_EVENT_HOUR = 19;
 const FALLBACK_EVENT_MINUTE = 0;
 const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
+const DEFAULT_FORUM_FETCH_MAX_ATTEMPTS = 4;
+const DEFAULT_FORUM_FETCH_TIMEOUT_MS = 25_000;
+const DEFAULT_FORUM_FETCH_RETRY_BASE_DELAY_MS = 750;
+const DEFAULT_FORUM_FETCH_RETRY_MAX_DELAY_MS = 8_000;
+const RETRYABLE_FETCH_ERROR_CODES = new Set([
+  "ABORT_ERR",
+  "EAI_AGAIN",
+  "ECONNABORTED",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
 const CANONICAL_INSTRUMENT_LABEL_BY_KEY = {
   flet: "Flety",
   flety: "Flety",
@@ -171,6 +191,136 @@ function looksMojibake(value) {
 
 function toObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function readPositiveIntEnv(name, fallback) {
+  const raw = process.env[name];
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getErrorCode(error) {
+  if (error && typeof error === "object") {
+    const directCode = typeof error.code === "string" ? error.code : null;
+    if (directCode) {
+      return directCode;
+    }
+
+    const cause = error.cause;
+    if (cause && typeof cause === "object" && typeof cause.code === "string") {
+      return cause.code;
+    }
+  }
+
+  return null;
+}
+
+function describeError(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+function isRetryableFetchError(error) {
+  if (error && typeof error === "object" && typeof error.name === "string" && error.name === "TimeoutError") {
+    return true;
+  }
+
+  const code = getErrorCode(error);
+  if (code && RETRYABLE_FETCH_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  const message = describeError(error).toLowerCase();
+  return (
+    message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("socket")
+  );
+}
+
+function computeRetryDelayMs(attempt, baseDelayMs, maxDelayMs) {
+  const exponential = baseDelayMs * (2 ** Math.max(attempt - 1, 0));
+  const jitter = Math.floor(Math.random() * Math.max(baseDelayMs, 1));
+  return Math.min(exponential + jitter, maxDelayMs);
+}
+
+function timeoutSignal(timeoutMs) {
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
+    return AbortSignal.timeout(timeoutMs);
+  }
+  return undefined;
+}
+
+function normalizeRequestBody(body) {
+  if (body === null || body === undefined) {
+    return undefined;
+  }
+
+  return body instanceof URLSearchParams ? body.toString() : body;
+}
+
+function resolveFetchRuntimeConfig() {
+  return {
+    maxAttempts: readPositiveIntEnv("FORUM_SYNC_FETCH_MAX_ATTEMPTS", DEFAULT_FORUM_FETCH_MAX_ATTEMPTS),
+    timeoutMs: readPositiveIntEnv("FORUM_SYNC_FETCH_TIMEOUT_MS", DEFAULT_FORUM_FETCH_TIMEOUT_MS),
+    retryBaseDelayMs: readPositiveIntEnv(
+      "FORUM_SYNC_FETCH_RETRY_BASE_DELAY_MS",
+      DEFAULT_FORUM_FETCH_RETRY_BASE_DELAY_MS,
+    ),
+    retryMaxDelayMs: readPositiveIntEnv(
+      "FORUM_SYNC_FETCH_RETRY_MAX_DELAY_MS",
+      DEFAULT_FORUM_FETCH_RETRY_MAX_DELAY_MS,
+    ),
+  };
+}
+
+async function fetchWithRetry(url, options) {
+  const {
+    maxAttempts,
+    timeoutMs,
+    retryBaseDelayMs,
+    retryMaxDelayMs,
+  } = resolveFetchRuntimeConfig();
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const signal = timeoutSignal(timeoutMs);
+
+    try {
+      return await fetch(url, {
+        ...options,
+        ...(signal ? { signal } : {}),
+      });
+    } catch (error) {
+      const retryable = isRetryableFetchError(error);
+      if (!retryable || attempt >= maxAttempts) {
+        const code = getErrorCode(error);
+        const suffix = code ? ` [${code}]` : "";
+        throw new Error(`Network request failed for ${url}: ${describeError(error)}${suffix}`, {
+          cause: error,
+        });
+      }
+
+      const delayMs = computeRetryDelayMs(attempt, retryBaseDelayMs, retryMaxDelayMs);
+      console.warn(
+        `Request retry ${attempt}/${maxAttempts - 1} for ${url} after ${delayMs}ms (${describeError(error)}).`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error(`Network request failed for ${url}: retry loop exhausted unexpectedly.`);
 }
 
 async function ensureCacheDir() {
@@ -389,7 +539,7 @@ function readOverridesFromEnv() {
 async function requestHtml({ jar, url, method = "GET", body }) {
   let currentUrl = url;
   let currentMethod = method;
-  let currentBody = body;
+  let currentBody = normalizeRequestBody(body);
 
   for (let redirectCount = 0; redirectCount < 10; redirectCount += 1) {
     const headers = {
@@ -400,11 +550,11 @@ async function requestHtml({ jar, url, method = "GET", body }) {
     if (cookieHeader) {
       headers.cookie = cookieHeader;
     }
-    if (currentBody) {
+    if (currentBody !== undefined) {
       headers["content-type"] = "application/x-www-form-urlencoded";
     }
 
-    const response = await fetch(currentUrl, {
+    const response = await fetchWithRetry(currentUrl, {
       method: currentMethod,
       headers,
       body: currentBody,
