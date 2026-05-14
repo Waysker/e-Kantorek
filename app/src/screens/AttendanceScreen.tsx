@@ -8,7 +8,8 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-import type { EventDetail, SquadGroup } from "../domain/models";
+import type { AttendanceStatus, EventDetail, SquadGroup } from "../domain/models";
+import { canonicalizeInstrumentLabel, UNKNOWN_INSTRUMENT_LABEL } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { AttendanceSummaryStrip } from "../ui/AttendanceSummaryStrip";
@@ -20,7 +21,7 @@ type AttendanceScreenProps = {
   onBack: () => void;
 };
 
-const UNKNOWN_INSTRUMENT_LABEL = "Instrument not mapped yet";
+type SelectableAttendanceStatus = Exclude<AttendanceStatus, "no_response">;
 
 function sortGroupsByInstrument(left: SquadGroup, right: SquadGroup) {
   if (left.instrument === UNKNOWN_INSTRUMENT_LABEL) {
@@ -41,7 +42,7 @@ function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
     }
 
     for (const participant of responseGroup.participants) {
-      const instrument = participant.primaryInstrument ?? UNKNOWN_INSTRUMENT_LABEL;
+      const instrument = canonicalizeInstrumentLabel(participant.primaryInstrument, UNKNOWN_INSTRUMENT_LABEL);
       const group = grouped.get(instrument) ?? {
         instrument,
         confirmedMembers: [],
@@ -71,40 +72,48 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
-  const options = [
+  const selectedStatus = event.attendanceSummary.userStatus;
+
+  const options: Array<{ key: SelectableAttendanceStatus; label: string }> = [
     { key: "going", label: tr("Będę", "Going") },
     { key: "maybe", label: tr("Może", "Maybe") },
     { key: "not_going", label: tr("Nie będę", "Not going") },
-  ] as const;
+  ];
 
   const responseSelector = (
-    <View style={styles.responseSelector}>
-      {options.map((option) => {
-        const isActive = event.attendanceSummary.userStatus === option.key;
+    <View style={styles.responseSelectorWrap}>
+      <View style={styles.responseSelector}>
+        {options.map((option) => {
+          const isActive = selectedStatus === option.key;
 
-        return (
-          <View
-            key={option.key}
-            style={[
-              styles.responsePill,
-              isActive && styles.responsePillActive,
-              !isDesktop && styles.responsePillMobile,
-            ]}
-          >
-            <Text
+          return (
+            <View
+              key={option.key}
               style={[
-                styles.responsePillLabel,
-                isActive && styles.responsePillLabelActive,
+                styles.responsePill,
+                isActive && styles.responsePillActive,
+                !isDesktop && styles.responsePillMobile,
               ]}
             >
-              {option.label}
-            </Text>
-            <Text style={styles.responsePillMeta}>
-              {isActive ? tr("Zaimportowane", "Imported") : tr("Tylko odczyt", "Read-only")}
-            </Text>
-          </View>
-        );
-      })}
+              <Text
+                style={[
+                  styles.responsePillLabel,
+                  isActive && styles.responsePillLabelActive,
+                ]}
+              >
+                {option.label}
+              </Text>
+              <Text style={styles.responsePillMeta}>
+                {isActive ? tr("Zaimportowane RSVP", "Imported RSVP") : tr("Tylko podgląd", "Preview only")}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
+        {tr("Stan z forum.", "Forum state.")}
+      </Text>
     </View>
   );
 
@@ -125,35 +134,23 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
         <View style={styles.headerSplitDesktop}>
           <SurfaceCard variant="default" style={styles.headerPrimary}>
             <Text style={styles.cardEyebrow}>
-              {tr("Obecność i skład", "Attendance and roster")}
+              {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
             </Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
-            <Text style={styles.cardSecondary}>
-              {tr(
-                "Wersja tylko do odczytu z forum. Najważniejszy element to grupowanie sekcji poniżej.",
-                "Read-only forum prototype. The important part in this phase is the grouped section roster below.",
-              )}
-            </Text>
             <AttendanceSummaryStrip summary={event.attendanceSummary} />
           </SurfaceCard>
 
           <SurfaceCard variant="outline" style={styles.headerSecondary}>
-            <Text style={styles.cardEyebrow}>{tr("Twoja odpowiedź", "Your response")}</Text>
+            <Text style={styles.cardEyebrow}>{tr("Twoja deklaracja RSVP", "Your RSVP declaration")}</Text>
             {responseSelector}
           </SurfaceCard>
         </View>
       ) : (
         <SurfaceCard variant="default">
           <Text style={styles.cardEyebrow}>
-            {tr("Obecność i skład", "Attendance and roster")}
+            {tr("Deklaracja RSVP i skład", "RSVP declaration and roster")}
           </Text>
           <Text style={styles.screenTitle}>{event.title}</Text>
-          <Text style={styles.cardSecondary}>
-            {tr(
-              "Dane na żywo z ankiety forum, tylko do odczytu.",
-              "Live read-only import from the forum poll.",
-            )}
-          </Text>
 
           <View style={styles.mobileSummaryRow}>
             <AttendanceSummaryStrip summary={event.attendanceSummary} compact />
@@ -161,7 +158,7 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
 
           <View style={styles.mobileResponseBlock}>
             <Text style={styles.mobileResponseTitle}>
-              {tr("Twoja odpowiedź", "Your response")}
+              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
             </Text>
             {responseSelector}
           </View>
@@ -173,17 +170,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
           {isDesktop
             ? tr("Grupy według instrumentu", "Grouped by instrument")
             : tr("Według instrumentu", "By instrument")}
-        </Text>
-        <Text style={styles.sectionCopy}>
-          {isDesktop
-            ? tr(
-                "Obecność i skład są teraz pokazane w jednym, grupowanym układzie.",
-                "Attendance and squad composition now live in one grouped layout.",
-              )
-            : tr(
-                "Jeden grupowany widok zamiast oddzielnych stron obecności i składu.",
-                "One grouped roster instead of separate attendance and squad pages.",
-              )}
         </Text>
       </View>
 
@@ -213,12 +199,6 @@ export function AttendanceScreen({ event, onBack }: AttendanceScreenProps) {
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>
                   {tr("Odmowy według instrumentu", "Declined by instrument")}
-                </Text>
-                <Text style={styles.sectionCopy}>
-                  {tr(
-                    "Ten widok jest domyślnie ukryty, żeby skupić się na potwierdzonym składzie.",
-                    "This view is hidden by default to keep focus on the confirmed roster.",
-                  )}
                 </Text>
               </View>
 
@@ -303,40 +283,54 @@ const styles = StyleSheet.create({
     color: tokens.colors.muted,
     fontWeight: "700",
   },
+  responseSelectorWrap: {
+    gap: tokens.spacing.sm,
+  },
   responseSelector: {
     flexDirection: "row",
+    gap: tokens.spacing.xs,
     flexWrap: "wrap",
-    gap: tokens.spacing.sm,
-    marginTop: tokens.spacing.xs,
   },
   responsePill: {
-    minWidth: 118,
-    borderRadius: tokens.radii.lg,
+    flex: 1,
+    minWidth: 110,
+    borderRadius: tokens.radii.round,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    paddingHorizontal: tokens.spacing.md,
+    backgroundColor: tokens.colors.surfaceMuted,
+    paddingHorizontal: tokens.spacing.sm,
     paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surface,
     gap: 2,
   },
   responsePillMobile: {
-    flex: 1,
+    minWidth: 94,
   },
   responsePillActive: {
-    borderColor: tokens.colors.brand,
     backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
   },
   responsePillLabel: {
-    fontSize: tokens.typography.body,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
     fontWeight: "700",
-    color: tokens.colors.ink,
   },
   responsePillLabelActive: {
     color: tokens.colors.brand,
   },
   responsePillMeta: {
-    fontSize: tokens.typography.caption,
+    fontSize: 11,
     color: tokens.colors.muted,
+  },
+  responseNotice: {
+    fontSize: tokens.typography.caption,
+    lineHeight: 18,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+  },
+  responseNoticeInfo: {
+    backgroundColor: tokens.colors.brandTint,
+    color: tokens.colors.brand,
   },
   sectionHeader: {
     gap: tokens.spacing.xs,
@@ -349,16 +343,16 @@ const styles = StyleSheet.create({
   },
   sectionCopy: {
     fontSize: tokens.typography.body,
-    lineHeight: 22,
+    lineHeight: 23,
     color: tokens.colors.muted,
   },
   declinedSection: {
-    gap: tokens.spacing.sm,
+    gap: tokens.spacing.md,
   },
   declinedToggle: {
+    borderRadius: tokens.radii.md,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.surface,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
@@ -376,5 +370,6 @@ const styles = StyleSheet.create({
   declinedToggleMeta: {
     fontSize: tokens.typography.caption,
     color: tokens.colors.muted,
+    fontWeight: "700",
   },
 });

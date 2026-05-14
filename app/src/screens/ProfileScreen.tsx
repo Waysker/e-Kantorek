@@ -10,11 +10,11 @@ function formatRoleLabel(role: UserProfile["role"]) {
   if (role === "admin") {
     return tr("Administrator", "Admin");
   }
-  if (role === "zarzad") {
+  if (role === "board") {
     return tr("Zarząd", "Board");
   }
-  if (role === "leader") {
-    return tr("Lider", "Leader");
+  if (role === "section") {
+    return tr("Sekcyjny", "Section leader");
   }
   return tr("Członek", "Member");
 }
@@ -41,16 +41,12 @@ export function ProfileScreen({
   dataSourceGeneratedAt,
   signedInEmail,
   onSignOut,
-  canManageAttendanceSetup,
-  onOpenAttendanceSetup,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
-  canManageAttendanceSetup?: boolean;
-  onOpenAttendanceSetup?: () => void;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
@@ -89,43 +85,6 @@ export function ProfileScreen({
           </Pressable>
         ) : null}
       </SurfaceCard>
-
-      {canManageAttendanceSetup && onOpenAttendanceSetup ? (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia zarządu", "Board tools")}
-          </Text>
-          <Text style={styles.cardTitle}>
-            {tr("Konfiguracja obecności", "Attendance setup")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Załaduj kopię arkusza obecności i opublikuj ją do Supabase. Ten PoC zasila też mapowanie instrumentów dla importu forum.",
-              "Upload the attendance workbook copy and publish it to Supabase. This PoC also refreshes instrument mapping for forum import.",
-            )}
-          </Text>
-          <Pressable style={styles.manageButton} onPress={onOpenAttendanceSetup}>
-            <Text style={styles.manageButtonLabel}>
-              {tr("Otwórz konfigurację", "Open setup")}
-            </Text>
-          </Pressable>
-        </SurfaceCard>
-      ) : null}
-
-      <SurfaceCard variant="muted">
-        <Text style={styles.cardEyebrow}>
-          {tr("Zakres prototypu", "Prototype scope")}
-        </Text>
-        <Text style={styles.cardTitle}>
-          {tr("Wizualny przegląd tylko do odczytu", "Read-only visual review")}
-        </Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Edycja profilu, powiadomienia i zapisy danych są poza zakresem tego etapu adapterowego.",
-            "Profile editing, notifications, and write actions stay out of this first adapter-backed phase.",
-          )}
-        </Text>
-      </SurfaceCard>
     </ScrollView>
   );
 }
@@ -149,12 +108,6 @@ const styles = StyleSheet.create({
   screenTitle: {
     fontSize: tokens.typography.hero,
     lineHeight: 34,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
     color: tokens.colors.ink,
     fontWeight: "700",
   },
@@ -182,21 +135,6 @@ const styles = StyleSheet.create({
   },
   signOutLabel: {
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-  manageButton: {
-    marginTop: tokens.spacing.md,
-    alignSelf: "flex-start",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
-  },
-  manageButtonLabel: {
-    color: tokens.colors.surface,
     fontSize: tokens.typography.caption,
     fontWeight: "700",
     textTransform: "uppercase",

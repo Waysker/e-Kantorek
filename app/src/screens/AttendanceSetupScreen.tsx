@@ -1,189 +1,107 @@
-import { useState } from "react";
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { supabaseAuthClient } from "../auth/supabaseAuthClient";
-import {
-  buildOverridesFromAttendancePayload,
-  parseAttendanceWorkbook,
-  type AttendanceWorkbookPayload,
-} from "../attendance/attendanceWorkbookParser";
 import type { UserProfile } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { SurfaceCard } from "../ui/SurfaceCard";
-
-const MAX_PREVIEW_EVENTS = 8;
 
 type AttendanceSetupScreenProps = {
   currentUser: UserProfile;
   onBack: () => void;
 };
 
-function isPrivilegedRole(role: UserProfile["role"]) {
-  return role === "admin" || role === "zarzad";
+function formatRoleLabel(role: UserProfile["role"]) {
+  if (role === "admin") {
+    return tr("Administrator", "Admin");
+  }
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjny", "Section");
+  }
+  return tr("Członek", "Member");
 }
 
-function resolveAttendanceKey() {
-  return process.env.EXPO_PUBLIC_ATTENDANCE_KEY?.trim() ?? "forum";
-}
+type SetupStep = {
+  id: string;
+  titlePl: string;
+  titleEn: string;
+  detailPl: string;
+  detailEn: string;
+};
 
-function resolveOverridesKey() {
-  return process.env.EXPO_PUBLIC_INSTRUMENT_OVERRIDES_KEY?.trim() ?? resolveAttendanceKey();
-}
+const setupSteps: SetupStep[] = [
+  {
+    id: "secrets",
+    titlePl: "Ustaw zmienne Supabase",
+    titleEn: "Configure Supabase env vars",
+    detailPl:
+      "Uzupełnij EXPO_PUBLIC_SUPABASE_URL i EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY w .env / sekretach GitHub.",
+    detailEn:
+      "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in .env / GitHub secrets.",
+  },
+  {
+    id: "migrations",
+    titlePl: "Uruchom migracje SQL",
+    titleEn: "Apply SQL migrations",
+    detailPl:
+      "Wgraj migracje 010-013 i skonfiguruj funkcje zgodnie z docs/ops/sheet-sync-setup.md.",
+    detailEn:
+      "Apply migrations 010-013 and configure functions from docs/ops/sheet-sync-setup.md.",
+  },
+  {
+    id: "preflight",
+    titlePl: "Zrób preflight arkusza",
+    titleEn: "Run sheet preflight",
+    detailPl:
+      "Uruchom attendance:preflight i napraw ewentualne błędy kontraktu danych.",
+    detailEn:
+      "Run attendance:preflight and fix any contract validation issues.",
+  },
+  {
+    id: "sheetSync",
+    titlePl: "Sprawdź sheet->Supabase sync",
+    titleEn: "Validate sheet->Supabase sync",
+    detailPl:
+      "Uruchom ręcznie lub przez cron funkcję sheet_to_supabase_sync i sprawdź sync_runs.",
+    detailEn:
+      "Run sheet_to_supabase_sync manually or via cron and verify sync_runs.",
+  },
+  {
+    id: "syncPublish",
+    titlePl: "Sprawdź pełny pipeline",
+    titleEn: "Validate full pipeline",
+    detailPl:
+      "Wykonaj forum:sync:publish i potwierdź, że profile/attendance ładują się z Supabase.",
+    detailEn:
+      "Run forum:sync:publish and confirm profile/attendance data is loaded from Supabase.",
+  },
+];
+
+const runbookCommands = [
+  "npm run attendance:preflight -- --sheet-id <id> --gid <gid> --strict",
+  "supabase functions deploy sheet_to_supabase_sync --no-verify-jwt",
+  "npm run forum:sync:publish",
+] as const;
 
 export function AttendanceSetupScreen({
   currentUser,
   onBack,
 }: AttendanceSetupScreenProps) {
-  const [parsedPayload, setParsedPayload] = useState<AttendanceWorkbookPayload | null>(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [infoMessage, setInfoMessage] = useState<string | null>(null);
-  const [isParsing, setIsParsing] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const canManageAttendance = isPrivilegedRole(currentUser.role);
+  const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
 
-  async function handlePickWorkbook() {
-    if (Platform.OS !== "web") {
-      setErrorMessage(
-        tr(
-          "Wersja mobilna PoC nie obsługuje jeszcze importu plików. Użyj weba.",
-          "Mobile PoC does not support workbook import yet. Use web for now.",
-        ),
-      );
-      return;
-    }
+  const completedCount = useMemo(
+    () => setupSteps.filter((step) => completedMap[step.id]).length,
+    [completedMap],
+  );
 
-    const documentRef = (globalThis as { document?: any }).document;
-    if (!documentRef?.createElement) {
-      setErrorMessage(
-        tr(
-          "Nie udało się otworzyć wyboru pliku w tej przeglądarce.",
-          "Could not open the file picker in this browser.",
-        ),
-      );
-      return;
-    }
-
-    const input = documentRef.createElement("input");
-    input.type = "file";
-    input.accept = ".xlsx,.xls,.csv";
-
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) {
-        return;
-      }
-
-      setIsParsing(true);
-      setErrorMessage(null);
-      setInfoMessage(null);
-
-      try {
-        const buffer = await file.arrayBuffer();
-        const parsed = parseAttendanceWorkbook(buffer, file.name);
-        setParsedPayload(parsed);
-        setSelectedFileName(file.name);
-      } catch (error) {
-        setParsedPayload(null);
-        setSelectedFileName(null);
-        setErrorMessage(
-          error instanceof Error
-            ? error.message
-            : tr(
-                "Nie udało się sparsować pliku obecności.",
-                "Attendance workbook parsing failed.",
-              ),
-        );
-      } finally {
-        setIsParsing(false);
-      }
-    };
-
-    input.click();
-  }
-
-  async function handlePublish() {
-    if (!parsedPayload) {
-      setErrorMessage(
-        tr(
-          "Najpierw wybierz i sparsuj plik obecności.",
-          "Choose and parse a workbook file first.",
-        ),
-      );
-      return;
-    }
-
-    if (!supabaseAuthClient) {
-      setErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
-      );
-      return;
-    }
-
-    setIsPublishing(true);
-    setErrorMessage(null);
-    setInfoMessage(null);
-
-    try {
-      const attendanceKey = resolveAttendanceKey();
-      const overridesKey = resolveOverridesKey();
-      const overridesPayload = buildOverridesFromAttendancePayload(parsedPayload);
-
-      const { error: attendanceError } = await supabaseAuthClient
-        .from("attendance_sheet_cache")
-        .upsert(
-          {
-            attendance_key: attendanceKey,
-            payload: parsedPayload,
-            generated_at: parsedPayload.metadata.generatedAt,
-          },
-          { onConflict: "attendance_key" },
-        );
-
-      if (attendanceError) {
-        throw new Error(`attendance_sheet_cache: ${attendanceError.message}`);
-      }
-
-      const { error: overridesError } = await supabaseAuthClient
-        .from("forum_instrument_overrides")
-        .upsert(
-          {
-            overrides_key: overridesKey,
-            payload: overridesPayload,
-          },
-          { onConflict: "overrides_key" },
-        );
-
-      if (overridesError) {
-        throw new Error(`forum_instrument_overrides: ${overridesError.message}`);
-      }
-
-      setInfoMessage(
-        tr(
-          `Opublikowano obecności i mapowanie instrumentów (${parsedPayload.summary.memberCount} osób, ${parsedPayload.summary.eventCount} wydarzeń).`,
-          `Published attendance + instrument mapping (${parsedPayload.summary.memberCount} members, ${parsedPayload.summary.eventCount} events).`,
-        ),
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : tr(
-              "Publikacja do Supabase nie powiodła się.",
-              "Publishing to Supabase failed.",
-            ),
-      );
-    } finally {
-      setIsPublishing(false);
-    }
+  function toggleStep(stepId: string) {
+    setCompletedMap((current) => ({
+      ...current,
+      [stepId]: !current[stepId],
+    }));
   }
 
   return (
@@ -193,121 +111,71 @@ export function AttendanceSetupScreen({
       showsVerticalScrollIndicator={false}
     >
       <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>
-          {tr("Wróć do profilu", "Back to profile")}
-        </Text>
+        <Text style={styles.backLinkLabel}>{tr("Wróć do profilu", "Back to profile")}</Text>
       </Pressable>
 
-      <SurfaceCard variant="brandTint">
-        <Text style={styles.cardEyebrow}>
-          {tr("PoC konfiguracji obecności", "Attendance setup PoC")}
-        </Text>
-        <Text style={styles.screenTitle}>
-          {tr("Google Sheet -> Supabase", "Google Sheet -> Supabase")}
-        </Text>
+      <SurfaceCard variant="default">
+        <Text style={styles.cardEyebrow}>{tr("Narzędzia sekcyjnych i zarządu", "Section and board tools")}</Text>
+        <Text style={styles.screenTitle}>{tr("Konfiguracja obecności", "Attendance setup")}</Text>
         <Text style={styles.cardBody}>
           {tr(
-            "Dla etapu rozwojowego źródłem prawdy jest kopia arkusza obecności. Ten ekran publikuje parserowany workbook do Supabase oraz aktualizuje mapowanie instrumentów.",
-            "For this development phase, the attendance workbook copy is the source of truth. This screen publishes parsed workbook data to Supabase and updates instrument mapping.",
+            "To ekran operacyjny PoC: prowadzi przez walidację arkusza i synchronizację sheet->Supabase.",
+            "This is a PoC operations screen: it guides sheet validation and sheet->Supabase sync.",
           )}
+        </Text>
+        <Text style={styles.cardSecondary}>
+          {tr("Operator", "Operator")}: {currentUser.fullName}
+        </Text>
+        <Text style={styles.cardSecondary}>
+          {tr("Rola", "Role")}: {formatRoleLabel(currentUser.role)}
         </Text>
       </SurfaceCard>
 
-      {!canManageAttendance ? (
-        <SurfaceCard variant="outline">
-          <Text style={styles.cardTitle}>
-            {tr("Brak uprawnień", "Insufficient permissions")}
-          </Text>
-          <Text style={styles.cardBody}>
-            {tr(
-              "Dostęp mają tylko role zarzad/admin.",
-              "Only board/admin roles can access this setup.",
-            )}
-          </Text>
-        </SurfaceCard>
-      ) : (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardTitle}>
-            {tr("Import pliku obecności", "Attendance workbook import")}
-          </Text>
-          <Text style={styles.cardSecondary}>
-            {tr(
-              "Obsługiwany format: .xlsx/.xls (preferowany), opcjonalnie .csv.",
-              "Supported format: .xlsx/.xls (preferred), optional .csv.",
-            )}
-          </Text>
+      <SurfaceCard variant="brandTint">
+        <Text style={styles.cardEyebrow}>{tr("Postęp", "Progress")}</Text>
+        <Text style={styles.progressLabel}>
+          {completedCount}/{setupSteps.length} {tr("kroków ukończonych", "steps completed")}
+        </Text>
+      </SurfaceCard>
 
-          <View style={styles.buttonRow}>
-            <Pressable
-              style={styles.primaryButton}
-              onPress={handlePickWorkbook}
-              disabled={isParsing || isPublishing}
-            >
-              <Text style={styles.primaryButtonLabel}>
-                {isParsing
-                  ? tr("Parsowanie...", "Parsing...")
-                  : tr("Wybierz plik", "Choose workbook")}
-              </Text>
-            </Pressable>
+      <SurfaceCard variant="default">
+        <Text style={styles.cardEyebrow}>{tr("Checklist", "Checklist")}</Text>
+        <View style={styles.stepsList}>
+          {setupSteps.map((step) => {
+            const isDone = Boolean(completedMap[step.id]);
+            return (
+              <Pressable
+                key={step.id}
+                style={[styles.stepRow, isDone && styles.stepRowDone]}
+                onPress={() => toggleStep(step.id)}
+              >
+                <View style={[styles.stepBullet, isDone && styles.stepBulletDone]}>
+                  <Text style={styles.stepBulletLabel}>{isDone ? "✓" : ""}</Text>
+                </View>
+                <View style={styles.stepTextWrap}>
+                  <Text style={styles.stepTitle}>{tr(step.titlePl, step.titleEn)}</Text>
+                  <Text style={styles.stepDetail}>{tr(step.detailPl, step.detailEn)}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </SurfaceCard>
 
-            <Pressable
-              style={[
-                styles.secondaryButton,
-                (!parsedPayload || isPublishing) && styles.secondaryButtonDisabled,
-              ]}
-              onPress={handlePublish}
-              disabled={!parsedPayload || isPublishing}
-            >
-              <Text style={styles.secondaryButtonLabel}>
-                {isPublishing
-                  ? tr("Publikacja...", "Publishing...")
-                  : tr("Opublikuj do Supabase", "Publish to Supabase")}
-              </Text>
-            </Pressable>
-          </View>
-
-          {selectedFileName ? (
-            <Text style={styles.cardSecondary}>
-              {tr("Wybrany plik", "Selected file")}: {selectedFileName}
+      <SurfaceCard variant="muted">
+        <Text style={styles.cardEyebrow}>{tr("Runbook", "Runbook")}</Text>
+        <View style={styles.commandList}>
+          {runbookCommands.map((command) => (
+            <Text key={command} style={styles.commandText}>
+              {command}
             </Text>
-          ) : null}
+          ))}
+        </View>
+      </SurfaceCard>
 
-          {parsedPayload ? (
-            <View style={styles.summaryBlock}>
-              <Text style={styles.cardEyebrow}>{tr("Podsumowanie", "Summary")}</Text>
-              <Text style={styles.summaryLine}>
-                {tr("Arkusze", "Sheets")}: {parsedPayload.summary.sheetCount}
-              </Text>
-              <Text style={styles.summaryLine}>
-                {tr("Osoby", "Members")}: {parsedPayload.summary.memberCount}
-              </Text>
-              <Text style={styles.summaryLine}>
-                {tr("Wydarzenia", "Events")}: {parsedPayload.summary.eventCount}
-              </Text>
-              <Text style={styles.summaryLine}>
-                {tr("Wpisy punktowe", "Score entries")}: {parsedPayload.summary.scoreCount}
-              </Text>
-              <Text style={styles.summaryLine}>
-                {tr("Suma punktów", "Total points")}: {parsedPayload.summary.totalPoints.toFixed(2)}
-              </Text>
-
-              <View style={styles.previewEventList}>
-                <Text style={styles.cardEyebrow}>
-                  {tr("Przykładowe wydarzenia", "Sample events")}
-                </Text>
-                {parsedPayload.events.slice(0, MAX_PREVIEW_EVENTS).map((event) => (
-                  <Text key={event.id} style={styles.previewEventLine}>
-                    {event.dateIso ? `${event.dateIso} - ` : ""}{event.label}
-                  </Text>
-                ))}
-              </View>
-            </View>
-          ) : null}
-
-          {infoMessage ? <Text style={styles.infoMessage}>{infoMessage}</Text> : null}
-          {errorMessage ? <Text style={styles.errorMessage}>{errorMessage}</Text> : null}
-        </SurfaceCard>
-      )}
+      <SurfaceCard variant="outline">
+        <Text style={styles.cardEyebrow}>{tr("Zakres PoC", "PoC scope")}</Text>
+      </SurfaceCard>
     </ScrollView>
   );
 }
@@ -336,16 +204,16 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   screenTitle: {
-    fontSize: tokens.typography.hero,
-    lineHeight: 34,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardTitle: {
     fontSize: tokens.typography.title,
     lineHeight: 28,
     color: tokens.colors.ink,
     fontWeight: "700",
+  },
+  cardBody: {
+    marginTop: tokens.spacing.sm,
+    fontSize: tokens.typography.body,
+    lineHeight: 23,
+    color: tokens.colors.ink,
   },
   cardSecondary: {
     marginTop: tokens.spacing.xs,
@@ -353,73 +221,72 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: tokens.colors.muted,
   },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
+  progressLabel: {
     fontSize: tokens.typography.body,
-    lineHeight: 22,
-    color: tokens.colors.ink,
+    color: tokens.colors.successInk,
+    fontWeight: "700",
   },
-  buttonRow: {
-    marginTop: tokens.spacing.md,
-    flexDirection: "row",
-    flexWrap: "wrap",
+  stepsList: {
     gap: tokens.spacing.sm,
   },
-  primaryButton: {
-    backgroundColor: tokens.colors.brand,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+  stepRow: {
+    flexDirection: "row",
+    gap: tokens.spacing.sm,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    padding: tokens.spacing.md,
+    backgroundColor: tokens.colors.surface,
   },
-  primaryButtonLabel: {
+  stepRowDone: {
+    backgroundColor: tokens.colors.successSurface,
+    borderColor: tokens.colors.successInk,
+  },
+  stepBullet: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 2,
+  },
+  stepBulletDone: {
+    borderColor: tokens.colors.successInk,
+    backgroundColor: tokens.colors.successInk,
+  },
+  stepBulletLabel: {
     color: tokens.colors.surface,
     fontWeight: "700",
   },
-  secondaryButton: {
-    backgroundColor: tokens.colors.surfaceMuted,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
+  stepTextWrap: {
+    flex: 1,
   },
-  secondaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  secondaryButtonLabel: {
+  stepTitle: {
+    fontSize: tokens.typography.body,
     color: tokens.colors.ink,
     fontWeight: "700",
   },
-  summaryBlock: {
-    marginTop: tokens.spacing.md,
-    gap: 4,
-  },
-  summaryLine: {
-    fontSize: tokens.typography.body,
-    lineHeight: 21,
-    color: tokens.colors.ink,
-  },
-  previewEventList: {
-    marginTop: tokens.spacing.md,
-    gap: 4,
-  },
-  previewEventLine: {
+  stepDetail: {
+    marginTop: tokens.spacing.xs,
     fontSize: tokens.typography.caption,
     lineHeight: 18,
     color: tokens.colors.muted,
   },
-  infoMessage: {
-    marginTop: tokens.spacing.md,
-    color: tokens.colors.successInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    fontWeight: "700",
+  commandList: {
+    marginTop: tokens.spacing.sm,
+    gap: tokens.spacing.xs,
   },
-  errorMessage: {
-    marginTop: tokens.spacing.md,
-    color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    fontWeight: "700",
+  commandText: {
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radii.md,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surface,
+    fontFamily: "monospace",
+    color: tokens.colors.ink,
   },
 });

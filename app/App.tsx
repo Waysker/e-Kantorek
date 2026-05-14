@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
-import { startTransition, useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { startTransition, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 
@@ -10,20 +10,27 @@ import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
   EventDetail,
   EventListItem,
-  FeedPost,
   UserProfile,
 } from "./src/domain/models";
+import {
+  canViewAttendanceSummaryByRole,
+  canWriteAttendanceByRole,
+  canManageRolesByRole,
+  normalizePrimaryRole,
+} from "./src/domain/roles";
 import type { AppRoute, PrimaryTab } from "./src/navigation/routes";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
 import { EventsScreen } from "./src/screens/EventsScreen";
-import { FeedScreen } from "./src/screens/FeedScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
-import { AttendanceSetupScreen } from "./src/screens/AttendanceSetupScreen";
+import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
+import { AttendanceSummaryScreen } from "./src/screens/AttendanceSummaryScreen";
+import { AttendanceWorkspaceScreen } from "./src/screens/AttendanceWorkspaceScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
+import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
 import { SquadScreen } from "./src/screens/SquadScreen";
 import { tr } from "./src/i18n";
@@ -34,7 +41,6 @@ const repositories = createPrototypeRepositories();
 
 type LoadedData = {
   currentUser: UserProfile;
-  feedPosts: FeedPost[];
   events: EventListItem[];
   eventDetailsById: Record<string, EventDetail>;
   dataSourceLabel: string;
@@ -62,17 +68,86 @@ type ProfileRow = {
   last_name: string;
   full_name: string;
   instrument: string;
-  role: UserProfile["role"];
+  role: string;
 };
 
 type AuthView = "sign_in" | "register";
+const ROOT_ROUTE: AppRoute = { name: "events" };
+const HISTORY_STATE_MARKER = "__oragh_route_stack__";
 
-function canSendAttendanceReminderRole(role: UserProfile["role"]) {
-  return role === "admin" || role === "zarzad" || role === "leader";
+function isSameRoute(left: AppRoute, right: AppRoute): boolean {
+  if (left.name !== right.name) {
+    return false;
+  }
+
+  if (!("eventId" in left) && !("eventId" in right)) {
+    return true;
+  }
+
+  if ("eventId" in left && "eventId" in right) {
+    return left.eventId === right.eventId;
+  }
+
+  return false;
 }
 
-function canManageAttendanceSetupRole(role: UserProfile["role"]) {
-  return role === "admin" || role === "zarzad";
+function isValidAppRoute(value: unknown): value is AppRoute {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as { name?: unknown; eventId?: unknown };
+  if (typeof candidate.name !== "string") {
+    return false;
+  }
+
+  if (
+    candidate.name === "events" ||
+    candidate.name === "profile" ||
+    candidate.name === "attendanceWorkspace" ||
+    candidate.name === "attendanceManager" ||
+    candidate.name === "attendanceSummary" ||
+    candidate.name === "roleManagement"
+  ) {
+    return true;
+  }
+
+  if (
+    candidate.name === "eventDetail" ||
+    candidate.name === "attendance" ||
+    candidate.name === "setlist" ||
+    candidate.name === "squad"
+  ) {
+    return typeof candidate.eventId === "string" && candidate.eventId.trim().length > 0;
+  }
+
+  return false;
+}
+
+function parseRouteStackFromHistoryState(state: unknown): AppRoute[] | null {
+  if (!state || typeof state !== "object") {
+    return null;
+  }
+
+  const stackValue = (state as Record<string, unknown>)[HISTORY_STATE_MARKER];
+  if (!Array.isArray(stackValue) || stackValue.length === 0) {
+    return null;
+  }
+
+  const parsedStack = stackValue.filter((entry): entry is AppRoute => isValidAppRoute(entry));
+  if (parsedStack.length !== stackValue.length) {
+    return null;
+  }
+
+  return parsedStack;
+}
+
+function areRouteStacksEqual(left: AppRoute[], right: AppRoute[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((route, index) => isSameRoute(route, right[index]));
 }
 
 export default function App() {
@@ -82,9 +157,89 @@ export default function App() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("sign_in");
   const [state, setState] = useState<AppState>({ status: "loading" });
-  const [route, setRoute] = useState<AppRoute>({ name: "feed" });
+  const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
+  const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
+  const browserHistoryRestoreRef = useRef(false);
+  const isWeb = Platform.OS === "web";
   const authenticatedUserId =
     authState.status === "signed_in" ? authState.session.user.id : null;
+
+  function pushRoute(nextRoute: AppRoute) {
+    setRouteStack((current) => {
+      const activeRoute = current[current.length - 1];
+      if (activeRoute && isSameRoute(activeRoute, nextRoute)) {
+        return current;
+      }
+      return [...current, nextRoute];
+    });
+  }
+
+  function resetToRoute(nextRoute: AppRoute) {
+    setRouteStack([nextRoute]);
+  }
+
+  function goBack(fallbackRoute: AppRoute = ROOT_ROUTE) {
+    setRouteStack((current) => {
+      if (current.length <= 1) {
+        return [fallbackRoute];
+      }
+      return current.slice(0, -1);
+    });
+  }
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined") {
+      return;
+    }
+
+    const existingStack = parseRouteStackFromHistoryState(window.history.state);
+    if (existingStack && existingStack.length > 0) {
+      browserHistoryRestoreRef.current = true;
+      setRouteStack(existingStack);
+    } else {
+      window.history.replaceState({ [HISTORY_STATE_MARKER]: [ROOT_ROUTE] }, "");
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const stackFromState = parseRouteStackFromHistoryState(event.state);
+      if (!stackFromState || stackFromState.length === 0) {
+        return;
+      }
+
+      browserHistoryRestoreRef.current = true;
+      setRouteStack(stackFromState);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [isWeb]);
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined") {
+      return;
+    }
+
+    if (browserHistoryRestoreRef.current) {
+      browserHistoryRestoreRef.current = false;
+      return;
+    }
+
+    const currentStack = parseRouteStackFromHistoryState(window.history.state);
+    if (currentStack && areRouteStacksEqual(currentStack, routeStack)) {
+      return;
+    }
+
+    const nextState = { [HISTORY_STATE_MARKER]: routeStack };
+    if (!window.history.state || parseRouteStackFromHistoryState(window.history.state) === null) {
+      window.history.replaceState(nextState, "");
+      return;
+    }
+
+    window.history.pushState(nextState, "");
+  }, [isWeb, routeStack]);
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured || !supabaseAuthClient) {
@@ -160,9 +315,8 @@ export default function App() {
 
     async function load() {
       try {
-        const [currentUser, feedPosts, events, profileResult] = await Promise.all([
+        const [currentUser, events, profileResult] = await Promise.all([
           repositories.users.getCurrentUser(),
-          repositories.feed.listFeedPosts(),
           repositories.events.listEvents(),
           supabaseAuthClient
             ? supabaseAuthClient
@@ -191,7 +345,6 @@ export default function App() {
             status: "ready",
             data: {
               currentUser,
-              feedPosts,
               events,
               eventDetailsById: Object.fromEntries(
                   eventDetails.map((event) => [event.id, event]),
@@ -202,7 +355,7 @@ export default function App() {
                 ? {
                     fullName: profileResult.data.full_name,
                     primaryInstrument: profileResult.data.instrument,
-                    role: profileResult.data.role,
+                    role: normalizePrimaryRole(profileResult.data.role),
                   }
                 : null,
             },
@@ -321,7 +474,7 @@ export default function App() {
       return;
     }
 
-    setRoute({ name: "feed" });
+    resetToRoute(ROOT_ROUTE);
     setState({ status: "loading" });
     setAuthView("sign_in");
   }
@@ -427,7 +580,6 @@ export default function App() {
 
   const {
     currentUser,
-    feedPosts,
     events,
     eventDetailsById,
     dataSourceLabel,
@@ -457,17 +609,24 @@ export default function App() {
     fullName: authProfile?.fullName || metadataFullName || currentUser.fullName,
     primaryInstrument:
       authProfile?.primaryInstrument || metadataInstrument || currentUser.primaryInstrument,
-    role: authProfile?.role || currentUser.role,
+    role: normalizePrimaryRole(authProfile?.role || currentUser.role),
   };
   const signedInEmail =
     authState.status === "signed_in" ? authState.session.user.email ?? null : null;
   const activeTab = routeToTab(route);
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
-  const canManageAttendanceSetup =
-    canManageAttendanceSetupRole(effectiveCurrentUser.role);
-  const canSendAttendanceReminders =
-    canSendAttendanceReminderRole(effectiveCurrentUser.role);
+  const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
+  const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
+  const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
+  const canSendAttendanceReminders = canViewAttendanceSummary;
+  const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
+  const navigationTabs: PrimaryTab[] = [
+    "events",
+    ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
+    ...(canManageRoles ? (["roles"] as const) : []),
+    "profile",
+  ];
 
   async function handleRemindMissingDeclarations(eventId: string): Promise<number> {
     if (!supabaseAuthClient) {
@@ -476,11 +635,11 @@ export default function App() {
       );
     }
 
-    if (!canSendAttendanceReminderRole(effectiveCurrentUser.role)) {
+    if (!canSendAttendanceReminders) {
       throw new Error(
         tr(
-          "Tylko role leader/zarzad/admin moga wysylac ponaglenia.",
-          "Only leader/board/admin roles can send reminders.",
+          "Tylko role sekcyjny/zarzad/admin moga wysylac ponaglenia.",
+          "Only section/board/admin roles can send reminders.",
         ),
       );
     }
@@ -495,6 +654,7 @@ export default function App() {
     const declaredFullNames = event.attendanceGroups
       .filter((group) => group.status !== "no_response")
       .flatMap((group) => group.participants.map((participant) => participant.fullName));
+
     const { data, error } = await supabaseAuthClient.rpc(
       "send_event_attendance_reminders",
       {
@@ -512,34 +672,39 @@ export default function App() {
   }
 
   function openTab(tab: PrimaryTab) {
-    if (tab === "feed") {
-      setRoute({ name: "feed" });
-      return;
-    }
-
     if (tab === "events") {
-      setRoute({ name: "events" });
+      resetToRoute({ name: "events" });
       return;
     }
 
-    setRoute({ name: "profile" });
+    if (tab === "attendance") {
+      if (canAccessAttendanceWorkspace) {
+        resetToRoute({ name: "attendanceWorkspace" });
+      } else {
+        resetToRoute({ name: "events" });
+      }
+      return;
+    }
+
+    if (tab === "roles") {
+      if (canManageRoles) {
+        resetToRoute({ name: "roleManagement" });
+      } else {
+        resetToRoute({ name: "events" });
+      }
+      return;
+    }
+
+    resetToRoute({ name: "profile" });
   }
 
   function renderScreen() {
     switch (route.name) {
-      case "feed":
-        return (
-          <FeedScreen
-            currentUser={effectiveCurrentUser}
-            feedPosts={feedPosts}
-            onOpenEvents={() => setRoute({ name: "events" })}
-          />
-        );
       case "events":
         return (
           <EventsScreen
             events={events}
-            onOpenEvent={(eventId) => setRoute({ name: "eventDetail", eventId })}
+            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
             canRemindMissingDeclarations={canSendAttendanceReminders}
             onRemindMissingDeclarations={
               canSendAttendanceReminders ? handleRemindMissingDeclarations : undefined
@@ -550,7 +715,7 @@ export default function App() {
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Nie znaleziono wydarzenia", "Event not found")}
             />
           );
@@ -559,12 +724,12 @@ export default function App() {
         return (
           <EventDetailScreen
             event={selectedEvent}
-            onBack={() => setRoute({ name: "events" })}
+            onBack={() => goBack({ name: "events" })}
             onOpenAttendance={() =>
-              setRoute({ name: "attendance", eventId: selectedEvent.id })
+              pushRoute({ name: "attendance", eventId: selectedEvent.id })
             }
             onOpenSetlist={() =>
-              setRoute({ name: "setlist", eventId: selectedEvent.id })
+              pushRoute({ name: "setlist", eventId: selectedEvent.id })
             }
           />
         );
@@ -572,7 +737,7 @@ export default function App() {
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak danych obecności", "Attendance unavailable")}
             />
           );
@@ -581,16 +746,14 @@ export default function App() {
         return (
           <AttendanceScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "setlist":
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak setlisty", "Setlist unavailable")}
             />
           );
@@ -599,16 +762,14 @@ export default function App() {
         return (
           <SetlistScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "squad":
         if (!selectedEvent) {
           return (
             <MissingEventScreen
-              onBack={() => setRoute({ name: "events" })}
+              onBack={() => goBack({ name: "events" })}
               title={tr("Brak składu", "Squad unavailable")}
             />
           );
@@ -617,9 +778,7 @@ export default function App() {
         return (
           <SquadScreen
             event={selectedEvent}
-            onBack={() =>
-              setRoute({ name: "eventDetail", eventId: selectedEvent.id })
-            }
+            onBack={() => goBack({ name: "events" })}
           />
         );
       case "profile":
@@ -630,23 +789,58 @@ export default function App() {
             dataSourceGeneratedAt={dataSourceGeneratedAt}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
-            canManageAttendanceSetup={canManageAttendanceSetup}
-            onOpenAttendanceSetup={
-              canManageAttendanceSetup
-                ? () => setRoute({ name: "attendanceSetup" })
+          />
+        );
+      case "attendanceWorkspace":
+        return canAccessAttendanceWorkspace ? (
+          <AttendanceWorkspaceScreen
+            canWriteAttendance={canWriteAttendance}
+            canViewAttendanceSummary={canViewAttendanceSummary}
+            onOpenAttendanceManager={
+              canWriteAttendance
+                ? () => pushRoute({ name: "attendanceManager" })
+                : undefined
+            }
+            onOpenAttendanceSummary={
+              canViewAttendanceSummary
+                ? () => pushRoute({ name: "attendanceSummary" })
                 : undefined
             }
           />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "events" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
         );
-      case "attendanceSetup":
-        return canManageAttendanceSetup ? (
-          <AttendanceSetupScreen
-            currentUser={effectiveCurrentUser}
-            onBack={() => setRoute({ name: "profile" })}
+      case "attendanceManager":
+        return canWriteAttendance ? (
+          <AttendanceManagerScreen
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
           />
         ) : (
           <MissingEventScreen
-            onBack={() => setRoute({ name: "profile" })}
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
+        );
+      case "attendanceSummary":
+        return canViewAttendanceSummary ? (
+          <AttendanceSummaryScreen
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
+          />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "attendanceWorkspace" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
+        );
+      case "roleManagement":
+        return canManageRoles ? (
+          <RoleManagementScreen currentUserId={effectiveCurrentUser.id} />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "events" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
@@ -658,8 +852,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppShell
+        tabs={navigationTabs}
         activeTab={activeTab}
         hideNavigation={route.name === "setlist"}
+        dataSourceLabel={dataSourceLabel}
+        dataSourceGeneratedAt={dataSourceGeneratedAt}
+        expectedSyncIntervalHours={4}
         onNavigate={openTab}
       >
         <StatusBar style={route.name === "setlist" ? "light" : "dark"} />

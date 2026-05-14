@@ -1,0 +1,128 @@
+name: Smoke Attendance DB-First
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/smoke-attendance-db-first.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "app/**"
+      - ".github/workflows/smoke-attendance-db-first.yml"
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+concurrency:
+  group: smoke-attendance-db-first-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  smoke-db-first:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Trigger Supabase smoke function
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN: ${{ secrets.SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN }}
+          SMOKE_REQUIRE_EXPORT_TRIGGER_OK: ${{ vars.SMOKE_REQUIRE_EXPORT_TRIGGER_OK || 'false' }}
+          SMOKE_CHECK_SYNC_CONTRACT: ${{ vars.SMOKE_CHECK_SYNC_CONTRACT || 'true' }}
+        run: |
+          if [ -z "$SUPABASE_PROJECT_REF" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping smoke on pull_request because SUPABASE_PROJECT_REF is unavailable."
+              exit 0
+            fi
+            echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
+            exit 1
+          fi
+          if [ -z "$SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" ]; then
+            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+              echo "::notice::Skipping smoke on pull_request because SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is unavailable (likely fork PR)."
+              exit 0
+            fi
+            echo "::error::SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is missing (repo secret)."
+            exit 1
+          fi
+
+          normalized_flag="$(echo "${SMOKE_REQUIRE_EXPORT_TRIGGER_OK:-false}" | tr '[:upper:]' '[:lower:]')"
+          case "$normalized_flag" in
+            1|true|yes|on) require_export=true ;;
+            *) require_export=false ;;
+          esac
+
+          normalized_contract_flag="$(echo "${SMOKE_CHECK_SYNC_CONTRACT:-true}" | tr '[:upper:]' '[:lower:]')"
+          case "$normalized_contract_flag" in
+            1|true|yes|on) check_sync_contract=true ;;
+            *) check_sync_contract=false ;;
+          esac
+
+          smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
+          payload="{\"requireExportTriggerOk\":${require_export},\"checkSyncContract\":${check_sync_contract}}"
+
+          raw_response=""
+          max_attempts=3
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            if raw_response="$(curl -sS --max-time 120 --connect-timeout 20 -X POST "$smoke_url" \
+              -H "Authorization: Bearer $SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              -w '\n%{http_code}')"; then
+              break
+            fi
+            if [ "$attempt" -ge "$max_attempts" ]; then
+              echo "::error::Smoke function request failed after $attempt attempts."
+              exit 1
+            fi
+            sleep_seconds=$((attempt * 10))
+            echo "::warning::Smoke function request failed (attempt $attempt/$max_attempts). Retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+            attempt=$((attempt + 1))
+          done
+
+          http_status="${raw_response##*$'\n'}"
+          response_body="${raw_response%$'\n'*}"
+
+          echo "$response_body"
+          echo "HTTP status: $http_status"
+
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            error_code="$(echo "$response_body" | jq -r '.error // empty' 2>/dev/null || true)"
+            error_message="$(echo "$response_body" | jq -r '.message // empty' 2>/dev/null || true)"
+            if [ -n "$error_code" ] || [ -n "$error_message" ]; then
+              echo "::error::Smoke function failed (HTTP $http_status): ${error_code:-unknown_error} ${error_message}"
+            else
+              echo "::error::Smoke function failed (HTTP $http_status) with non-JSON or unexpected body."
+            fi
+            exit 1
+          fi
+
+          status="$(echo "$response_body" | jq -r '.status // empty' 2>/dev/null || true)"
+          if [ -z "$status" ]; then
+            echo "::error::Smoke function returned 2xx but body is not valid JSON status payload."
+            echo "$response_body"
+            exit 1
+          fi
+          if [ "$status" != "ok" ]; then
+            echo "::error::Smoke function returned status=${status}."
+            if echo "$response_body" | jq -e . >/dev/null 2>&1; then
+              echo "$response_body" | jq .
+            else
+              echo "$response_body"
+            fi
+            exit 1
+          fi

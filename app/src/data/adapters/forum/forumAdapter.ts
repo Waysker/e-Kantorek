@@ -10,6 +10,8 @@ import type {
   SquadMember,
   UserProfile,
 } from "../../../domain/models";
+import { canonicalizeInstrumentLabel } from "../../../domain/instruments";
+import { normalizePrimaryRole } from "../../../domain/roles";
 import {
   legacyForumAttendance,
   legacyForumCurrentUserId,
@@ -19,6 +21,12 @@ import {
   type LegacyForumMessageRow,
   type LegacyForumReplyCode,
 } from "./legacyForumFixtures";
+
+const UNKNOWN_INSTRUMENT_LABEL = "Unassigned";
+
+function normalizeForumInstrument(value: string | undefined): string {
+  return canonicalizeInstrumentLabel(value, UNKNOWN_INSTRUMENT_LABEL);
+}
 
 function mapReplyCode(code: LegacyForumReplyCode): AttendanceStatus {
   switch (code) {
@@ -130,7 +138,7 @@ function buildSquad(eventId: string): SquadComposition {
 
   const instrumentOrder = Array.from(
     new Set(
-      legacyForumMembers.map((member) => member.instrument_label ?? "Unassigned"),
+      legacyForumMembers.map((member) => normalizeForumInstrument(member.instrument_label)),
     ),
   );
 
@@ -141,7 +149,7 @@ function buildSquad(eventId: string): SquadComposition {
       const maybeMembers: SquadMember[] = [];
 
       for (const member of legacyForumMembers) {
-        const memberInstrument = member.instrument_label ?? "Unassigned";
+        const memberInstrument = normalizeForumInstrument(member.instrument_label);
 
         if (memberInstrument !== instrument) {
           continue;
@@ -237,7 +245,7 @@ function buildAttendanceGroups(eventId: string) {
           id: row.member_id,
           fullName: member?.full_name ?? "Unknown member",
           ...(member?.instrument_label
-            ? { primaryInstrument: member.instrument_label }
+            ? { primaryInstrument: normalizeForumInstrument(member.instrument_label) }
             : {}),
         };
       });
@@ -295,8 +303,8 @@ export class ForumAdapter implements UsersRepository, EventsRepository {
     return {
       id: member.member_id,
       fullName: member.full_name,
-      role: member.role_code,
-      primaryInstrument: member.instrument_label,
+      role: normalizePrimaryRole(member.role_code),
+      primaryInstrument: normalizeForumInstrument(member.instrument_label),
     };
   }
 

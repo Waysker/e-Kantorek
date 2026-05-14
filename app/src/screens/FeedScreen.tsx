@@ -12,6 +12,19 @@ type FeedScreenProps = {
   onOpenEvents: () => void;
 };
 
+function formatRoleLabel(role: UserProfile["role"]) {
+  if (role === "admin") {
+    return tr("Administrator", "Admin");
+  }
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjny", "Section leader");
+  }
+  return tr("Członek", "Member");
+}
+
 export function FeedScreen({
   currentUser,
   feedPosts,
@@ -48,18 +61,6 @@ export function FeedScreen({
 
       <SurfaceCard variant="muted">
         <Text style={styles.cardEyebrow}>{tr("Aktualny etap", "Current phase")}</Text>
-        <Text style={styles.cardTitle}>
-          {tr(
-            "Wizualny prototyp z tymczasowymi adapterami danych",
-            "Visual prototype with temporary data adapters",
-          )}
-        </Text>
-        <Text style={styles.cardBody}>
-          {tr(
-            "Dane z forum obejmują wydarzenia, użytkowników i obecność. Aktualności pozostają testowe do czasu uruchomienia docelowego backendu.",
-            "Forum-backed data is scoped to events, users, and attendance. Feed is still local fixture content until the real app backend exists.",
-          )}
-        </Text>
         <Pressable onPress={onOpenEvents} style={styles.linkAction}>
           <Text style={styles.linkActionLabel}>
             {tr("Przejdź do wydarzeń", "Review event prototype")}
@@ -99,7 +100,7 @@ export function FeedScreen({
         <Text style={styles.cardBody}>
           {tr("Instrument główny", "Primary instrument")}:{" "}
           {currentUser.primaryInstrument ?? tr("Nieprzypisany", "Unassigned")}.{" "}
-          {tr("Rola", "Role")}: {currentUser.role}.
+          {tr("Rola", "Role")}: {formatRoleLabel(currentUser.role)}.
         </Text>
       </SurfaceCard>
     </ScrollView>

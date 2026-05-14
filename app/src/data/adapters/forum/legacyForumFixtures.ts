@@ -1,7 +1,7 @@
 type LegacyForumMemberRow = {
   member_id: string;
   full_name: string;
-  role_code: "member" | "leader" | "zarzad" | "admin";
+  role_code: "member" | "section" | "board" | "admin" | "leader";
   instrument_label?: string;
 };
 
@@ -37,14 +37,14 @@ export const legacyForumMembers: LegacyForumMemberRow[] = [
   {
     member_id: "member-lead",
     full_name: "Lead Member",
-    role_code: "leader",
-    instrument_label: "Trabki",
+    role_code: "section",
+    instrument_label: "Trąbki",
   },
   {
     member_id: "member-a",
     full_name: "Member A",
     role_code: "member",
-    instrument_label: "Trabki",
+    instrument_label: "Trąbki",
   },
   {
     member_id: "member-admin",

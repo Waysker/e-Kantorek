@@ -9,12 +9,14 @@
     "web": "expo start --web",
     "web:build": "expo export --platform web",
     "web:build:pages": "expo export --platform web && node ./scripts/patch-web-dist-for-pages.mjs",
+    "attendance:preflight": "node ./scripts/attendance-sheet-preflight.mjs",
+    "attendance:export:csv": "node ./scripts/export-attendance-csv.mjs",
+    "edge:check": "node ./scripts/edge-functions-check.mjs",
     "typecheck": "tsc --noEmit",
-    "forum:publish:attendance": "node ./scripts/publish-attendance-sheet-to-supabase.mjs",
     "forum:sync": "node ./scripts/sync-forum-snapshot.mjs",
-    "forum:publish:overrides": "node ./scripts/publish-instrument-overrides-to-supabase.mjs",
     "forum:publish": "node ./scripts/publish-snapshot-to-supabase.mjs",
-    "forum:sync:publish": "node ./scripts/run-forum-sync-pipeline.mjs"
+    "forum:sync:publish": "node ./scripts/run-forum-sync-pipeline.mjs",
+    "smoke:attendance:db-first": "node ./scripts/smoke-attendance-db-first.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

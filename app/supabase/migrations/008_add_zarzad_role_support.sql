@@ -86,7 +86,7 @@ with check (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 );
 
@@ -100,7 +100,7 @@ using (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 )
 with check (
@@ -108,7 +108,7 @@ with check (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 );
 
@@ -122,7 +122,7 @@ with check (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 );
 
@@ -136,7 +136,7 @@ using (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 )
 with check (
@@ -144,7 +144,7 @@ with check (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and p.role in ('zarzad', 'admin')
+      and p.role in ('board', 'zarzad', 'admin')
   )
 );
 
@@ -173,8 +173,8 @@ begin
   from public.profiles p
   where p.id = v_actor_id;
 
-  if v_actor_role not in ('leader', 'zarzad', 'admin') then
-    raise exception 'Only leader/zarzad/admin roles can send attendance reminders.';
+  if v_actor_role not in ('section', 'board', 'admin', 'leader', 'zarzad') then
+    raise exception 'Only section/board/admin roles can send attendance reminders.';
   end if;
 
   if p_event_id is null or length(trim(p_event_id)) = 0 then
@@ -209,9 +209,9 @@ begin
     where declared.normalized_full_name is null
       and profile.id <> v_actor_id
       and (
-        v_actor_role in ('admin', 'zarzad')
+        v_actor_role in ('admin', 'board', 'zarzad')
         or (
-          v_actor_role = 'leader'
+          v_actor_role in ('section', 'leader')
           and profile.instrument = v_actor_instrument
         )
       )

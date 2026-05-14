@@ -11,23 +11,39 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import type { PrimaryTab } from "../navigation/routes";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { DataFreshnessBanner } from "./DataFreshnessBanner";
 
 type AppShellProps = {
+  tabs: PrimaryTab[];
   activeTab: PrimaryTab;
   hideNavigation?: boolean;
+  dataSourceLabel: string;
+  dataSourceGeneratedAt: string | null;
+  expectedSyncIntervalHours?: number;
   onNavigate: (tab: PrimaryTab) => void;
   children: ReactNode;
 };
 
-const tabs: { key: PrimaryTab; label: string }[] = [
-  { key: "feed", label: tr("Aktualności", "Feed") },
-  { key: "events", label: tr("Wydarzenia", "Events") },
-  { key: "profile", label: tr("Profil", "Profile") },
-];
+function getTabLabel(tab: PrimaryTab): string {
+  if (tab === "events") {
+    return tr("Wydarzenia", "Events");
+  }
+  if (tab === "attendance") {
+    return tr("Obecność", "Attendance");
+  }
+  if (tab === "roles") {
+    return tr("Role", "Roles");
+  }
+  return tr("Profil", "Profile");
+}
 
 export function AppShell({
+  tabs,
   activeTab,
   hideNavigation,
+  dataSourceLabel,
+  dataSourceGeneratedAt,
+  expectedSyncIntervalHours,
   onNavigate,
   children,
 }: AppShellProps) {
@@ -36,7 +52,16 @@ export function AppShell({
   const isDesktop = width >= tokens.breakpoints.desktop;
 
   if (hideNavigation) {
-    return <View style={styles.immersiveRoot}>{children}</View>;
+    return (
+      <View style={styles.immersiveRoot}>
+        <DataFreshnessBanner
+          dataSourceLabel={dataSourceLabel}
+          dataSourceGeneratedAt={dataSourceGeneratedAt}
+          expectedSyncIntervalHours={expectedSyncIntervalHours}
+        />
+        <View style={styles.immersiveContent}>{children}</View>
+      </View>
+    );
   }
 
   if (isDesktop) {
@@ -48,12 +73,13 @@ export function AppShell({
             <Text style={styles.sidebarTitle}>Orkiestra Reprezentacyjna AGH</Text>
             <View style={styles.sidebarNav}>
               {tabs.map((tab) => {
-                const isActive = tab.key === activeTab;
+                const isActive = tab === activeTab;
+                const label = getTabLabel(tab);
 
                 return (
                   <Pressable
-                    key={tab.key}
-                    onPress={() => onNavigate(tab.key)}
+                    key={tab}
+                    onPress={() => onNavigate(tab)}
                     style={[styles.sidebarLink, isActive && styles.sidebarLinkActive]}
                   >
                     <Text
@@ -62,7 +88,7 @@ export function AppShell({
                         isActive && styles.sidebarLinkLabelActive,
                       ]}
                     >
-                      {tab.label}
+                      {label}
                     </Text>
                   </Pressable>
                 );
@@ -70,7 +96,14 @@ export function AppShell({
             </View>
           </View>
 
-          <View style={styles.desktopMain}>{children}</View>
+          <View style={styles.desktopMain}>
+            <DataFreshnessBanner
+              dataSourceLabel={dataSourceLabel}
+              dataSourceGeneratedAt={dataSourceGeneratedAt}
+              expectedSyncIntervalHours={expectedSyncIntervalHours}
+            />
+            <View style={styles.desktopContent}>{children}</View>
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -78,7 +111,14 @@ export function AppShell({
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
-      <View style={styles.mobileContent}>{children}</View>
+      <View style={styles.mobileLayout}>
+        <DataFreshnessBanner
+          dataSourceLabel={dataSourceLabel}
+          dataSourceGeneratedAt={dataSourceGeneratedAt}
+          expectedSyncIntervalHours={expectedSyncIntervalHours}
+        />
+        <View style={styles.mobileContent}>{children}</View>
+      </View>
       <View
         style={[
           styles.bottomNav,
@@ -86,12 +126,13 @@ export function AppShell({
         ]}
       >
         {tabs.map((tab) => {
-          const isActive = tab.key === activeTab;
+          const isActive = tab === activeTab;
+          const label = getTabLabel(tab);
 
           return (
             <Pressable
-              key={tab.key}
-              onPress={() => onNavigate(tab.key)}
+              key={tab}
+              onPress={() => onNavigate(tab)}
               style={styles.bottomNavItem}
             >
               <Text
@@ -100,7 +141,7 @@ export function AppShell({
                   isActive && styles.bottomNavLabelActive,
                 ]}
               >
-                {tab.label}
+                {label}
               </Text>
             </Pressable>
           );
@@ -118,6 +159,9 @@ const styles = StyleSheet.create({
   immersiveRoot: {
     flex: 1,
     backgroundColor: tokens.colors.readerBackdrop,
+  },
+  immersiveContent: {
+    flex: 1,
   },
   desktopLayout: {
     flex: 1,
@@ -164,6 +208,12 @@ const styles = StyleSheet.create({
     color: tokens.colors.brand,
   },
   desktopMain: {
+    flex: 1,
+  },
+  desktopContent: {
+    flex: 1,
+  },
+  mobileLayout: {
     flex: 1,
   },
   mobileContent: {
