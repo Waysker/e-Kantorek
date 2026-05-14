@@ -1,9 +1,10 @@
 export type PrimaryTab = "events" | "attendance" | "roles" | "profile";
+export type AttendanceFocusStatus = "going" | "not_going";
 
 export type AppRoute =
   | { name: "events" }
   | { name: "eventDetail"; eventId: string }
-  | { name: "attendance"; eventId: string }
+  | { name: "attendance"; eventId: string; focusStatus?: AttendanceFocusStatus }
   | { name: "setlist"; eventId: string }
   | { name: "squad"; eventId: string }
   | { name: "attendanceWorkspace" }

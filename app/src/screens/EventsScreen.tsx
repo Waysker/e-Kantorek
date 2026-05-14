@@ -10,8 +10,6 @@ import { SurfaceCard } from "../ui/SurfaceCard";
 type EventsScreenProps = {
   events: EventListItem[];
   onOpenEvent: (eventId: string) => void;
-  canRemindMissingDeclarations?: boolean;
-  onRemindMissingDeclarations?: (eventId: string) => Promise<number>;
 };
 
 type EventsTab = "upcoming" | "past";
@@ -37,37 +35,20 @@ function sortByNearestPast(left: EventListItem, right: EventListItem) {
 
 function getAttendanceLabel(status: EventListItem["attendanceStatus"]) {
   if (status === "going") {
-    return tr("Będę", "Going");
+    return tr("Bede", "Going");
   }
   if (status === "maybe") {
-    return tr("Może", "Maybe");
+    return tr("Moze", "Maybe");
   }
   if (status === "not_going") {
-    return tr("Nie będę", "Not going");
+    return tr("Nie bede", "Not going");
   }
   return tr("Brak odpowiedzi", "No response");
 }
 
-type ReminderFeedback = {
-  tone: "success" | "error" | "info";
-  message: string;
-};
-
-export function EventsScreen({
-  events,
-  onOpenEvent,
-  canRemindMissingDeclarations,
-  onRemindMissingDeclarations,
-}: EventsScreenProps) {
+export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
   const [activeTab, setActiveTab] = useState<EventsTab>("upcoming");
-  const [pendingReminderEventId, setPendingReminderEventId] = useState<string | null>(
-    null,
-  );
-  const [feedbackByEventId, setFeedbackByEventId] = useState<
-    Record<string, ReminderFeedback>
-  >({});
   const todayKey = toWarsawDateKey(new Date());
-  const canRemind = canRemindMissingDeclarations && Boolean(onRemindMissingDeclarations);
 
   const upcomingEvents = events
     .filter((event) => toWarsawDateKey(event.startsAt) >= todayKey)
@@ -78,53 +59,6 @@ export function EventsScreen({
 
   const visibleEvents = activeTab === "upcoming" ? upcomingEvents : pastEvents;
 
-  async function handleRemind(event: EventListItem) {
-    if (!onRemindMissingDeclarations) {
-      return;
-    }
-
-    setPendingReminderEventId(event.id);
-
-    try {
-      const notifiedCount = await onRemindMissingDeclarations(event.id);
-      setFeedbackByEventId((current) => ({
-        ...current,
-        [event.id]:
-          notifiedCount > 0
-            ? {
-                tone: "success",
-                message: tr(
-                  `Wyslano ponaglenie do ${notifiedCount} osob.`,
-                  `Sent reminders to ${notifiedCount} member(s).`,
-                ),
-              }
-            : {
-                tone: "info",
-                message: tr(
-                  "Wszyscy sa juz zadeklarowani przy tym wydarzeniu.",
-                  "Everyone has already responded for this event.",
-                ),
-              },
-      }));
-    } catch (error) {
-      setFeedbackByEventId((current) => ({
-        ...current,
-        [event.id]: {
-          tone: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : tr(
-                  "Nie udalo sie wyslac ponaglenia.",
-                  "Could not send reminders.",
-                ),
-        },
-      }));
-    } finally {
-      setPendingReminderEventId((current) => (current === event.id ? null : current));
-    }
-  }
-
   return (
     <ScrollView
       style={styles.screenScroll}
@@ -133,35 +67,23 @@ export function EventsScreen({
     >
       <View style={styles.screenHeaderBlock}>
         <Text style={styles.kicker}>{tr("Wydarzenia", "Events")}</Text>
-        <Text style={styles.screenTitle}>
-          {tr("Najbliższe na górze", "Closest first by date")}
-        </Text>
+        <Text style={styles.screenTitle}>{tr("Najblizsze na gorze", "Closest first by date")}</Text>
       </View>
 
       <View style={styles.tabRow}>
         <Pressable
           onPress={() => setActiveTab("upcoming")}
-          style={[
-            styles.tabButton,
-            activeTab === "upcoming" && styles.tabButtonActive,
-          ]}
+          style={[styles.tabButton, activeTab === "upcoming" && styles.tabButtonActive]}
         >
-          <Text
-            style={[
-              styles.tabLabel,
-              activeTab === "upcoming" && styles.tabLabelActive,
-            ]}
-          >
-            {tr("Nadchodzące", "Upcoming")} ({upcomingEvents.length})
+          <Text style={[styles.tabLabel, activeTab === "upcoming" && styles.tabLabelActive]}>
+            {tr("Nadchodzace", "Upcoming")} ({upcomingEvents.length})
           </Text>
         </Pressable>
         <Pressable
           onPress={() => setActiveTab("past")}
           style={[styles.tabButton, activeTab === "past" && styles.tabButtonActive]}
         >
-          <Text
-            style={[styles.tabLabel, activeTab === "past" && styles.tabLabelActive]}
-          >
+          <Text style={[styles.tabLabel, activeTab === "past" && styles.tabLabelActive]}>
             {tr("Archiwum", "Past")} ({pastEvents.length})
           </Text>
         </Pressable>
@@ -171,12 +93,12 @@ export function EventsScreen({
         <SurfaceCard variant="outline">
           <Text style={styles.emptyTitle}>
             {activeTab === "upcoming"
-              ? tr("Brak nadchodzących wydarzeń.", "No upcoming events.")
-              : tr("Brak wydarzeń archiwalnych.", "No past events.")}
+              ? tr("Brak nadchodzacych wydarzen.", "No upcoming events.")
+              : tr("Brak wydarzen archiwalnych.", "No past events.")}
           </Text>
           <Text style={styles.emptyCopy}>
             {tr(
-              "Zsynchronizowane wątki forum pojawią się tutaj automatycznie.",
+              "Zsynchronizowane watki forum pojawia sie tutaj automatycznie.",
               "Synced forum threads will appear here automatically.",
             )}
           </Text>
@@ -186,67 +108,28 @@ export function EventsScreen({
           <Pressable key={event.id} onPress={() => onOpenEvent(event.id)}>
             <SurfaceCard variant="default">
               <View style={styles.eventCardTop}>
-                <Text style={styles.eventDateLabel}>
-                  {formatDateLabel(event.startsAt)}
-                </Text>
+                <Text style={styles.eventDateLabel}>{formatDateLabel(event.startsAt)}</Text>
                 <View style={styles.eventActionsColumn}>
                   <Text
                     style={[
                       styles.attendanceChip,
-                      event.attendanceStatus === "going" &&
-                        styles.attendanceChipPositive,
-                      event.attendanceStatus === "maybe" &&
-                        styles.attendanceChipMuted,
-                      event.attendanceStatus === "not_going" &&
-                        styles.attendanceChipNegative,
+                      event.attendanceStatus === "going" && styles.attendanceChipPositive,
+                      event.attendanceStatus === "maybe" && styles.attendanceChipMuted,
+                      event.attendanceStatus === "not_going" && styles.attendanceChipNegative,
                     ]}
                   >
                     {getAttendanceLabel(event.attendanceStatus)}
                   </Text>
-                  {canRemind ? (
-                    <Pressable
-                      style={[
-                        styles.reminderButton,
-                        pendingReminderEventId === event.id && styles.reminderButtonDisabled,
-                      ]}
-                      disabled={pendingReminderEventId === event.id}
-                      onPress={(pressEvent) => {
-                        pressEvent.stopPropagation();
-                        void handleRemind(event);
-                      }}
-                    >
-                      <Text style={styles.reminderButtonLabel}>
-                        {pendingReminderEventId === event.id
-                          ? tr("Ponaglanie...", "Sending...")
-                          : tr("Ponaglij", "Remind")}
-                      </Text>
-                    </Pressable>
-                  ) : null}
                 </View>
               </View>
 
               <Text style={styles.cardTitle}>{event.title}</Text>
-              {event.venue ? (
-                <Text style={styles.cardSecondary}>{event.venue}</Text>
-              ) : null}
+              {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
               <Text style={styles.cardBody}>{event.preview}</Text>
               <Text style={styles.cardFooter}>
-                {event.updateCount} {tr("aktualizacji", "updates")} -{" "}
-                {event.commentCount} {tr("komentarzy", "comments")}
+                {event.updateCount} {tr("aktualizacji", "updates")} - {event.commentCount}{" "}
+                {tr("komentarzy", "comments")}
               </Text>
-              {feedbackByEventId[event.id] ? (
-                <Text
-                  style={[
-                    styles.reminderFeedback,
-                    feedbackByEventId[event.id].tone === "success" &&
-                      styles.reminderFeedbackSuccess,
-                    feedbackByEventId[event.id].tone === "error" &&
-                      styles.reminderFeedbackError,
-                  ]}
-                >
-                  {feedbackByEventId[event.id].message}
-                </Text>
-              ) : null}
             </SurfaceCard>
           </Pressable>
         ))
@@ -356,22 +239,6 @@ const styles = StyleSheet.create({
     backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
   },
-  reminderButton: {
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brandTint,
-    borderWidth: 1,
-    borderColor: tokens.colors.brand,
-  },
-  reminderButtonDisabled: {
-    opacity: 0.75,
-  },
-  reminderButtonLabel: {
-    color: tokens.colors.brand,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
   cardTitle: {
     marginTop: tokens.spacing.sm,
     fontSize: tokens.typography.title,
@@ -395,18 +262,5 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.md,
     fontSize: tokens.typography.caption,
     color: tokens.colors.muted,
-  },
-  reminderFeedback: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  reminderFeedbackSuccess: {
-    color: tokens.colors.successInk,
-  },
-  reminderFeedbackError: {
-    color: tokens.colors.dangerInk,
   },
 });

@@ -85,7 +85,15 @@ function isSameRoute(left: AppRoute, right: AppRoute): boolean {
   }
 
   if ("eventId" in left && "eventId" in right) {
-    return left.eventId === right.eventId;
+    if (left.eventId !== right.eventId) {
+      return false;
+    }
+
+    if (left.name === "attendance" && right.name === "attendance") {
+      return left.focusStatus === right.focusStatus;
+    }
+
+    return true;
   }
 
   return false;
@@ -96,7 +104,7 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     return false;
   }
 
-  const candidate = value as { name?: unknown; eventId?: unknown };
+  const candidate = value as { name?: unknown; eventId?: unknown; focusStatus?: unknown };
   if (typeof candidate.name !== "string") {
     return false;
   }
@@ -118,7 +126,18 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     candidate.name === "setlist" ||
     candidate.name === "squad"
   ) {
-    return typeof candidate.eventId === "string" && candidate.eventId.trim().length > 0;
+    if (typeof candidate.eventId !== "string" || candidate.eventId.trim().length === 0) {
+      return false;
+    }
+
+    if (candidate.name === "attendance") {
+      if (candidate.focusStatus === undefined) {
+        return true;
+      }
+      return candidate.focusStatus === "going" || candidate.focusStatus === "not_going";
+    }
+
+    return true;
   }
 
   return false;
@@ -705,10 +724,6 @@ export default function App() {
           <EventsScreen
             events={events}
             onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
-            canRemindMissingDeclarations={canSendAttendanceReminders}
-            onRemindMissingDeclarations={
-              canSendAttendanceReminders ? handleRemindMissingDeclarations : undefined
-            }
           />
         );
       case "eventDetail":
@@ -725,11 +740,17 @@ export default function App() {
           <EventDetailScreen
             event={selectedEvent}
             onBack={() => goBack({ name: "events" })}
-            onOpenAttendance={() =>
-              pushRoute({ name: "attendance", eventId: selectedEvent.id })
+            onOpenAttendance={(focusStatus) =>
+              pushRoute({ name: "attendance", eventId: selectedEvent.id, focusStatus })
             }
             onOpenSetlist={() =>
               pushRoute({ name: "setlist", eventId: selectedEvent.id })
+            }
+            canRemindMissingDeclarations={canSendAttendanceReminders}
+            onRemindMissingDeclarations={
+              canSendAttendanceReminders
+                ? () => handleRemindMissingDeclarations(selectedEvent.id)
+                : undefined
             }
           />
         );
@@ -747,6 +768,7 @@ export default function App() {
           <AttendanceScreen
             event={selectedEvent}
             onBack={() => goBack({ name: "events" })}
+            focusStatus={route.focusStatus}
           />
         );
       case "setlist":

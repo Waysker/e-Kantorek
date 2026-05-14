@@ -3,7 +3,7 @@ drop constraint if exists profiles_role_check;
 
 alter table public.profiles
 add constraint profiles_role_check
-check (role in ('member', 'leader', 'zarzad', 'admin'));
+check (role in ('member', 'leader', 'section', 'board', 'zarzad', 'admin'));
 
 update public.profiles
 set role = 'zarzad'
@@ -52,7 +52,7 @@ begin
     parsed_role := 'zarzad';
   end if;
 
-  if parsed_role not in ('member', 'leader', 'zarzad', 'admin') then
+  if parsed_role not in ('member', 'leader', 'section', 'board', 'zarzad', 'admin') then
     parsed_role := 'member';
   end if;
 
@@ -163,6 +163,7 @@ declare
   v_actor_role text;
   v_actor_instrument public.oragh_instrument;
   v_notified_count integer := 0;
+  v_notified_names text[] := array[]::text[];
 begin
   if v_actor_id is null then
     raise exception 'Authentication required.';
@@ -215,27 +216,46 @@ begin
           and profile.instrument = v_actor_instrument
         )
       )
-  )
-  insert into public.notifications (
-    user_id,
-    kind,
-    title,
-    body,
-    ref_type,
-    ref_id,
-    created_by
+  ),
+  inserted as (
+    insert into public.notifications (
+      user_id,
+      kind,
+      title,
+      body,
+      ref_type,
+      ref_id,
+      created_by
+    )
+    select
+      recipient.id,
+      'attendance_reminder',
+      'Ponaglenie obecnosci',
+      format('Prosimy o deklaracje obecnosci dla wydarzenia: %s.', trim(p_event_title)),
+      'event',
+      trim(p_event_id),
+      v_actor_id
+    from recipients as recipient
+    returning user_id
   )
   select
-    recipient.id,
-    'attendance_reminder',
-    'Ponaglenie obecnosci',
-    format('Prosimy o deklaracje obecnosci dla wydarzenia: %s.', trim(p_event_title)),
-    'event',
-    trim(p_event_id),
-    v_actor_id
-  from recipients as recipient;
+    count(*),
+    coalesce(
+      array_agg(coalesce(nullif(trim(p.full_name), ''), p.id::text) order by p.full_name),
+      array[]::text[]
+    )
+  into v_notified_count, v_notified_names
+  from inserted i
+  join public.profiles p
+    on p.id = i.user_id;
 
-  get diagnostics v_notified_count = row_count;
+  raise log 'send_event_attendance_reminders actor=% role=% event=% recipients=% recipients_count=%',
+    v_actor_id,
+    v_actor_role,
+    trim(p_event_id),
+    v_notified_names,
+    v_notified_count;
+
   return v_notified_count;
 end;
 $$;

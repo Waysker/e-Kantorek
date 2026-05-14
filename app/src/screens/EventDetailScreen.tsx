@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -11,14 +12,24 @@ import type { EventDetail } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { formatDateLabel, formatRelativeLabel } from "../utils/format";
-import { AttendanceSummaryStrip } from "../ui/AttendanceSummaryStrip";
+import {
+  AttendanceSummaryStrip,
+  type AttendanceSummaryFocusStatus,
+} from "../ui/AttendanceSummaryStrip";
 import { SurfaceCard } from "../ui/SurfaceCard";
 
 type EventDetailScreenProps = {
   event: EventDetail;
   onBack: () => void;
-  onOpenAttendance: () => void;
+  onOpenAttendance: (focusStatus?: AttendanceSummaryFocusStatus) => void;
   onOpenSetlist: () => void;
+  canRemindMissingDeclarations?: boolean;
+  onRemindMissingDeclarations?: () => Promise<number>;
+};
+
+type ReminderFeedback = {
+  tone: "success" | "error" | "info";
+  message: string;
 };
 
 export function EventDetailScreen({
@@ -26,23 +37,63 @@ export function EventDetailScreen({
   onBack,
   onOpenAttendance,
   onOpenSetlist,
+  canRemindMissingDeclarations,
+  onRemindMissingDeclarations,
 }: EventDetailScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
+  const canRemind = canRemindMissingDeclarations && Boolean(onRemindMissingDeclarations);
+  const [isReminding, setIsReminding] = useState(false);
+  const [reminderFeedback, setReminderFeedback] = useState<ReminderFeedback | null>(null);
+
+  async function handleRemindPress() {
+    if (!onRemindMissingDeclarations) {
+      return;
+    }
+
+    setIsReminding(true);
+    setReminderFeedback(null);
+
+    try {
+      const notifiedCount = await onRemindMissingDeclarations();
+      setReminderFeedback(
+        notifiedCount > 0
+          ? {
+              tone: "success",
+              message: tr(
+                `Wyslano ponaglenie do ${notifiedCount} osob.`,
+                `Sent reminders to ${notifiedCount} member(s).`,
+              ),
+            }
+          : {
+              tone: "info",
+              message: tr(
+                "Wszyscy sa juz zadeklarowani przy tym wydarzeniu.",
+                "Everyone has already responded for this event.",
+              ),
+            },
+      );
+    } catch (error) {
+      setReminderFeedback({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : tr("Nie udalo sie wyslac ponaglenia.", "Could not send reminders."),
+      });
+    } finally {
+      setIsReminding(false);
+    }
+  }
 
   return (
     <ScrollView
       style={styles.screenScroll}
-      contentContainerStyle={[
-        styles.screenContent,
-        isDesktop && styles.desktopContent,
-      ]}
+      contentContainerStyle={[styles.screenContent, isDesktop && styles.desktopContent]}
       showsVerticalScrollIndicator={false}
     >
       <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>
-          {tr("Wróć do wydarzeń", "Back to Events")}
-        </Text>
+        <Text style={styles.backLinkLabel}>{tr("Wroc do wydarzen", "Back to Events")}</Text>
       </Pressable>
 
       <View style={[styles.desktopSplit, isDesktop && styles.desktopSplitActive]}>
@@ -50,9 +101,7 @@ export function EventDetailScreen({
           <SurfaceCard variant="brandTint">
             <Text style={styles.cardEyebrow}>{formatDateLabel(event.startsAt)}</Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
-            {event.venue ? (
-              <Text style={styles.cardSecondary}>{event.venue}</Text>
-            ) : null}
+            {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
             <Text style={styles.cardBody}>{event.description}</Text>
 
             {event.updates.length > 0 ? (
@@ -67,7 +116,7 @@ export function EventDetailScreen({
             ) : (
               <Text style={styles.cardSecondary}>
                 {tr(
-                  "Brak osobnych aktualizacji organizatorów w tym wątku.",
+                  "Brak osobnych aktualizacji organizatorow w tym watku.",
                   "No separate organizer updates were imported from this thread yet.",
                 )}
               </Text>
@@ -78,14 +127,43 @@ export function EventDetailScreen({
             <View style={styles.cardActionRow}>
               <View style={styles.cardActionCopy}>
                 <Text style={styles.cardEyebrow}>
-                  {tr("Deklaracje RSVP i skład", "RSVP declarations and roster")}
+                  {tr("Deklaracje RSVP i sklad", "RSVP declarations and roster")}
                 </Text>
               </View>
-              <Pressable onPress={onOpenAttendance} style={styles.inlineButton}>
-                <Text style={styles.inlineButtonLabel}>{tr("Otwórz", "Open")}</Text>
-              </Pressable>
+              {canRemind ? (
+                <Pressable
+                  onPress={() => void handleRemindPress()}
+                  style={[styles.inlineButton, isReminding && styles.inlineButtonDisabled]}
+                  disabled={isReminding}
+                >
+                  <Text style={styles.inlineButtonLabel}>
+                    {isReminding ? tr("Ponaglanie...", "Sending...") : tr("Ponaglij", "Remind")}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
-            <AttendanceSummaryStrip summary={event.attendanceSummary} />
+            <AttendanceSummaryStrip
+              summary={event.attendanceSummary}
+              includeMaybe={false}
+              onSelectStatus={(status) => onOpenAttendance(status)}
+            />
+            <Text style={styles.cardHint}>
+              {tr(
+                "Kliknij kafelek Bede / Nie bede, aby otworzyc odpowiednia liste.",
+                "Tap Going / Not going tile to open the corresponding list.",
+              )}
+            </Text>
+            {reminderFeedback ? (
+              <Text
+                style={[
+                  styles.reminderFeedback,
+                  reminderFeedback.tone === "success" && styles.reminderFeedbackSuccess,
+                  reminderFeedback.tone === "error" && styles.reminderFeedbackError,
+                ]}
+              >
+                {reminderFeedback.message}
+              </Text>
+            ) : null}
           </SurfaceCard>
 
           {!isDesktop ? (
@@ -95,7 +173,7 @@ export function EventDetailScreen({
                   <Text style={styles.cardEyebrow}>Setlista</Text>
                 </View>
                 <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                  <Text style={styles.inlineButtonLabel}>{tr("Otwórz", "Open")}</Text>
+                  <Text style={styles.inlineButtonLabel}>{tr("Otworz", "Open")}</Text>
                 </Pressable>
               </View>
               <Text style={styles.cardBody}>{event.setlist.preview}</Text>
@@ -104,9 +182,7 @@ export function EventDetailScreen({
 
           <SurfaceCard variant="outline">
             <Text style={styles.cardEyebrow}>{tr("Komentarze", "Comments")}</Text>
-            <Text style={styles.cardTitle}>
-              {tr("Dyskusja członków", "Member discussion")}
-            </Text>
+            <Text style={styles.cardTitle}>{tr("Dyskusja czlonkow", "Member discussion")}</Text>
             {event.comments.length > 0 ? (
               event.comments.map((comment) => (
                 <View key={comment.id} style={styles.commentRow}>
@@ -119,7 +195,7 @@ export function EventDetailScreen({
             ) : (
               <Text style={styles.cardSecondary}>
                 {tr(
-                  "Brak odpowiedzi członków zaimportowanych z forum.",
+                  "Brak odpowiedzi czlonkow zaimportowanych z forum.",
                   "No member replies were imported from the forum thread yet.",
                 )}
               </Text>
@@ -133,9 +209,7 @@ export function EventDetailScreen({
               <View style={styles.setlistRailHeader}>
                 <Text style={styles.cardTitle}>Setlista</Text>
                 <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                  <Text style={styles.inlineButtonLabel}>
-                    {tr("Pełny ekran", "Fullscreen")}
-                  </Text>
+                  <Text style={styles.inlineButtonLabel}>{tr("Pelny ekran", "Fullscreen")}</Text>
                 </Pressable>
               </View>
               {event.setlist.sections.map((section) => (
@@ -258,6 +332,27 @@ const styles = StyleSheet.create({
   inlineButtonLabel: {
     color: tokens.colors.surface,
     fontWeight: "700",
+  },
+  inlineButtonDisabled: {
+    opacity: 0.75,
+  },
+  cardHint: {
+    marginTop: tokens.spacing.sm,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
+  },
+  reminderFeedback: {
+    marginTop: tokens.spacing.sm,
+    fontSize: tokens.typography.caption,
+    lineHeight: 18,
+    color: tokens.colors.muted,
+    fontWeight: "700",
+  },
+  reminderFeedbackSuccess: {
+    color: tokens.colors.successInk,
+  },
+  reminderFeedbackError: {
+    color: tokens.colors.dangerInk,
   },
   commentRow: {
     marginTop: tokens.spacing.md,
