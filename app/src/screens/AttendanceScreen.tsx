@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  Pressable,
   useWindowDimensions,
 } from "react-native";
 
@@ -35,6 +35,13 @@ function sortGroupsByInstrument(left: SquadGroup, right: SquadGroup) {
     return -1;
   }
   return left.instrument.localeCompare(right.instrument, "pl");
+}
+
+function removeMaybeMembers(groups: SquadGroup[]): SquadGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    maybeMembers: [],
+  }));
 }
 
 function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
@@ -74,24 +81,23 @@ function mapDeclinedGroupsByInstrument(event: EventDetail): SquadGroup[] {
     .sort(sortGroupsByInstrument);
 }
 
-function removeMaybeMembers(groups: SquadGroup[]): SquadGroup[] {
-  return groups.map((group) => ({
-    ...group,
-    maybeMembers: [],
-  }));
-}
-
 export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScreenProps) {
-  const [isDeclinedVisible, setIsDeclinedVisible] = useState(focusStatus === "not_going");
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
-  const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
-  const goingGroups = useMemo(() => removeMaybeMembers(event.squad.groups), [event.squad.groups]);
   const selectedStatus = event.attendanceSummary.userStatus;
+  const [activeList, setActiveList] = useState<AttendanceSummaryFocusStatus>(
+    focusStatus ?? "going",
+  );
+
+  const goingGroups = useMemo(
+    () => removeMaybeMembers(event.squad.groups),
+    [event.squad.groups],
+  );
+  const declinedGroups = useMemo(() => mapDeclinedGroupsByInstrument(event), [event]);
 
   useEffect(() => {
-    if (focusStatus === "not_going") {
-      setIsDeclinedVisible(true);
+    if (focusStatus) {
+      setActiveList(focusStatus);
     }
   }, [focusStatus]);
 
@@ -119,7 +125,9 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
                 {option.label}
               </Text>
               <Text style={styles.responsePillMeta}>
-                {isActive ? tr("Zaimportowane RSVP", "Imported RSVP") : tr("Tylko podglad", "Preview only")}
+                {isActive
+                  ? tr("Zaimportowane RSVP", "Imported RSVP")
+                  : tr("Tylko podglad", "Preview only")}
               </Text>
             </View>
           );
@@ -131,55 +139,6 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       </Text>
     </View>
   );
-
-  const goingSection = (
-    <>
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>
-          {isDesktop ? tr("Grupy wedlug instrumentu", "Grouped by instrument") : tr("Wedlug instrumentu", "By instrument")}
-        </Text>
-      </View>
-      <InstrumentRosterGrid groups={goingGroups} />
-    </>
-  );
-
-  const declinedSection =
-    event.attendanceSummary.notGoing > 0 ? (
-      <View style={styles.declinedSection}>
-        <Pressable
-          onPress={() => setIsDeclinedVisible((current) => !current)}
-          style={[styles.declinedToggle, isDeclinedVisible && styles.declinedToggleActive]}
-        >
-          <Text style={styles.declinedToggleTitle}>
-            {isDeclinedVisible
-              ? tr("Ukryj osoby, ktore odmowily", "Hide declined members")
-              : tr("Pokaz osoby, ktore odmowily", "Show declined members")}
-          </Text>
-          <Text style={styles.declinedToggleMeta}>
-            {tr("Odmowili", "Declined")}: {event.attendanceSummary.notGoing}
-          </Text>
-        </Pressable>
-
-        {isDeclinedVisible ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>
-                {tr("Odmowy wedlug instrumentu", "Declined by instrument")}
-              </Text>
-            </View>
-
-            <InstrumentRosterGrid
-              groups={declinedGroups}
-              confirmedLabel={tr("odmowilo", "declined")}
-              emptyStateLabel={tr(
-                "Brak osob, ktore odmowily udzialu.",
-                "No declined members for this event.",
-              )}
-            />
-          </>
-        ) : null}
-      </View>
-    ) : null;
 
   return (
     <ScrollView
@@ -194,42 +153,80 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       {isDesktop ? (
         <View style={styles.headerSplitDesktop}>
           <SurfaceCard variant="default" style={styles.headerPrimary}>
-            <Text style={styles.cardEyebrow}>{tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}</Text>
+            <Text style={styles.cardEyebrow}>
+              {tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}
+            </Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
-            <AttendanceSummaryStrip summary={event.attendanceSummary} includeMaybe={false} />
+            <AttendanceSummaryStrip
+              summary={event.attendanceSummary}
+              includeMaybe={false}
+              onSelectStatus={(status) => setActiveList(status)}
+            />
+            <Text style={styles.helperText}>
+              {tr(
+                "Kliknij Bede / Nie bede, aby przelaczyc liste.",
+                "Tap Going / Not going to switch list.",
+              )}
+            </Text>
           </SurfaceCard>
 
           <SurfaceCard variant="outline" style={styles.headerSecondary}>
-            <Text style={styles.cardEyebrow}>{tr("Twoja deklaracja RSVP", "Your RSVP declaration")}</Text>
+            <Text style={styles.cardEyebrow}>
+              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
+            </Text>
             {responseSelector}
           </SurfaceCard>
         </View>
       ) : (
         <SurfaceCard variant="default">
-          <Text style={styles.cardEyebrow}>{tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}</Text>
+          <Text style={styles.cardEyebrow}>
+            {tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}
+          </Text>
           <Text style={styles.screenTitle}>{event.title}</Text>
 
           <View style={styles.mobileSummaryRow}>
-            <AttendanceSummaryStrip summary={event.attendanceSummary} compact includeMaybe={false} />
+            <AttendanceSummaryStrip
+              summary={event.attendanceSummary}
+              compact
+              includeMaybe={false}
+              onSelectStatus={(status) => setActiveList(status)}
+            />
           </View>
+          <Text style={styles.helperText}>
+            {tr(
+              "Kliknij Bede / Nie bede, aby przelaczyc liste.",
+              "Tap Going / Not going to switch list.",
+            )}
+          </Text>
 
           <View style={styles.mobileResponseBlock}>
-            <Text style={styles.mobileResponseTitle}>{tr("Twoja deklaracja RSVP", "Your RSVP declaration")}</Text>
+            <Text style={styles.mobileResponseTitle}>
+              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
+            </Text>
             {responseSelector}
           </View>
         </SurfaceCard>
       )}
 
-      {focusStatus === "not_going" ? (
-        <>
-          {declinedSection}
-          {goingSection}
-        </>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>
+          {activeList === "going"
+            ? tr("Bede wedlug instrumentu", "Going by instrument")
+            : tr("Nie bede wedlug instrumentu", "Not going by instrument")}
+        </Text>
+      </View>
+
+      {activeList === "going" ? (
+        <InstrumentRosterGrid groups={goingGroups} />
       ) : (
-        <>
-          {goingSection}
-          {declinedSection}
-        </>
+        <InstrumentRosterGrid
+          groups={declinedGroups}
+          confirmedLabel={tr("odmowilo", "declined")}
+          emptyStateLabel={tr(
+            "Brak osob, ktore odmowily udzialu.",
+            "No declined members for this event.",
+          )}
+        />
       )}
     </ScrollView>
   );
@@ -279,6 +276,11 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     color: tokens.colors.ink,
     fontWeight: "700",
+  },
+  helperText: {
+    marginTop: tokens.spacing.sm,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
   },
   mobileSummaryRow: {
     marginTop: tokens.spacing.sm,
@@ -350,32 +352,6 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.title,
     lineHeight: 28,
     color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  declinedSection: {
-    gap: tokens.spacing.md,
-  },
-  declinedToggle: {
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    gap: 2,
-  },
-  declinedToggleActive: {
-    borderColor: tokens.colors.brand,
-    backgroundColor: tokens.colors.brandTint,
-  },
-  declinedToggleTitle: {
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  declinedToggleMeta: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
     fontWeight: "700",
   },
 });
