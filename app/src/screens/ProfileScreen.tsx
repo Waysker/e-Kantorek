@@ -10,6 +10,9 @@ function formatRoleLabel(role: UserProfile["role"]) {
   if (role === "admin") {
     return tr("Administrator", "Admin");
   }
+  if (role === "zarzad") {
+    return tr("Zarząd", "Board");
+  }
   if (role === "leader") {
     return tr("Lider", "Leader");
   }
@@ -90,7 +93,7 @@ export function ProfileScreen({
       {canManageAttendanceSetup && onOpenAttendanceSetup ? (
         <SurfaceCard variant="default">
           <Text style={styles.cardEyebrow}>
-            {tr("Narzędzia lidera", "Leader tools")}
+            {tr("Narzędzia zarządu", "Board tools")}
           </Text>
           <Text style={styles.cardTitle}>
             {tr("Konfiguracja obecności", "Attendance setup")}

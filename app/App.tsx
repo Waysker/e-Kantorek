@@ -67,6 +67,14 @@ type ProfileRow = {
 
 type AuthView = "sign_in" | "register";
 
+function canSendAttendanceReminderRole(role: UserProfile["role"]) {
+  return role === "admin" || role === "zarzad" || role === "leader";
+}
+
+function canManageAttendanceSetupRole(role: UserProfile["role"]) {
+  return role === "admin" || role === "zarzad";
+}
+
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>({ status: "checking" });
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
@@ -457,7 +465,51 @@ export default function App() {
   const selectedEvent =
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
   const canManageAttendanceSetup =
-    effectiveCurrentUser.role === "admin" || effectiveCurrentUser.role === "leader";
+    canManageAttendanceSetupRole(effectiveCurrentUser.role);
+  const canSendAttendanceReminders =
+    canSendAttendanceReminderRole(effectiveCurrentUser.role);
+
+  async function handleRemindMissingDeclarations(eventId: string): Promise<number> {
+    if (!supabaseAuthClient) {
+      throw new Error(
+        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+      );
+    }
+
+    if (!canSendAttendanceReminderRole(effectiveCurrentUser.role)) {
+      throw new Error(
+        tr(
+          "Tylko role leader/zarzad/admin moga wysylac ponaglenia.",
+          "Only leader/board/admin roles can send reminders.",
+        ),
+      );
+    }
+
+    const event = eventDetailsById[eventId];
+    if (!event) {
+      throw new Error(
+        tr("Nie znaleziono wydarzenia.", "The selected event could not be found."),
+      );
+    }
+
+    const declaredFullNames = event.attendanceGroups
+      .filter((group) => group.status !== "no_response")
+      .flatMap((group) => group.participants.map((participant) => participant.fullName));
+    const { data, error } = await supabaseAuthClient.rpc(
+      "send_event_attendance_reminders",
+      {
+        p_event_id: event.id,
+        p_event_title: event.title,
+        p_declared_full_names: declaredFullNames,
+      },
+    );
+
+    if (error) {
+      throw new Error(`send_event_attendance_reminders: ${error.message}`);
+    }
+
+    return typeof data === "number" ? data : 0;
+  }
 
   function openTab(tab: PrimaryTab) {
     if (tab === "feed") {
@@ -488,6 +540,10 @@ export default function App() {
           <EventsScreen
             events={events}
             onOpenEvent={(eventId) => setRoute({ name: "eventDetail", eventId })}
+            canRemindMissingDeclarations={canSendAttendanceReminders}
+            onRemindMissingDeclarations={
+              canSendAttendanceReminders ? handleRemindMissingDeclarations : undefined
+            }
           />
         );
       case "eventDetail":

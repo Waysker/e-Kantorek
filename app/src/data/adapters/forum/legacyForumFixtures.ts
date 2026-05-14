@@ -1,7 +1,7 @@
 type LegacyForumMemberRow = {
   member_id: string;
   full_name: string;
-  role_code: "member" | "leader" | "admin";
+  role_code: "member" | "leader" | "zarzad" | "admin";
   instrument_label?: string;
 };
 

@@ -9,7 +9,9 @@ Current data setup:
 - `Feed` uses local fixture content
 - `Events`, `Users`, and `Attendance` currently come from a normalized local snapshot
 - that snapshot is the boundary between the app UI and the temporary forum integration
-- leader/admin users now have a web-only PoC setup screen for attendance workbook import
+- zarzad/admin users now have a web-only PoC setup screen for attendance workbook import
+- zarzad/admin can send attendance reminder notifications ("Ponaglij") to all missing declarations
+- leader (section lead) can review attendance and send "Ponaglij" only to missing declarations in their own section/instrument
 
 That boundary is intentional.
 
@@ -104,12 +106,14 @@ To prepare a real sync:
 2. Review `forum-sync.config.json`
 3. Apply `supabase/migrations/005_forum_instrument_overrides.sql`
 4. Apply `supabase/migrations/006_attendance_sheet_cache.sql`
-5. Optional local source file for PoC/backward compatibility: `../Copy of Obecności 25'-26'.xlsx`
-6. Optionally publish workbook payload with `npm.cmd run forum:publish:attendance`
-7. Bootstrap DB overrides from workbook/JSON with `npm.cmd run forum:publish:overrides`
-8. Run `npm.cmd run forum:sync`
-9. Optionally publish snapshot with `npm.cmd run forum:publish`
-10. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
+5. Apply `supabase/migrations/007_event_attendance_reminders.sql`
+6. Apply `supabase/migrations/008_add_zarzad_role_support.sql`
+7. Optional local source file for PoC/backward compatibility: `../Copy of Obecnosci 25'-26'.xlsx`
+8. Optionally publish workbook payload with `npm.cmd run forum:publish:attendance`
+9. Bootstrap DB overrides from workbook/JSON with `npm.cmd run forum:publish:overrides`
+10. Run `npm.cmd run forum:sync`
+11. Optionally publish snapshot with `npm.cmd run forum:publish`
+12. Recommended one-shot trigger: `npm.cmd run forum:sync:publish`
 
 The current sync auto-discovers dated concert threads from both `Dzial Koncert` (`fid=27`) and `Propozycje koncertow` (`fid=50`), filtered to the configured `eventYear`, unless `eventThreadUrls` is filled explicitly. It writes authenticated raw HTML into `.cache/forum-sync`, fetches poll results from `Ankieta`, parses setlist-like posts, and writes `.cache/forum-sync/snapshot.json`.
 To explicitly refresh local fallback TypeScript snapshot, run sync with `FORUM_SYNC_WRITE_LOCAL_SNAPSHOT=1`.
@@ -119,7 +123,7 @@ Cloud-ready mode:
 - If `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` are set, the app reads from `forum_snapshot_cache` in Supabase.
 - If they are missing or the cloud row is unavailable, the app falls back to local `forumSnapshot.ts`.
 - Profile screen shows data source and `Last synced` timestamp from snapshot metadata.
-- Leader/admin profile includes an Attendance Setup PoC screen (web) to upload workbook and publish to Supabase.
+- Zarzad/admin profile includes an Attendance Setup PoC screen (web) to upload workbook and publish to Supabase.
 - `forum:publish:attendance` publishes parsed workbook payload into `attendance_sheet_cache` (`ORAGH_ATTENDANCE_KEY`, fallback `ORAGH_SNAPSHOT_KEY`).
 - `forum:sync` reads instrument overrides from `forum_instrument_overrides` first (key: `ORAGH_INSTRUMENT_OVERRIDES_KEY`, fallback `ORAGH_SNAPSHOT_KEY`, default `forum`).
 - If DB overrides are missing/unavailable, `forum:sync` falls back to local/env overrides.
@@ -130,6 +134,8 @@ Cloud-ready mode:
 - Authenticated-only reads are enforced by `supabase/migrations/004_snapshot_cache_authenticated_only.sql`.
 - SQL bootstrap for override storage is in `supabase/migrations/005_forum_instrument_overrides.sql`.
 - SQL bootstrap for attendance workbook payload + privileged writer policies is in `supabase/migrations/006_attendance_sheet_cache.sql`.
+- SQL bootstrap for reminder notifications + RPC sender is in `supabase/migrations/007_event_attendance_reminders.sql`.
+- SQL bootstrap for `zarzad` role support and policy updates is in `supabase/migrations/008_add_zarzad_role_support.sql`.
 
 Scheduling / trigger:
 
@@ -179,7 +185,7 @@ Temporary limitation:
 - the forum exposes attendance voters and member names cleanly
 - it does not expose instruments in the same way
 - instrument mapping is currently DB-managed via JSON payload rows (`attendance_sheet_cache` + `forum_instrument_overrides`)
-- PoC admin UI exists (web) for workbook upload, but still needs audited edit history and stronger governance
+- PoC zarzad/admin UI exists (web) for workbook upload, but still needs audited edit history and stronger governance
 
 ## Next Build Targets
 
