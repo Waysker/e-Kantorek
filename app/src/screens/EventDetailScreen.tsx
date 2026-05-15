@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -36,34 +36,56 @@ type ReminderFeedback = {
   message: string;
 };
 
-function buildReminderPopupMessage(names: string[], notifiedCount: number): string {
+type ReminderPopupState = {
+  title: string;
+  intro: string;
+  lines: string[];
+  footer: string | null;
+};
+
+function buildReminderPopupState(
+  names: string[],
+  notifiedCount: number,
+): ReminderPopupState {
   if (notifiedCount <= 0) {
-    return tr(
-      "Brak osob do ponaglenia przy tym wydarzeniu.",
-      "There are no members left to remind for this event.",
-    );
+    return {
+      title: tr("Ponaglenie wyslane", "Reminder sent"),
+      intro: tr(
+        "Brak osob do ponaglenia przy tym wydarzeniu.",
+        "There are no members left to remind for this event.",
+      ),
+      lines: [],
+      footer: null,
+    };
   }
 
   if (names.length === 0) {
-    return tr(
-      `Wyslano ponaglenie do ${notifiedCount} osob.`,
-      `Sent reminders to ${notifiedCount} member(s).`,
-    );
+    return {
+      title: tr("Ponaglenie wyslane", "Reminder sent"),
+      intro: tr(
+        `Wyslano ponaglenie do ${notifiedCount} osob.`,
+        `Sent reminders to ${notifiedCount} member(s).`,
+      ),
+      lines: [],
+      footer: null,
+    };
   }
 
   const MAX_NAMES = 20;
   const shownNames = names.slice(0, MAX_NAMES);
   const hiddenCount = Math.max(names.length - shownNames.length, 0);
-  const listBlock = shownNames.map((name, index) => `${index + 1}. ${name}`).join("\n");
-
-  if (hiddenCount <= 0) {
-    return listBlock;
-  }
-
-  return `${listBlock}\n${tr(
-    `+ ${hiddenCount} kolejnych osob`,
-    `+ ${hiddenCount} more member(s)`,
-  )}`;
+  return {
+    title: tr("Ponaglenie wyslane", "Reminder sent"),
+    intro: tr(
+      `Wyslano ponaglenie do ${notifiedCount} osob:`,
+      `Sent reminders to ${notifiedCount} member(s):`,
+    ),
+    lines: shownNames.map((name, index) => `${index + 1}. ${name}`),
+    footer:
+      hiddenCount > 0
+        ? tr(`+ ${hiddenCount} kolejnych osob`, `+ ${hiddenCount} more member(s)`)
+        : null,
+  };
 }
 
 export function EventDetailScreen({
@@ -79,6 +101,7 @@ export function EventDetailScreen({
   const canRemind = canRemindMissingDeclarations && Boolean(onRemindMissingDeclarations);
   const [isReminding, setIsReminding] = useState(false);
   const [reminderFeedback, setReminderFeedback] = useState<ReminderFeedback | null>(null);
+  const [reminderPopup, setReminderPopup] = useState<ReminderPopupState | null>(null);
 
   async function handleRemindPress() {
     if (!onRemindMissingDeclarations) {
@@ -107,10 +130,7 @@ export function EventDetailScreen({
               ),
             },
       );
-      Alert.alert(
-        tr("Ponaglenie wyslane", "Reminder sent"),
-        buildReminderPopupMessage(notifiedFullNames, notifiedCount),
-      );
+      setReminderPopup(buildReminderPopupState(notifiedFullNames, notifiedCount));
     } catch (error) {
       setReminderFeedback({
         tone: "error",
@@ -125,147 +145,180 @@ export function EventDetailScreen({
   }
 
   return (
-    <ScrollView
-      style={styles.screenScroll}
-      contentContainerStyle={[styles.screenContent, isDesktop && styles.desktopContent]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>{tr("Wroc do wydarzen", "Back to Events")}</Text>
-      </Pressable>
+    <>
+      <ScrollView
+        style={styles.screenScroll}
+        contentContainerStyle={[styles.screenContent, isDesktop && styles.desktopContent]}
+        showsVerticalScrollIndicator={false}
+      >
+        <Pressable onPress={onBack} style={styles.backLink}>
+          <Text style={styles.backLinkLabel}>{tr("Wroc do wydarzen", "Back to Events")}</Text>
+        </Pressable>
 
-      <View style={[styles.desktopSplit, isDesktop && styles.desktopSplitActive]}>
-        <View style={styles.desktopPrimaryColumn}>
-          <SurfaceCard variant="brandTint">
-            <Text style={styles.cardEyebrow}>{formatDateLabel(event.startsAt)}</Text>
-            <Text style={styles.screenTitle}>{event.title}</Text>
-            {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
-            <Text style={styles.cardBody}>{event.description}</Text>
+        <View style={[styles.desktopSplit, isDesktop && styles.desktopSplitActive]}>
+          <View style={styles.desktopPrimaryColumn}>
+            <SurfaceCard variant="brandTint">
+              <Text style={styles.cardEyebrow}>{formatDateLabel(event.startsAt)}</Text>
+              <Text style={styles.screenTitle}>{event.title}</Text>
+              {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
+              <Text style={styles.cardBody}>{event.description}</Text>
 
-            {event.updates.length > 0 ? (
-              event.updates.map((update) => (
-                <View key={update.id} style={styles.updateBlock}>
-                  <Text style={styles.updateMeta}>
-                    {update.authorName} - {formatRelativeLabel(update.createdAt)}
-                  </Text>
-                  <Text style={styles.updateBody}>{update.body}</Text>
-                </View>
-              ))
-            ) : (
-              <Text style={styles.cardSecondary}>
-                {tr(
-                  "Brak osobnych aktualizacji organizatorow w tym watku.",
-                  "No separate organizer updates were imported from this thread yet.",
-                )}
-              </Text>
-            )}
-          </SurfaceCard>
-
-          <SurfaceCard variant="default">
-            <View style={styles.cardActionRow}>
-              <View style={styles.cardActionCopy}>
-                <Text style={styles.cardEyebrow}>
-                  {tr("Deklaracje RSVP i sklad", "RSVP declarations and roster")}
+              {event.updates.length > 0 ? (
+                event.updates.map((update) => (
+                  <View key={update.id} style={styles.updateBlock}>
+                    <Text style={styles.updateMeta}>
+                      {update.authorName} - {formatRelativeLabel(update.createdAt)}
+                    </Text>
+                    <Text style={styles.updateBody}>{update.body}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.cardSecondary}>
+                  {tr(
+                    "Brak osobnych aktualizacji organizatorow w tym watku.",
+                    "No separate organizer updates were imported from this thread yet.",
+                  )}
                 </Text>
-              </View>
-              {canRemind ? (
-                <Pressable
-                  onPress={() => void handleRemindPress()}
-                  style={[styles.inlineButton, isReminding && styles.inlineButtonDisabled]}
-                  disabled={isReminding}
-                >
-                  <Text style={styles.inlineButtonLabel}>
-                    {isReminding ? tr("Ponaglanie...", "Sending...") : tr("Ponaglij", "Remind")}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-            <AttendanceSummaryStrip
-              summary={event.attendanceSummary}
-              includeMaybe={false}
-              onSelectStatus={(status) => onOpenAttendance(status)}
-            />
-            <Text style={styles.cardHint}>
-              {tr(
-                "Kliknij kafelek Bede / Nie bede, aby otworzyc odpowiednia liste.",
-                "Tap Going / Not going tile to open the corresponding list.",
               )}
-            </Text>
-            {reminderFeedback ? (
-              <Text
-                style={[
-                  styles.reminderFeedback,
-                  reminderFeedback.tone === "success" && styles.reminderFeedbackSuccess,
-                  reminderFeedback.tone === "error" && styles.reminderFeedbackError,
-                ]}
-              >
-                {reminderFeedback.message}
-              </Text>
-            ) : null}
-          </SurfaceCard>
+            </SurfaceCard>
 
-          {!isDesktop ? (
             <SurfaceCard variant="default">
               <View style={styles.cardActionRow}>
                 <View style={styles.cardActionCopy}>
-                  <Text style={styles.cardEyebrow}>Setlista</Text>
-                </View>
-                <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                  <Text style={styles.inlineButtonLabel}>{tr("Otworz", "Open")}</Text>
-                </Pressable>
-              </View>
-              <Text style={styles.cardBody}>{event.setlist.preview}</Text>
-            </SurfaceCard>
-          ) : null}
-
-          <SurfaceCard variant="outline">
-            <Text style={styles.cardEyebrow}>{tr("Komentarze", "Comments")}</Text>
-            <Text style={styles.cardTitle}>{tr("Dyskusja czlonkow", "Member discussion")}</Text>
-            {event.comments.length > 0 ? (
-              event.comments.map((comment) => (
-                <View key={comment.id} style={styles.commentRow}>
-                  <Text style={styles.updateMeta}>
-                    {comment.authorName} - {formatRelativeLabel(comment.createdAt)}
+                  <Text style={styles.cardEyebrow}>
+                    {tr("Deklaracje RSVP i sklad", "RSVP declarations and roster")}
                   </Text>
-                  <Text style={styles.cardBody}>{comment.body}</Text>
                 </View>
-              ))
-            ) : (
-              <Text style={styles.cardSecondary}>
+                {canRemind ? (
+                  <Pressable
+                    onPress={() => void handleRemindPress()}
+                    style={[styles.inlineButton, isReminding && styles.inlineButtonDisabled]}
+                    disabled={isReminding}
+                  >
+                    <Text style={styles.inlineButtonLabel}>
+                      {isReminding ? tr("Ponaglanie...", "Sending...") : tr("Ponaglij", "Remind")}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              <AttendanceSummaryStrip
+                summary={event.attendanceSummary}
+                includeMaybe={false}
+                onSelectStatus={(status) => onOpenAttendance(status)}
+              />
+              <Text style={styles.cardHint}>
                 {tr(
-                  "Brak odpowiedzi czlonkow zaimportowanych z forum.",
-                  "No member replies were imported from the forum thread yet.",
+                  "Kliknij kafelek Bede / Nie bede, aby otworzyc odpowiednia liste.",
+                  "Tap Going / Not going tile to open the corresponding list.",
                 )}
               </Text>
-            )}
-          </SurfaceCard>
-        </View>
+              {reminderFeedback ? (
+                <Text
+                  style={[
+                    styles.reminderFeedback,
+                    reminderFeedback.tone === "success" && styles.reminderFeedbackSuccess,
+                    reminderFeedback.tone === "error" && styles.reminderFeedbackError,
+                  ]}
+                >
+                  {reminderFeedback.message}
+                </Text>
+              ) : null}
+            </SurfaceCard>
 
-        {isDesktop ? (
-          <View style={styles.desktopRail}>
-            <SurfaceCard variant="paper">
-              <View style={styles.setlistRailHeader}>
-                <Text style={styles.cardTitle}>Setlista</Text>
-                <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                  <Text style={styles.inlineButtonLabel}>{tr("Pelny ekran", "Fullscreen")}</Text>
-                </Pressable>
-              </View>
-              {event.setlist.sections.map((section) => (
-                <View key={section.id} style={styles.setlistSectionBlock}>
-                  <Text style={styles.setlistSectionTitle}>{section.title}</Text>
-                  {section.items.map((item, itemIndex) => (
-                    <Text key={item.id} style={styles.setlistListText}>
-                      {itemIndex + 1}. {item.label}
-                      {item.detail ? ` - ${item.detail}` : ""}
-                    </Text>
-                  ))}
+            {!isDesktop ? (
+              <SurfaceCard variant="default">
+                <View style={styles.cardActionRow}>
+                  <View style={styles.cardActionCopy}>
+                    <Text style={styles.cardEyebrow}>Setlista</Text>
+                  </View>
+                  <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
+                    <Text style={styles.inlineButtonLabel}>{tr("Otworz", "Open")}</Text>
+                  </Pressable>
                 </View>
-              ))}
+                <Text style={styles.cardBody}>{event.setlist.preview}</Text>
+              </SurfaceCard>
+            ) : null}
+
+            <SurfaceCard variant="outline">
+              <Text style={styles.cardEyebrow}>{tr("Komentarze", "Comments")}</Text>
+              <Text style={styles.cardTitle}>{tr("Dyskusja czlonkow", "Member discussion")}</Text>
+              {event.comments.length > 0 ? (
+                event.comments.map((comment) => (
+                  <View key={comment.id} style={styles.commentRow}>
+                    <Text style={styles.updateMeta}>
+                      {comment.authorName} - {formatRelativeLabel(comment.createdAt)}
+                    </Text>
+                    <Text style={styles.cardBody}>{comment.body}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.cardSecondary}>
+                  {tr(
+                    "Brak odpowiedzi czlonkow zaimportowanych z forum.",
+                    "No member replies were imported from the forum thread yet.",
+                  )}
+                </Text>
+              )}
             </SurfaceCard>
           </View>
-        ) : null}
-      </View>
-    </ScrollView>
+          {isDesktop ? (
+            <View style={styles.desktopRail}>
+              <SurfaceCard variant="paper">
+                <View style={styles.setlistRailHeader}>
+                  <Text style={styles.cardTitle}>Setlista</Text>
+                  <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
+                    <Text style={styles.inlineButtonLabel}>{tr("Pelny ekran", "Fullscreen")}</Text>
+                  </Pressable>
+                </View>
+                {event.setlist.sections.map((section) => (
+                  <View key={section.id} style={styles.setlistSectionBlock}>
+                    <Text style={styles.setlistSectionTitle}>{section.title}</Text>
+                    {section.items.map((item, itemIndex) => (
+                      <Text key={item.id} style={styles.setlistListText}>
+                        {itemIndex + 1}. {item.label}
+                        {item.detail ? ` - ${item.detail}` : ""}
+                      </Text>
+                    ))}
+                  </View>
+                ))}
+              </SurfaceCard>
+            </View>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={reminderPopup !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReminderPopup(null)}
+      >
+        <View style={styles.popupOverlay}>
+          <View style={styles.popupCard}>
+            <Text style={styles.popupTitle}>
+              {reminderPopup?.title ?? tr("Ponaglenie wyslane", "Reminder sent")}
+            </Text>
+            <Text style={styles.popupIntro}>
+              {reminderPopup?.intro ?? ""}
+            </Text>
+            {reminderPopup?.lines.map((line) => (
+              <Text key={line} style={styles.popupLine}>
+                {line}
+              </Text>
+            ))}
+            {reminderPopup?.footer ? (
+              <Text style={styles.popupFooter}>{reminderPopup.footer}</Text>
+            ) : null}
+            <Pressable
+              onPress={() => setReminderPopup(null)}
+              style={styles.popupCloseButton}
+            >
+              <Text style={styles.popupCloseButtonLabel}>{tr("OK", "OK")}</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -420,5 +473,55 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.body,
     lineHeight: 20,
     color: tokens.colors.ink,
+  },
+  popupOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: tokens.spacing.lg,
+  },
+  popupCard: {
+    width: "100%",
+    maxWidth: 520,
+    backgroundColor: tokens.colors.surface,
+    borderRadius: tokens.radii.lg,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    padding: tokens.spacing.lg,
+    gap: tokens.spacing.xs,
+  },
+  popupTitle: {
+    fontSize: tokens.typography.title,
+    color: tokens.colors.ink,
+    fontWeight: "700",
+  },
+  popupIntro: {
+    marginTop: tokens.spacing.xs,
+    fontSize: tokens.typography.body,
+    color: tokens.colors.ink,
+  },
+  popupLine: {
+    fontSize: tokens.typography.body,
+    lineHeight: 22,
+    color: tokens.colors.ink,
+  },
+  popupFooter: {
+    marginTop: tokens.spacing.xs,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
+    fontWeight: "700",
+  },
+  popupCloseButton: {
+    marginTop: tokens.spacing.md,
+    alignSelf: "flex-end",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radii.round,
+    backgroundColor: tokens.colors.brand,
+  },
+  popupCloseButtonLabel: {
+    color: tokens.colors.surface,
+    fontWeight: "700",
   },
 });
