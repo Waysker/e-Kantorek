@@ -71,6 +71,11 @@ type ProfileRow = {
   role: string;
 };
 
+type ReminderDispatchResult = {
+  notifiedCount: number;
+  notifiedFullNames: string[];
+};
+
 type AuthView = "sign_in" | "register";
 const ROOT_ROUTE: AppRoute = { name: "events" };
 const HISTORY_STATE_MARKER = "__oragh_route_stack__";
@@ -647,7 +652,9 @@ export default function App() {
     "profile",
   ];
 
-  async function handleRemindMissingDeclarations(eventId: string): Promise<number> {
+  async function handleRemindMissingDeclarations(
+    eventId: string,
+  ): Promise<ReminderDispatchResult> {
     if (!supabaseAuthClient) {
       throw new Error(
         tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
@@ -674,20 +681,65 @@ export default function App() {
       .filter((group) => group.status !== "no_response")
       .flatMap((group) => group.participants.map((participant) => participant.fullName));
 
+    const payload = {
+      p_event_id: event.id,
+      p_event_title: event.title,
+      p_declared_full_names: declaredFullNames,
+    };
+
     const { data, error } = await supabaseAuthClient.rpc(
-      "send_event_attendance_reminders",
-      {
-        p_event_id: event.id,
-        p_event_title: event.title,
-        p_declared_full_names: declaredFullNames,
-      },
+      "send_event_attendance_reminders_detailed",
+      payload,
     );
 
     if (error) {
-      throw new Error(`send_event_attendance_reminders: ${error.message}`);
+      if (error.code === "42883") {
+        const legacyResult = await supabaseAuthClient.rpc(
+          "send_event_attendance_reminders",
+          payload,
+        );
+
+        if (legacyResult.error) {
+          throw new Error(
+            `send_event_attendance_reminders: ${legacyResult.error.message}`,
+          );
+        }
+
+        const legacyCount =
+          typeof legacyResult.data === "number" ? legacyResult.data : 0;
+        return {
+          notifiedCount: legacyCount,
+          notifiedFullNames: [],
+        };
+      }
+
+      throw new Error(`send_event_attendance_reminders_detailed: ${error.message}`);
     }
 
-    return typeof data === "number" ? data : 0;
+    const parsed =
+      data && typeof data === "object" && !Array.isArray(data)
+        ? (data as Record<string, unknown>)
+        : null;
+    const parsedCount =
+      parsed && typeof parsed.notified_count === "number"
+        ? parsed.notified_count
+        : parsed && typeof parsed.notified_count === "string"
+          ? Number(parsed.notified_count)
+          : 0;
+    const notifiedFullNames =
+      parsed && Array.isArray(parsed.notified_full_names)
+        ? parsed.notified_full_names
+            .map((entry) => String(entry ?? "").trim())
+            .filter((entry) => entry.length > 0)
+        : [];
+
+    return {
+      notifiedCount:
+        Number.isFinite(parsedCount) && parsedCount > 0
+          ? Math.trunc(parsedCount)
+          : 0,
+      notifiedFullNames,
+    }
   }
 
   function openTab(tab: PrimaryTab) {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -24,13 +25,46 @@ type EventDetailScreenProps = {
   onOpenAttendance: (focusStatus?: AttendanceSummaryFocusStatus) => void;
   onOpenSetlist: () => void;
   canRemindMissingDeclarations?: boolean;
-  onRemindMissingDeclarations?: () => Promise<number>;
+  onRemindMissingDeclarations?: () => Promise<{
+    notifiedCount: number;
+    notifiedFullNames: string[];
+  }>;
 };
 
 type ReminderFeedback = {
   tone: "success" | "error" | "info";
   message: string;
 };
+
+function buildReminderPopupMessage(names: string[], notifiedCount: number): string {
+  if (notifiedCount <= 0) {
+    return tr(
+      "Brak osob do ponaglenia przy tym wydarzeniu.",
+      "There are no members left to remind for this event.",
+    );
+  }
+
+  if (names.length === 0) {
+    return tr(
+      `Wyslano ponaglenie do ${notifiedCount} osob.`,
+      `Sent reminders to ${notifiedCount} member(s).`,
+    );
+  }
+
+  const MAX_NAMES = 20;
+  const shownNames = names.slice(0, MAX_NAMES);
+  const hiddenCount = Math.max(names.length - shownNames.length, 0);
+  const listBlock = shownNames.map((name, index) => `${index + 1}. ${name}`).join("\n");
+
+  if (hiddenCount <= 0) {
+    return listBlock;
+  }
+
+  return `${listBlock}\n${tr(
+    `+ ${hiddenCount} kolejnych osob`,
+    `+ ${hiddenCount} more member(s)`,
+  )}`;
+}
 
 export function EventDetailScreen({
   event,
@@ -55,7 +89,7 @@ export function EventDetailScreen({
     setReminderFeedback(null);
 
     try {
-      const notifiedCount = await onRemindMissingDeclarations();
+      const { notifiedCount, notifiedFullNames } = await onRemindMissingDeclarations();
       setReminderFeedback(
         notifiedCount > 0
           ? {
@@ -72,6 +106,10 @@ export function EventDetailScreen({
                 "Everyone has already responded for this event.",
               ),
             },
+      );
+      Alert.alert(
+        tr("Ponaglenie wyslane", "Reminder sent"),
+        buildReminderPopupMessage(notifiedFullNames, notifiedCount),
       );
     } catch (error) {
       setReminderFeedback({
