@@ -1,6 +1,6 @@
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import type { UserProfile } from "../domain/models";
+import type { AppNotification, UserProfile } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { SurfaceCard } from "../ui/SurfaceCard";
@@ -35,22 +35,53 @@ function formatDataSourceLabel(label: string) {
   return label;
 }
 
+function formatNotificationKindLabel(kind: AppNotification["kind"]) {
+  if (kind === "attendance_reminder") {
+    return tr("Ponaglenie obecnosci", "Attendance reminder");
+  }
+  if (kind === "event_reminder") {
+    return tr("Przypomnienie wydarzenia", "Event reminder");
+  }
+  if (kind === "event_update") {
+    return tr("Aktualizacja wydarzenia", "Event update");
+  }
+  if (kind === "feed_post") {
+    return tr("Aktualnosc", "Feed post");
+  }
+  return kind;
+}
+
 export function ProfileScreen({
   currentUser,
   dataSourceLabel,
   dataSourceGeneratedAt,
+  notifications,
+  unreadNotificationsCount,
+  notificationsErrorMessage,
+  isNotificationsLoading,
+  isMarkingNotificationsRead,
+  onRefreshNotifications,
+  onMarkAllNotificationsRead,
   signedInEmail,
   onSignOut,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
+  notifications: AppNotification[];
+  unreadNotificationsCount: number;
+  notificationsErrorMessage?: string | null;
+  isNotificationsLoading?: boolean;
+  isMarkingNotificationsRead?: boolean;
+  onRefreshNotifications?: () => Promise<void> | void;
+  onMarkAllNotificationsRead?: () => Promise<void> | void;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
 }) {
   const freshnessLabel = dataSourceGeneratedAt
     ? `${formatDateLabel(dataSourceGeneratedAt)} (${formatRelativeLabel(dataSourceGeneratedAt)})`
     : tr("Nieznane", "Unknown");
+  const latestNotifications = notifications.slice(0, 30);
 
   return (
     <ScrollView
@@ -84,6 +115,87 @@ export function ProfileScreen({
             <Text style={styles.signOutLabel}>{tr("Wyloguj", "Sign out")}</Text>
           </Pressable>
         ) : null}
+      </SurfaceCard>
+
+      <SurfaceCard variant="default">
+        <Text style={styles.cardEyebrow}>{tr("Powiadomienia", "Notifications")}</Text>
+        <Text style={styles.sectionTitle}>
+          {tr("Nowe", "Unread")}: {unreadNotificationsCount}
+        </Text>
+
+        <View style={styles.notificationActionsRow}>
+          <Pressable
+            style={styles.actionButton}
+            onPress={() => void onRefreshNotifications?.()}
+            disabled={isNotificationsLoading}
+          >
+            <Text style={styles.actionButtonLabel}>
+              {isNotificationsLoading ? tr("Odswiezanie...", "Refreshing...") : tr("Odswiez", "Refresh")}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.actionButton,
+              unreadNotificationsCount === 0 && styles.actionButtonDisabled,
+            ]}
+            onPress={() => void onMarkAllNotificationsRead?.()}
+            disabled={unreadNotificationsCount === 0 || isMarkingNotificationsRead}
+          >
+            <Text style={styles.actionButtonLabel}>
+              {isMarkingNotificationsRead
+                ? tr("Zapisywanie...", "Saving...")
+                : tr("Oznacz wszystko jako przeczytane", "Mark all as read")}
+            </Text>
+          </Pressable>
+        </View>
+
+        {notificationsErrorMessage ? (
+          <Text style={styles.errorText}>{notificationsErrorMessage}</Text>
+        ) : null}
+
+        {isNotificationsLoading && latestNotifications.length === 0 ? (
+          <View style={styles.loadingRow}>
+            <ActivityIndicator color={tokens.colors.brand} />
+            <Text style={styles.loadingLabel}>
+              {tr("Wczytuje powiadomienia...", "Loading notifications...")}
+            </Text>
+          </View>
+        ) : null}
+
+        {!isNotificationsLoading && latestNotifications.length === 0 ? (
+          <Text style={styles.emptyNotificationsLabel}>
+            {tr("Brak powiadomien.", "No notifications yet.")}
+          </Text>
+        ) : null}
+
+        {latestNotifications.map((notification) => {
+          const isUnread = notification.readAt == null;
+          const timestampLabel = formatRelativeLabel(notification.createdAt);
+
+          return (
+            <View
+              key={notification.id}
+              style={[
+                styles.notificationRow,
+                isUnread && styles.notificationRowUnread,
+              ]}
+            >
+              <View style={styles.notificationHeaderRow}>
+                <Text style={styles.notificationKindLabel}>
+                  {formatNotificationKindLabel(notification.kind)}
+                </Text>
+                <Text style={styles.notificationMetaLabel}>{timestampLabel}</Text>
+              </View>
+              <Text style={styles.notificationTitle}>{notification.title}</Text>
+              <Text style={styles.notificationBody}>{notification.body}</Text>
+              {isUnread ? (
+                <Text style={styles.notificationUnreadLabel}>
+                  {tr("Nowe", "New")}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
       </SurfaceCard>
     </ScrollView>
   );
@@ -122,6 +234,106 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.body,
     lineHeight: 23,
     color: tokens.colors.ink,
+  },
+  sectionTitle: {
+    fontSize: tokens.typography.body,
+    lineHeight: 22,
+    color: tokens.colors.ink,
+    fontWeight: "700",
+  },
+  notificationActionsRow: {
+    marginTop: tokens.spacing.sm,
+    flexDirection: "row",
+    gap: tokens.spacing.xs,
+    flexWrap: "wrap",
+  },
+  actionButton: {
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.xs,
+    borderRadius: tokens.radii.round,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    backgroundColor: tokens.colors.surfaceMuted,
+  },
+  actionButtonDisabled: {
+    opacity: 0.5,
+  },
+  actionButtonLabel: {
+    color: tokens.colors.ink,
+    fontSize: tokens.typography.caption,
+    fontWeight: "700",
+  },
+  loadingRow: {
+    marginTop: tokens.spacing.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  loadingLabel: {
+    color: tokens.colors.muted,
+    fontSize: tokens.typography.caption,
+  },
+  emptyNotificationsLabel: {
+    marginTop: tokens.spacing.md,
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
+  },
+  notificationRow: {
+    marginTop: tokens.spacing.md,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.sm,
+    backgroundColor: tokens.colors.surface,
+    gap: 4,
+  },
+  notificationRowUnread: {
+    borderColor: tokens.colors.brand,
+    backgroundColor: tokens.colors.brandTint,
+  },
+  notificationHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  notificationKindLabel: {
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  notificationMetaLabel: {
+    fontSize: 11,
+    color: tokens.colors.muted,
+  },
+  notificationTitle: {
+    fontSize: tokens.typography.body,
+    lineHeight: 21,
+    color: tokens.colors.ink,
+    fontWeight: "700",
+  },
+  notificationBody: {
+    fontSize: tokens.typography.caption,
+    lineHeight: 18,
+    color: tokens.colors.ink,
+  },
+  notificationUnreadLabel: {
+    marginTop: 2,
+    alignSelf: "flex-start",
+    fontSize: 11,
+    lineHeight: 14,
+    color: tokens.colors.successInk,
+    fontWeight: "700",
+  },
+  errorText: {
+    marginTop: tokens.spacing.sm,
+    color: tokens.colors.dangerInk,
+    fontSize: tokens.typography.caption,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   signOutButton: {
     marginTop: tokens.spacing.md,

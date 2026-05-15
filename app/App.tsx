@@ -8,6 +8,8 @@ import type { OraghInstrument } from "./src/auth/instruments";
 import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabaseAuthClient";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
+  AppNotification,
+  AppNotificationKind,
   EventDetail,
   EventListItem,
   UserProfile,
@@ -71,6 +73,17 @@ type ProfileRow = {
   role: string;
 };
 
+type NotificationRow = {
+  id?: string;
+  kind?: string;
+  title?: string;
+  body?: string;
+  ref_type?: string | null;
+  ref_id?: string | null;
+  created_at?: string;
+  read_at?: string | null;
+};
+
 type ReminderDispatchResult = {
   notifiedCount: number;
   notifiedFullNames: string[];
@@ -79,6 +92,51 @@ type ReminderDispatchResult = {
 type AuthView = "sign_in" | "register";
 const ROOT_ROUTE: AppRoute = { name: "events" };
 const HISTORY_STATE_MARKER = "__oragh_route_stack__";
+const NOTIFICATION_FETCH_LIMIT = 80;
+
+function normalizeNotificationRows(rows: NotificationRow[]): AppNotification[] {
+  return rows
+    .map((row) => {
+      const id = String(row.id ?? "").trim();
+      const kind = String(row.kind ?? "").trim() as AppNotificationKind;
+      const title = String(row.title ?? "").trim();
+      const body = String(row.body ?? "").trim();
+      const createdAt = String(row.created_at ?? "").trim();
+
+      if (!id || !kind || !title || !body || !createdAt) {
+        return null;
+      }
+
+      return {
+        id,
+        kind,
+        title,
+        body,
+        refType:
+          typeof row.ref_type === "string" && row.ref_type.trim().length > 0
+            ? row.ref_type.trim()
+            : null,
+        refId:
+          typeof row.ref_id === "string" && row.ref_id.trim().length > 0
+            ? row.ref_id.trim()
+            : null,
+        createdAt,
+        readAt:
+          typeof row.read_at === "string" && row.read_at.trim().length > 0
+            ? row.read_at.trim()
+            : null,
+      } satisfies AppNotification;
+    })
+    .filter((entry): entry is AppNotification => entry !== null)
+    .sort((left, right) => {
+      const leftTimestamp = Date.parse(left.createdAt);
+      const rightTimestamp = Date.parse(right.createdAt);
+      if (Number.isFinite(leftTimestamp) && Number.isFinite(rightTimestamp)) {
+        return rightTimestamp - leftTimestamp;
+      }
+      return right.createdAt.localeCompare(left.createdAt, "pl");
+    });
+}
 
 function isSameRoute(left: AppRoute, right: AppRoute): boolean {
   if (left.name !== right.name) {
@@ -181,6 +239,10 @@ export default function App() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("sign_in");
   const [state, setState] = useState<AppState>({ status: "loading" });
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationsErrorMessage, setNotificationsErrorMessage] = useState<string | null>(null);
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+  const [isMarkingNotificationsRead, setIsMarkingNotificationsRead] = useState(false);
   const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
   const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
   const browserHistoryRestoreRef = useRef(false);
@@ -209,6 +271,79 @@ export default function App() {
       }
       return current.slice(0, -1);
     });
+  }
+
+  async function fetchNotifications(options?: { showLoading?: boolean }) {
+    if (!supabaseAuthClient || !authenticatedUserId) {
+      setNotifications([]);
+      setNotificationsErrorMessage(null);
+      setIsNotificationsLoading(false);
+      return;
+    }
+
+    const showLoading = options?.showLoading ?? false;
+    if (showLoading) {
+      setIsNotificationsLoading(true);
+    }
+
+    const { data, error } = await supabaseAuthClient
+      .from("notifications")
+      .select("id,kind,title,body,ref_type,ref_id,created_at,read_at")
+      .eq("user_id", authenticatedUserId)
+      .order("created_at", { ascending: false })
+      .limit(NOTIFICATION_FETCH_LIMIT);
+
+    if (error) {
+      setNotificationsErrorMessage(error.message);
+      if (showLoading) {
+        setIsNotificationsLoading(false);
+      }
+      return;
+    }
+
+    setNotificationsErrorMessage(null);
+    setNotifications(normalizeNotificationRows((data ?? []) as NotificationRow[]));
+    if (showLoading) {
+      setIsNotificationsLoading(false);
+    }
+  }
+
+  async function handleMarkAllNotificationsRead() {
+    if (!supabaseAuthClient || !authenticatedUserId) {
+      return;
+    }
+
+    const unreadIds = notifications
+      .filter((notification) => notification.readAt == null)
+      .map((notification) => notification.id);
+
+    if (unreadIds.length === 0) {
+      return;
+    }
+
+    setIsMarkingNotificationsRead(true);
+    setNotificationsErrorMessage(null);
+
+    const { error } = await supabaseAuthClient
+      .from("notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("user_id", authenticatedUserId)
+      .in("id", unreadIds);
+
+    if (error) {
+      setNotificationsErrorMessage(error.message);
+      setIsMarkingNotificationsRead(false);
+      return;
+    }
+
+    setNotifications((current) =>
+      current.map((notification) =>
+        unreadIds.includes(notification.id)
+          ? { ...notification, readAt: new Date().toISOString() }
+          : notification,
+      ),
+    );
+    setIsMarkingNotificationsRead(false);
   }
 
   useEffect(() => {
@@ -407,6 +542,60 @@ export default function App() {
 
     return () => {
       isCancelled = true;
+    };
+  }, [authenticatedUserId]);
+
+  useEffect(() => {
+    if (!authenticatedUserId || !supabaseAuthClient) {
+      setNotifications([]);
+      setNotificationsErrorMessage(null);
+      setIsNotificationsLoading(false);
+      return;
+    }
+    const client = supabaseAuthClient;
+
+    let isCancelled = false;
+    let needsPolling = true;
+
+    const channel = client
+      .channel(`notifications:${authenticatedUserId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${authenticatedUserId}`,
+        },
+        () => {
+          if (isCancelled) {
+            return;
+          }
+          void fetchNotifications();
+        },
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          needsPolling = false;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          needsPolling = true;
+        }
+      });
+
+    const intervalId = setInterval(() => {
+      if (!needsPolling || isCancelled) {
+        return;
+      }
+      void fetchNotifications();
+    }, 45_000);
+
+    void fetchNotifications({ showLoading: true });
+
+    return () => {
+      isCancelled = true;
+      clearInterval(intervalId);
+      void client.removeChannel(channel);
     };
   }, [authenticatedUserId]);
 
@@ -651,6 +840,10 @@ export default function App() {
     ...(canManageRoles ? (["roles"] as const) : []),
     "profile",
   ];
+  const unreadNotificationsCount = notifications.reduce(
+    (count, notification) => (notification.readAt == null ? count + 1 : count),
+    0,
+  );
 
   async function handleRemindMissingDeclarations(
     eventId: string,
@@ -861,6 +1054,13 @@ export default function App() {
             currentUser={effectiveCurrentUser}
             dataSourceLabel={dataSourceLabel}
             dataSourceGeneratedAt={dataSourceGeneratedAt}
+            notifications={notifications}
+            unreadNotificationsCount={unreadNotificationsCount}
+            notificationsErrorMessage={notificationsErrorMessage}
+            isNotificationsLoading={isNotificationsLoading}
+            isMarkingNotificationsRead={isMarkingNotificationsRead}
+            onRefreshNotifications={() => fetchNotifications({ showLoading: true })}
+            onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
           />
@@ -928,6 +1128,7 @@ export default function App() {
       <AppShell
         tabs={navigationTabs}
         activeTab={activeTab}
+        tabBadges={unreadNotificationsCount > 0 ? { profile: unreadNotificationsCount } : undefined}
         hideNavigation={route.name === "setlist"}
         dataSourceLabel={dataSourceLabel}
         dataSourceGeneratedAt={dataSourceGeneratedAt}

@@ -16,6 +16,7 @@ import { DataFreshnessBanner } from "./DataFreshnessBanner";
 type AppShellProps = {
   tabs: PrimaryTab[];
   activeTab: PrimaryTab;
+  tabBadges?: Partial<Record<PrimaryTab, number>>;
   hideNavigation?: boolean;
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
@@ -40,6 +41,7 @@ function getTabLabel(tab: PrimaryTab): string {
 export function AppShell({
   tabs,
   activeTab,
+  tabBadges,
   hideNavigation,
   dataSourceLabel,
   dataSourceGeneratedAt,
@@ -75,6 +77,8 @@ export function AppShell({
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;
                 const label = getTabLabel(tab);
+                const badgeCount = tabBadges?.[tab] ?? 0;
+                const showBadge = badgeCount > 0;
 
                 return (
                   <Pressable
@@ -82,14 +86,23 @@ export function AppShell({
                     onPress={() => onNavigate(tab)}
                     style={[styles.sidebarLink, isActive && styles.sidebarLinkActive]}
                   >
-                    <Text
-                      style={[
-                        styles.sidebarLinkLabel,
-                        isActive && styles.sidebarLinkLabelActive,
-                      ]}
-                    >
-                      {label}
-                    </Text>
+                    <View style={styles.navItemLabelRow}>
+                      <Text
+                        style={[
+                          styles.sidebarLinkLabel,
+                          isActive && styles.sidebarLinkLabelActive,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                      {showBadge ? (
+                        <View style={styles.navBadge}>
+                          <Text style={styles.navBadgeLabel}>
+                            {badgeCount > 99 ? "99+" : String(badgeCount)}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </Pressable>
                 );
               })}
@@ -128,6 +141,8 @@ export function AppShell({
         {tabs.map((tab) => {
           const isActive = tab === activeTab;
           const label = getTabLabel(tab);
+          const badgeCount = tabBadges?.[tab] ?? 0;
+          const showBadge = badgeCount > 0;
 
           return (
             <Pressable
@@ -135,14 +150,23 @@ export function AppShell({
               onPress={() => onNavigate(tab)}
               style={styles.bottomNavItem}
             >
-              <Text
-                style={[
-                  styles.bottomNavLabel,
-                  isActive && styles.bottomNavLabelActive,
-                ]}
-              >
-                {label}
-              </Text>
+              <View style={styles.navItemLabelRow}>
+                <Text
+                  style={[
+                    styles.bottomNavLabel,
+                    isActive && styles.bottomNavLabelActive,
+                  ]}
+                >
+                  {label}
+                </Text>
+                {showBadge ? (
+                  <View style={styles.navBadge}>
+                    <Text style={styles.navBadgeLabel}>
+                      {badgeCount > 99 ? "99+" : String(badgeCount)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
             </Pressable>
           );
         })}
@@ -206,6 +230,26 @@ const styles = StyleSheet.create({
   },
   sidebarLinkLabelActive: {
     color: tokens.colors.brand,
+  },
+  navItemLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+  },
+  navBadge: {
+    minWidth: 18,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: tokens.radii.round,
+    backgroundColor: tokens.colors.brand,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  navBadgeLabel: {
+    fontSize: 10,
+    lineHeight: 12,
+    color: tokens.colors.surface,
+    fontWeight: "700",
   },
   desktopMain: {
     flex: 1,

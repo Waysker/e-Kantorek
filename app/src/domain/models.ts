@@ -8,6 +8,23 @@ export type UserProfile = {
   primaryInstrument?: string;
 };
 
+export type AppNotificationKind =
+  | "feed_post"
+  | "event_update"
+  | "attendance_reminder"
+  | "event_reminder";
+
+export type AppNotification = {
+  id: string;
+  kind: AppNotificationKind;
+  title: string;
+  body: string;
+  refType: string | null;
+  refId: string | null;
+  createdAt: string;
+  readAt: string | null;
+};
+
 export type FeedPost = {
   id: string;
   authorName: string;

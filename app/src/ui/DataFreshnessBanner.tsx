@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { appLocaleTag, tr } from "../i18n";
+import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { formatDateLabel } from "../utils/format";
+import { formatDateLabel, formatRelativeTime } from "../utils/format";
 
 type FreshnessTone = "fresh" | "stale" | "unknown";
 
@@ -31,23 +31,28 @@ function formatDataSourceLabel(label: string) {
 
 function formatRelativeAgeLabel(targetTimestampMs: number, nowTimestampMs: number) {
   const diffMs = targetTimestampMs - nowTimestampMs;
-  const relativeFormatter = new Intl.RelativeTimeFormat(appLocaleTag, {
-    numeric: "auto",
-    style: "short",
-  });
 
   const diffMinutes = Math.round(diffMs / (1000 * 60));
   if (Math.abs(diffMinutes) < 60) {
-    return relativeFormatter.format(diffMinutes, "minute");
+    return formatRelativeTime(diffMinutes, "minute", {
+      numeric: "auto",
+      style: "short",
+    });
   }
 
   const diffHours = Math.round(diffMs / (1000 * 60 * 60));
   if (Math.abs(diffHours) < 48) {
-    return relativeFormatter.format(diffHours, "hour");
+    return formatRelativeTime(diffHours, "hour", {
+      numeric: "auto",
+      style: "short",
+    });
   }
 
   const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  return relativeFormatter.format(diffDays, "day");
+  return formatRelativeTime(diffDays, "day", {
+    numeric: "auto",
+    style: "short",
+  });
 }
 
 export function DataFreshnessBanner({
