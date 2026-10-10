@@ -24,6 +24,10 @@
 13. `docs/ops/smoke-attendance-db-first-hybrid.md`
 14. `docs/contracts/attendance-sheet-contract.md`
 
+## Supabase hosting
+
+- `docs/ops/cloudflare-tunnel-supabase-self-hosting.md` — current self-hosted database topology, Cloudflare Tunnel, GitHub secret names, data-copy status, and operating runbook. Read this before changing the Supabase endpoint or sync deployment.
+
 ## Scope Notes
 
 - Runtime source of truth: Supabase DB (`db_first`) with controlled export to copy sheet.
