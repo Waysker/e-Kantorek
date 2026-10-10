@@ -23,7 +23,35 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="./favicon.ico" /></head>
+  <link rel="icon" href="./favicon.ico" />
+<script>
+  (() => {
+    const buildId = "ec379e949cf6db290e44b5ff40d78bfdbeb8a762";
+    const url = new URL("./version.json", window.location.href);
+    url.searchParams.set("check", String(Date.now()));
+
+    fetch(url, { cache: "no-store", credentials: "omit" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((version) => {
+        const latestBuildId = version?.buildId;
+        if (!latestBuildId || latestBuildId === buildId) {
+          const currentUrl = new URL(window.location.href);
+          if (currentUrl.searchParams.has("__oragh_build")) {
+            currentUrl.searchParams.delete("__oragh_build");
+            window.history.replaceState(null, "", currentUrl);
+          }
+          return;
+        }
+
+        const currentUrl = new URL(window.location.href);
+        if (currentUrl.searchParams.get("__oragh_build") === latestBuildId) return;
+        currentUrl.searchParams.set("__oragh_build", latestBuildId);
+        window.location.replace(currentUrl.href);
+      })
+      .catch(() => {});
+  })();
+</script>
+</head>
 
   <body>
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
