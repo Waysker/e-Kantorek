@@ -1000,7 +1000,7 @@ function extractPreview(description) {
 
 function looksLikeSetlist(text) {
   const normalized = stripDiacritics(text).toLowerCase();
-  return normalized.includes("setlista") || normalized.includes("setlist") || normalized.includes("lista utwor") || /\bi set\b/.test(normalized) || normalized.includes(" bis:");
+  return normalized.includes("setlista") || normalized.includes("setlist") || normalized.includes("lista utwor") || /\brepertuar\s*:/i.test(normalized) || /\bi set\b/.test(normalized) || normalized.includes(" bis:");
 }
 
 function parseSetlistItems(text, itemIdPrefix) {
@@ -1013,7 +1013,7 @@ function parseSetlistItems(text, itemIdPrefix) {
 }
 
 function parseSetlistSections(text, eventId) {
-  const marker = /(setlista|setlist|lista utwor(?:ow)?)/i.exec(text);
+  const marker = /(setlista|setlist|lista utwor(?:ow)?|repertuar\s*:)/i.exec(text);
   const source = marker ? text.slice((marker.index ?? 0) + marker[0].length) : text;
   const normalized = source.replace(/^[:\s-]+/, "").replace(/\b(I{1,4})\s*set\b\s*:?\s*/gi, (_, numeral) => `\n${numeral.toUpperCase()} SET:\n`).replace(/\bset\s*(I{1,4})\b\s*:?\s*/gi, (_, numeral) => `\n${numeral.toUpperCase()} SET:\n`).replace(/\b(BIS)\b\s*:?\s*/gi, "\nBIS:\n").trim();
   const headingPattern = /(?:^|\n)\s*((?:[IVX]+ SET|BIS))\s*:\s*/g;
