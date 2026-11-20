@@ -8,6 +8,7 @@ import type { ForumSnapshotShape } from "./snapshotShape";
 type SnapshotRow = {
   snapshot_key: string;
   payload: ForumSnapshotShape;
+  updated_at: string;
 };
 
 type SupabaseSnapshotRepositoryOptions = {
@@ -22,6 +23,7 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
   private readonly snapshotKey: string;
   private readonly fallbackRepository: ForumSnapshotRepository;
   private cachedSnapshot: ForumSnapshotShape | null = null;
+  private cachedSnapshotUpdatedAt: string | null = null;
   private resolvedSourceLabel: "supabase_cloud" | "local_fallback" | null = null;
 
   constructor({
@@ -70,7 +72,7 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
   }
 
   getSnapshotGeneratedAt(): string | null {
-    return this.cachedSnapshot?.metadata?.generatedAt ?? null;
+    return this.cachedSnapshotUpdatedAt ?? this.cachedSnapshot?.metadata?.generatedAt ?? null;
   }
 
   private async loadSnapshot(): Promise<ForumSnapshotShape> {
@@ -81,7 +83,7 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
     try {
       const { data, error } = await this.client
         .from("forum_snapshot_cache")
-        .select("snapshot_key,payload")
+        .select("snapshot_key,payload,updated_at")
         .eq("snapshot_key", this.snapshotKey)
         .maybeSingle<SnapshotRow>();
 
@@ -94,6 +96,7 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
       }
 
       this.cachedSnapshot = data.payload;
+      this.cachedSnapshotUpdatedAt = data.updated_at;
       this.resolvedSourceLabel = "supabase_cloud";
       return data.payload;
     } catch {
@@ -116,6 +119,7 @@ export class SupabaseSnapshotRepository implements EventsRepository, UsersReposi
         ),
       };
       this.cachedSnapshot = fallbackSnapshot;
+      this.cachedSnapshotUpdatedAt = fallbackSnapshot.metadata.generatedAt;
       this.resolvedSourceLabel = "local_fallback";
       return fallbackSnapshot;
     }

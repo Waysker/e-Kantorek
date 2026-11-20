@@ -3,8 +3,8 @@ name: Forum Sync Publish
 on:
   workflow_dispatch:
   schedule:
-    # Every 4 hours (UTC)
-    - cron: "17 */4 * * *"
+    # Every hour (UTC)
+    - cron: "17 * * * *"
 
 permissions:
   contents: read
@@ -14,12 +14,12 @@ env:
 
 concurrency:
   group: forum-sync-publish
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   sync-publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: app
@@ -64,8 +64,9 @@ jobs:
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
           ORAGH_INSTRUMENT_OVERRIDES_KEY: ${{ vars.ORAGH_INSTRUMENT_OVERRIDES_KEY || vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
+          FORUM_SYNC_PROFILE_CONCURRENCY: "2"
         run: |
-          max_attempts=2
+          max_attempts=4
           attempt=1
           while [ "$attempt" -le "$max_attempts" ]; do
             if npm run forum:sync:publish; then
@@ -75,7 +76,12 @@ jobs:
               echo "::error::Forum sync publish failed after $attempt attempts."
               exit 1
             fi
-            echo "::warning::Forum sync publish failed (attempt $attempt/$max_attempts). Retrying in 20s."
-            sleep 20
+            case "$attempt" in
+              1) sleep_seconds=60 ;;
+              2) sleep_seconds=180 ;;
+              *) sleep_seconds=480 ;;
+            esac
+            echo "::warning::Forum sync publish failed (attempt $attempt/$max_attempts). Retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
             attempt=$((attempt + 1))
           done

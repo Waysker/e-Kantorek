@@ -58,7 +58,7 @@ function formatRelativeAgeLabel(targetTimestampMs: number, nowTimestampMs: numbe
 export function DataFreshnessBanner({
   dataSourceLabel,
   dataSourceGeneratedAt,
-  expectedSyncIntervalHours = 4,
+  expectedSyncIntervalHours = 1,
 }: DataFreshnessBannerProps) {
   const [nowTimestampMs, setNowTimestampMs] = useState(() => Date.now());
 

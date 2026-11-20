@@ -1,0 +1,71 @@
+name: Forum Snapshot Freshness
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: forum-snapshot-freshness
+  cancel-in-progress: true
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check published snapshot age
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
+          MAX_AGE_HOURS: "6"
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SECRET_KEY" ]; then
+            echo "::error::SUPABASE_URL or Supabase server key is missing."
+            exit 1
+          fi
+
+          endpoint="${SUPABASE_URL%/}/rest/v1/forum_snapshot_cache"
+          response=""
+          attempt=1
+          while [ "$attempt" -le 3 ]; do
+            if response="$(curl --silent --show-error --fail-with-body --max-time 30 \
+              --get "$endpoint" \
+              --data-urlencode "select=updated_at" \
+              --data-urlencode "snapshot_key=eq.${ORAGH_SNAPSHOT_KEY}" \
+              --data-urlencode "limit=1" \
+              -H "apikey: $SUPABASE_SECRET_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SECRET_KEY")"; then
+              break
+            fi
+            if [ "$attempt" -ge 3 ]; then
+              echo "::error::Could not read forum snapshot timestamp after $attempt attempts."
+              exit 1
+            fi
+            sleep_seconds=$((attempt * 10))
+            echo "::warning::Supabase freshness query failed (attempt $attempt/3). Retrying in ${sleep_seconds}s."
+            sleep "$sleep_seconds"
+            attempt=$((attempt + 1))
+          done
+
+          updated_at="$(echo "$response" | jq -r '.[0].updated_at // empty')"
+          if [ -z "$updated_at" ]; then
+            echo "::error::Forum snapshot '${ORAGH_SNAPSHOT_KEY}' was not found in Supabase."
+            exit 1
+          fi
+
+          updated_epoch="$(date -u -d "$updated_at" +%s)"
+          now_epoch="$(date -u +%s)"
+          age_seconds=$((now_epoch - updated_epoch))
+          max_age_seconds=$((MAX_AGE_HOURS * 60 * 60))
+          age_hours="$(awk -v seconds="$age_seconds" 'BEGIN { printf "%.1f", seconds / 3600 }')"
+          echo "Snapshot '${ORAGH_SNAPSHOT_KEY}' last published at ${updated_at}; age=${age_hours}h; limit=${MAX_AGE_HOURS}h."
+
+          if [ "$age_seconds" -gt "$max_age_seconds" ]; then
+            echo "::error::Forum snapshot is stale (${age_hours}h old; maximum is ${MAX_AGE_HOURS}h)."
+            exit 1
+          fi

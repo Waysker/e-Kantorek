@@ -256,6 +256,18 @@ function computeRetryDelayMs(attempt, baseDelayMs, maxDelayMs) {
   return Math.min(exponential + jitter, maxDelayMs);
 }
 
+function parseRetryAfterMs(value) {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds * 1_000;
+  }
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt)
+    ? Math.max(retryAt - Date.now(), 0)
+    : null;
+}
+
 function timeoutSignal(timeoutMs) {
   if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function") {
     return AbortSignal.timeout(timeoutMs);
@@ -554,12 +566,25 @@ async function requestHtml({ jar, url, method = "GET", body }) {
       headers["content-type"] = "application/x-www-form-urlencoded";
     }
 
-    const response = await fetchWithRetry(currentUrl, {
-      method: currentMethod,
-      headers,
-      body: currentBody,
-      redirect: "manual",
-    });
+    const { maxAttempts } = resolveFetchRuntimeConfig();
+    let response;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      response = await fetchWithRetry(currentUrl, {
+        method: currentMethod,
+        headers,
+        body: currentBody,
+        redirect: "manual",
+      });
+      if (![429, 500, 502, 503, 504].includes(response.status) || attempt >= maxAttempts) {
+        break;
+      }
+      const delayMs = parseRetryAfterMs(response.headers.get("retry-after")) ??
+        computeRetryDelayMs(attempt, 2_000, 30_000);
+      console.warn(
+        `HTTP ${response.status} for ${currentUrl}; retry ${attempt}/${maxAttempts - 1} in ${delayMs}ms.`,
+      );
+      await sleep(delayMs);
+    }
     jar.absorb(response);
 
     if (
@@ -1286,7 +1311,8 @@ async function main() {
     });
   }
   const usersByKey = new Map();
-  await mapWithConcurrency(uniqueParticipants(rawThreads), 5, async (participant) => {
+  const profileFetchConcurrency = readPositiveIntEnv("FORUM_SYNC_PROFILE_CONCURRENCY", 2);
+  await mapWithConcurrency(uniqueParticipants(rawThreads), profileFetchConcurrency, async (participant) => {
     const cacheKey = toUserKey(participant);
     if (usersByKey.has(cacheKey)) {
       return;
