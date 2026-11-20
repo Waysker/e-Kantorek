@@ -73,6 +73,57 @@ type ProfileRow = {
   role: string;
 };
 
+type ProfileMemberLinkRow = { member_id: string };
+type LinkedMemberRow = { full_name: string };
+
+function normalizeIdentityName(value: string | null | undefined): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pl")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function applySignedInUserAttendance(
+  events: EventListItem[],
+  details: EventDetail[],
+  identityNames: string[],
+): { events: EventListItem[]; details: Record<string, EventDetail> } {
+  const names = new Set(identityNames.map(normalizeIdentityName).filter(Boolean));
+  const updatedDetails = details.map((event) => {
+    const matchingResponses = event.attendanceGroups.filter((group) =>
+      group.participants.some((participant) => names.has(normalizeIdentityName(participant.fullName))),
+    );
+    const userStatus: EventDetail["attendanceSummary"]["userStatus"] = matchingResponses.length === 1
+      ? matchingResponses[0].status
+      : "no_response";
+    const userStatusLabel = userStatus === "going"
+      ? tr("Bede", "Going")
+      : userStatus === "maybe"
+        ? tr("Moze", "Maybe")
+        : userStatus === "not_going"
+          ? tr("Nie bede", "Not going")
+          : tr("Brak odpowiedzi", "No response");
+    return {
+      ...event,
+      attendanceStatus: userStatus,
+      attendanceLabel: userStatusLabel,
+      attendanceSummary: { ...event.attendanceSummary, userStatus, userStatusLabel },
+    };
+  });
+  const detailMap = Object.fromEntries(updatedDetails.map((event) => [event.id, event]));
+  return {
+    events: events.map((event) => {
+      const detail = detailMap[event.id];
+      return detail
+        ? { ...event, attendanceStatus: detail.attendanceStatus, attendanceLabel: detail.attendanceLabel }
+        : event;
+    }),
+    details: detailMap,
+  };
+}
+
 type NotificationRow = {
   id?: string;
   kind?: string;
@@ -494,6 +545,35 @@ export default function App() {
           events.map((event) => repositories.events.getEventDetail(event.id)),
         );
 
+        const identityNames = [profileResult.data?.full_name ?? ""];
+        if (supabaseAuthClient) {
+          try {
+            const { data: profileMemberLink } = await supabaseAuthClient
+              .from("profile_member_links")
+              .select("member_id")
+              .eq("profile_id", authenticatedUserId)
+              .maybeSingle<ProfileMemberLinkRow>();
+            if (profileMemberLink?.member_id) {
+              const { data: linkedMember } = await supabaseAuthClient
+                .from("members")
+                .select("full_name")
+                .eq("member_id", profileMemberLink.member_id)
+                .maybeSingle<LinkedMemberRow>();
+              if (linkedMember?.full_name) {
+                identityNames.unshift(linkedMember.full_name);
+              }
+            }
+          } catch {
+            // The profile name remains a usable identity fallback if optional linking is unavailable.
+          }
+        }
+
+        const personalizedAttendance = applySignedInUserAttendance(
+          events,
+          eventDetails,
+          identityNames,
+        );
+
         if (isCancelled) {
           return;
         }
@@ -504,10 +584,8 @@ export default function App() {
             status: "ready",
             data: {
               currentUser,
-              events,
-              eventDetailsById: Object.fromEntries(
-                  eventDetails.map((event) => [event.id, event]),
-                ),
+              events: personalizedAttendance.events,
+              eventDetailsById: personalizedAttendance.details,
               dataSourceLabel: dataSourceStatus.label,
               dataSourceGeneratedAt: dataSourceStatus.generatedAt,
               authProfile: profileResult.data
