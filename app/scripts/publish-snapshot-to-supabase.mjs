@@ -57,6 +57,64 @@ async function readSnapshot() {
   return JSON.parse(raw);
 }
 
+// Guards against publishing a broken scrape (e.g. forum returned an error page
+// with HTTP 200) over a good snapshot. Set FORUM_PUBLISH_FORCE=1 to bypass.
+const MIN_PREVIOUS_EVENTS_FOR_RATIO_CHECK = 4;
+const MIN_EVENTS_RATIO = 0.5;
+
+async function assertSnapshotLooksSane(client, snapshotKey, snapshot) {
+  const events = Array.isArray(snapshot?.events) ? snapshot.events : null;
+  const problems = [];
+
+  if (!events) {
+    problems.push("snapshot.events is missing or not an array");
+  }
+  if (!snapshot?.currentUser?.id) {
+    problems.push("snapshot.currentUser is missing");
+  }
+  if (events && snapshot.eventDetailsById) {
+    const detailCount = Object.keys(snapshot.eventDetailsById).length;
+    if (detailCount !== events.length) {
+      problems.push(`events (${events.length}) and eventDetailsById (${detailCount}) differ`);
+    }
+  }
+
+  if (events) {
+    const { data, error } = await client
+      .from("forum_snapshot_cache")
+      .select("payload")
+      .eq("snapshot_key", snapshotKey)
+      .maybeSingle();
+    if (error) {
+      // Cannot compare; do not block publishing on a read failure.
+      console.warn(`Sanity check: could not read previous snapshot (${error.message}).`);
+    } else {
+      const previousCount = Array.isArray(data?.payload?.events) ? data.payload.events.length : 0;
+      if (previousCount > 0 && events.length === 0) {
+        problems.push(`new snapshot has 0 events, previous had ${previousCount}`);
+      } else if (
+        previousCount >= MIN_PREVIOUS_EVENTS_FOR_RATIO_CHECK &&
+        events.length < previousCount * MIN_EVENTS_RATIO
+      ) {
+        problems.push(
+          `events dropped from ${previousCount} to ${events.length} (below ${MIN_EVENTS_RATIO * 100}% of previous)`,
+        );
+      }
+    }
+  }
+
+  if (problems.length === 0) {
+    return;
+  }
+  if (process.env.FORUM_PUBLISH_FORCE === "1") {
+    console.warn(`Sanity check failed but FORUM_PUBLISH_FORCE=1: ${problems.join("; ")}`);
+    return;
+  }
+  throw new Error(
+    `Refusing to publish suspicious snapshot: ${problems.join("; ")}. Set FORUM_PUBLISH_FORCE=1 to override.`,
+  );
+}
+
 async function main() {
   await loadEnv();
 
@@ -75,6 +133,8 @@ async function main() {
   const client = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
+
+  await assertSnapshotLooksSane(client, snapshotKey, snapshot);
 
   const { error } = await client.from("forum_snapshot_cache").upsert(
     {
