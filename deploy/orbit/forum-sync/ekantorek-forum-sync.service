@@ -1,0 +1,21 @@
+[Unit]
+Description=e-Kantorek forum sync and publish to Supabase (Docker)
+Requires=docker.service
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# systemd reads the env file as root (mode 600), so the secrets are not
+# readable by other users or other services on this host.
+EnvironmentFile=/etc/ekantorek/forum-sync.env
+TimeoutStartSec=15min
+# The sync itself runs unprivileged inside a throwaway Node container.
+ExecStart=/usr/bin/docker run --rm --name ekantorek-forum-sync \
+  --user 1000:1000 --memory 512m --cap-drop ALL --security-opt no-new-privileges \
+  --env-file /etc/ekantorek/forum-sync.env \
+  -e HOME=/tmp -e FORUM_SYNC_PROFILE_CONCURRENCY=2 \
+  -v /home/waysker/e-Kantorek-sync:/repo -w /repo/app \
+  node:24-slim npm run forum:sync:publish
+# Dead-man's-switch ping (optional): only reached when ExecStart succeeded.
+ExecStartPost=/bin/sh -c 'test -z "$$HC_PING_URL" || curl -fsS -m 10 --retry 3 -o /dev/null "$$HC_PING_URL"'

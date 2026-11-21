@@ -1,0 +1,13 @@
+[Unit]
+Description=Run e-Kantorek forum sync every 20 minutes
+
+[Timer]
+# Minutes 0/20/40, plus a random delay so the forum never sees a fixed-second pattern.
+OnCalendar=*:0/20
+RandomizedDelaySec=180
+# Catch up once after downtime or reboot.
+Persistent=true
+Unit=ekantorek-forum-sync.service
+
+[Install]
+WantedBy=timers.target
