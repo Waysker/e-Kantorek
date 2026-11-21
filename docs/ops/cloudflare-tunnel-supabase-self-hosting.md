@@ -61,6 +61,41 @@ Forum sync workflow: `.github/workflows/forum-sync-publish.yml` (`Forum Sync Pub
 
 Production web deploy is manual: `.github/workflows/web-deploy-pages.yml` (`Deploy Web Production`). After changing its workflow configuration on `main`, run the workflow to rebuild the deployed client with the shared URL. Staging deploys automatically on pushes to `main` matching the configured paths.
 
+## Auth email (SMTP via Resend)
+
+Supabase Cloud sent signup confirmation emails with its built-in mailer. Self-hosted GoTrue has no mailer, so with `ENABLE_EMAIL_AUTOCONFIRM=false` and no SMTP, registration fails with `Error sending confirmation email`. Outgoing auth mail is now sent through Resend.
+
+| Item | Configuration |
+| --- | --- |
+| Provider | Resend (domain region: eu-west-1) |
+| Sending domain | `mail.waysker.fyi` (a subdomain, so mail reputation is separate from the main domain) |
+| Sender | `noreply@mail.waysker.fyi`, name `e-Kantorek` |
+| DNS (Cloudflare, all **DNS only**, not proxied) | DKIM TXT `resend._domainkey.mail`, CNAMEs `send.mail` and `rsend.mail`, DMARC TXT `_dmarc.mail` (`v=DMARC1; p=none;`) |
+
+Settings in the Orbit Compose `.env` (`/home/waysker/supabase-selfhost-test/.env`):
+
+```bash
+SMTP_HOST=smtp.resend.com
+SMTP_PORT=465
+SMTP_USER=resend
+SMTP_PASS=<Resend API key, sending access for mail.waysker.fyi>
+SMTP_ADMIN_EMAIL=noreply@mail.waysker.fyi
+SMTP_SENDER_NAME=e-Kantorek
+ENABLE_EMAIL_AUTOCONFIRM=false
+API_EXTERNAL_URL=https://e-kantorek-supabase.waysker.fyi/auth/v1
+SUPABASE_PUBLIC_URL=https://e-kantorek-supabase.waysker.fyi
+SITE_URL=https://Waysker.github.io/e-Kantorek/
+```
+
+Notes:
+
+- `SMTP_PASS` is a secret. Enter it directly in `.env` on Orbit, keep one `SMTP_PASS` line only, and never paste it into chat or logs. If it is exposed, delete it in Resend (API Keys), create a new one, update `.env`, and restart `auth`.
+- `API_EXTERNAL_URL` must be the permanent public hostname. It was previously a temporary `trycloudflare.com` quick-tunnel URL, which makes the confirmation link in the email point to a dead address.
+- Apply changes by recreating only the auth service: `sudo docker compose -f docker-compose.yml -f docker-compose.orbit-quick.yml up -d auth`.
+- The app treats a signup without an immediate session as "confirm your email" (`handleRegister` in `app/App.tsx`).
+- New sending domains can land in spam at first. SPF/DKIM/DMARC are configured; mark the message "not spam" for early users and ask them to check the spam folder.
+- Troubleshooting: `sudo docker compose -f docker-compose.yml -f docker-compose.orbit-quick.yml logs --tail=40 auth` right after a test signup.
+
 ## Operating commands
 
 Run on Orbit from the Compose directory. Use `sudo` if the account cannot access the Docker daemon directly:
