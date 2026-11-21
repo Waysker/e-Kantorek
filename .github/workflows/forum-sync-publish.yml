@@ -3,8 +3,12 @@ name: Forum Sync Publish
 on:
   workflow_dispatch:
   schedule:
-    # Every hour (UTC)
-    - cron: "17 * * * *"
+    # GitHub drops/delays scheduled runs heavily (observed: one run per ~8-10h
+    # instead of hourly). Register several staggered, off-peak triggers; the
+    # "Skip if snapshot is fresh" step below keeps redundant runs cheap.
+    - cron: "11 * * * *"
+    - cron: "31 * * * *"
+    - cron: "51 * * * *"
 
 permissions:
   contents: read
@@ -25,10 +29,41 @@ jobs:
         working-directory: app
 
     steps:
+      - name: Skip if snapshot is fresh
+        id: gate
+        if: github.event_name == 'schedule'
+        working-directory: .
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY || secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORAGH_SNAPSHOT_KEY: ${{ vars.ORAGH_SNAPSHOT_KEY || 'forum' }}
+          MIN_INTERVAL_MINUTES: "45"
+        run: |
+          skip=false
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SECRET_KEY" ]; then
+            response="$(curl --silent --fail --max-time 20 --get "${SUPABASE_URL%/}/rest/v1/forum_snapshot_cache" \
+              --data-urlencode "select=updated_at" \
+              --data-urlencode "snapshot_key=eq.${ORAGH_SNAPSHOT_KEY}" \
+              --data-urlencode "limit=1" \
+              -H "apikey: $SUPABASE_SECRET_KEY" \
+              -H "Authorization: Bearer $SUPABASE_SECRET_KEY" || true)"
+            updated_at="$(echo "$response" | jq -r '.[0].updated_at // empty' 2>/dev/null || true)"
+            if [ -n "$updated_at" ]; then
+              age=$(( $(date -u +%s) - $(date -u -d "$updated_at" +%s) ))
+              echo "Snapshot age: ${age}s"
+              if [ "$age" -lt $((MIN_INTERVAL_MINUTES * 60)) ]; then
+                skip=true
+              fi
+            fi
+          fi
+          echo "skip=$skip" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
+        if: steps.gate.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Setup Node
+        if: steps.gate.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -36,9 +71,11 @@ jobs:
           cache-dependency-path: app/package-lock.json
 
       - name: Install dependencies
+        if: steps.gate.outputs.skip != 'true'
         run: npm ci
 
       - name: Validate required secrets
+        if: steps.gate.outputs.skip != 'true'
         env:
           ORAGH_FORUM_USERNAME: ${{ secrets.ORAGH_FORUM_USERNAME }}
           ORAGH_FORUM_PASSWORD: ${{ secrets.ORAGH_FORUM_PASSWORD }}
@@ -57,6 +94,7 @@ jobs:
           fi
 
       - name: Sync forum and publish snapshot
+        if: steps.gate.outputs.skip != 'true'
         env:
           ORAGH_FORUM_USERNAME: ${{ secrets.ORAGH_FORUM_USERNAME }}
           ORAGH_FORUM_PASSWORD: ${{ secrets.ORAGH_FORUM_PASSWORD }}
