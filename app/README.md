@@ -240,7 +240,7 @@ Scheduling / trigger:
 
 - Manual trigger: run `npm run forum:sync:publish` from the `app` directory.
 - Scheduled trigger (Windows Task Scheduler, legacy): run `cmd.exe /d /c "cd /d C:\Users\Waysker\Documents\New project\app && npm.cmd run forum:sync:publish >> .cache\forum-sync\scheduler.log 2>&1"` on your preferred cadence.
-- Cloud trigger (recommended): use GitHub Actions workflow at `.github/workflows/forum-sync-publish.yml`.
+- Production scheduler: systemd timer on orbit (every ~20 min, Docker), see `deploy/orbit/forum-sync/README.md`. The GitHub Actions workflow `.github/workflows/forum-sync-publish.yml` is manual/backup only (`workflow_dispatch`).
 
 GitHub Actions setup:
 
