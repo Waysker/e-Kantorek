@@ -12,6 +12,8 @@ export const tokens = {
     successInk: "#0E5F3B",
     dangerSurface: "#F5E2E2",
     dangerInk: "#8A3131",
+    warningSurface: "#FBEBC8",
+    warningInk: "#6B4A00",
     paper: "#FFF9EF",
     readerBackdrop: "#171513",
     readerChrome: "#302C28",

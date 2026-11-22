@@ -89,15 +89,15 @@ export function DataFreshnessBanner({
     return { tone: "fresh" as FreshnessTone, syncedAtMs };
   }, [dataSourceGeneratedAt, expectedSyncIntervalHours, nowTimestampMs]);
 
+  // Show the banner only when data is stale or its freshness is unknown.
+  if (freshness.tone === "fresh") {
+    return null;
+  }
+
   const statusLabel =
-    freshness.tone === "fresh"
-      ? tr("Dane aktualne", "Data is up to date")
-      : freshness.tone === "stale"
-        ? tr(
-            "Uwaga: dane moga byc nieaktualne",
-            "Warning: data may be outdated",
-          )
-        : tr("Brak metadanych synchronizacji", "Sync metadata unavailable");
+    freshness.tone === "stale"
+      ? tr("Uwaga: dane moga byc nieaktualne", "Warning: data may be outdated")
+      : tr("Brak metadanych synchronizacji", "Sync metadata unavailable");
 
   const detailsLabel =
     freshness.syncedAtMs == null
@@ -118,11 +118,7 @@ export function DataFreshnessBanner({
     <View
       style={[
         styles.container,
-        freshness.tone === "fresh"
-          ? styles.containerFresh
-          : freshness.tone === "stale"
-            ? styles.containerStale
-            : styles.containerUnknown,
+        freshness.tone === "stale" ? styles.containerStale : styles.containerUnknown,
       ]}
     >
       <Text
@@ -159,10 +155,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     gap: 2,
-  },
-  containerFresh: {
-    backgroundColor: tokens.colors.successSurface,
-    borderBottomColor: tokens.colors.successInk,
   },
   containerStale: {
     backgroundColor: tokens.colors.dangerSurface,

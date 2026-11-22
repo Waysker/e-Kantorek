@@ -29,6 +29,9 @@ function getTabLabel(tab: PrimaryTab): string {
   if (tab === "events") {
     return tr("Wydarzenia", "Events");
   }
+  if (tab === "calendar") {
+    return tr("Kalendarz", "Calendar");
+  }
   if (tab === "attendance") {
     return tr("Obecność", "Attendance");
   }

@@ -79,3 +79,10 @@ export function formatRelativeLabel(value: string) {
     month: "short",
   }).format(new Date(value));
 }
+
+// Forum thread titles start with a date ("2026.11.20 Event name"); the date is
+// already shown separately in the UI, so strip it for display.
+export function stripTitleDatePrefix(title: string) {
+  const stripped = title.replace(/^\s*\d{4}[./-]\d{1,2}[./-]\d{1,2}[\s:.\-–—]*/, "").trim();
+  return stripped.length > 0 ? stripped : title;
+}

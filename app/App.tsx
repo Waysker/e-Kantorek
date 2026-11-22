@@ -24,6 +24,7 @@ import type { AppRoute, PrimaryTab } from "./src/navigation/routes";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
+import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { EventsScreen } from "./src/screens/EventsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
@@ -225,6 +226,7 @@ function isValidAppRoute(value: unknown): value is AppRoute {
 
   if (
     candidate.name === "events" ||
+    candidate.name === "calendar" ||
     candidate.name === "profile" ||
     candidate.name === "attendanceWorkspace" ||
     candidate.name === "attendanceManager" ||
@@ -914,6 +916,7 @@ export default function App() {
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
   const navigationTabs: PrimaryTab[] = [
     "events",
+    "calendar",
     ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
     ...(canManageRoles ? (["roles"] as const) : []),
     "profile",
@@ -1019,6 +1022,11 @@ export default function App() {
       return;
     }
 
+    if (tab === "calendar") {
+      resetToRoute({ name: "calendar" });
+      return;
+    }
+
     if (tab === "attendance") {
       if (canAccessAttendanceWorkspace) {
         resetToRoute({ name: "attendanceWorkspace" });
@@ -1045,6 +1053,13 @@ export default function App() {
       case "events":
         return (
           <EventsScreen
+            events={events}
+            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
+          />
+        );
+      case "calendar":
+        return (
+          <CalendarScreen
             events={events}
             onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
           />
