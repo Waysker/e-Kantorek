@@ -1,5 +1,6 @@
 [Unit]
 Description=e-Kantorek forum sync and publish to Supabase (Docker)
+OnFailure=ekantorek-forum-sync-failed.service
 Requires=docker.service
 Wants=network-online.target
 After=network-online.target docker.service
@@ -17,5 +18,6 @@ ExecStart=/usr/bin/docker run --rm --name ekantorek-forum-sync \
   -e HOME=/tmp -e FORUM_SYNC_PROFILE_CONCURRENCY=2 \
   -v /home/waysker/e-Kantorek-sync:/repo -w /repo/app \
   node:24-slim npm run forum:sync:publish
-# Dead-man's-switch ping (optional): only reached when ExecStart succeeded.
-ExecStartPost=/bin/sh -c 'test -z "$$HC_PING_URL" || curl -fsS -m 10 --retry 3 -o /dev/null "$$HC_PING_URL"'
+# Resets the failure counter and sends a "recovered" message after an outage.
+# The leading "-" keeps a notifier problem from marking a good sync as failed.
+ExecStartPost=-/usr/local/lib/ekantorek/notify.sh ok

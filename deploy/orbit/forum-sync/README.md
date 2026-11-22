@@ -23,7 +23,9 @@ sudo install -m 600 /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/forum-
 sudoedit /etc/ekantorek/forum-sync.env
 
 # 4. Units
-sudo cp /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/ekantorek-forum-sync.{service,timer} /etc/systemd/system/
+sudo install -d /usr/local/lib/ekantorek
+sudo install -m 755 -o root -g root /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/notify.sh /usr/local/lib/ekantorek/notify.sh
+sudo cp /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/ekantorek-forum-sync{,-failed}.service /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/ekantorek-forum-sync.timer /etc/systemd/system/
 sudo systemd-analyze verify /etc/systemd/system/ekantorek-forum-sync.service
 sudo systemctl daemon-reload
 
@@ -42,3 +44,18 @@ systemctl list-timers ekantorek-forum-sync.timer
 - A failed run is retried by the next timer tick, not in a loop (be gentle with the forum).
 - Suspicious-snapshot refusal: see `FORUM_PUBLISH_FORCE=1` in `app/scripts/publish-snapshot-to-supabase.mjs`.
 - The GitHub workflow `Forum Sync Publish` is manual-only (`workflow_dispatch`); this timer is the scheduler.
+
+## ntfy alerts
+
+Set `NTFY_SERVER`/`NTFY_TOPIC` (a new random topic, not the tickets one) in
+`/etc/ekantorek/forum-sync.env`, subscribe to it in the ntfy app, then test:
+
+```bash
+sudo systemctl start ekantorek-forum-sync-failed.service   # counts as failure 1
+sudo systemctl start ekantorek-forum-sync-failed.service   # failure 2 -> push
+sudo systemctl start ekantorek-forum-sync.service          # success -> "recovered" push
+```
+
+Alerts fire after 2 consecutive failures, repeat every 6 more, and a single
+"recovered" message follows. It cannot detect orbit itself being down; the app
+banner covers that for users (it turns red when data is older than 2 h).

@@ -1,0 +1,7 @@
+[Unit]
+Description=Notify about a failed e-Kantorek forum sync (ntfy)
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/ekantorek/forum-sync.env
+ExecStart=/usr/local/lib/ekantorek/notify.sh fail

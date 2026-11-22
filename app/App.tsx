@@ -1210,7 +1210,7 @@ export default function App() {
         hideNavigation={route.name === "setlist"}
         dataSourceLabel={dataSourceLabel}
         dataSourceGeneratedAt={dataSourceGeneratedAt}
-        expectedSyncIntervalHours={4}
+        expectedSyncIntervalHours={2}
         onNavigate={openTab}
       >
         <StatusBar style={route.name === "setlist" ? "light" : "dark"} />
