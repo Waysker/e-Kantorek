@@ -41,4 +41,4 @@ systemctl list-timers ekantorek-forum-sync.timer
 - Pause: `sudo systemctl stop ekantorek-forum-sync.timer`.
 - A failed run is retried by the next timer tick, not in a loop (be gentle with the forum).
 - Suspicious-snapshot refusal: see `FORUM_PUBLISH_FORCE=1` in `app/scripts/publish-snapshot-to-supabase.mjs`.
-- Once pings arrive reliably, remove the schedule triggers from `.github/workflows/forum-sync-publish.yml`.
+- The GitHub workflow `Forum Sync Publish` is manual-only (`workflow_dispatch`); this timer is the scheduler.
