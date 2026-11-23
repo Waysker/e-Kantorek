@@ -1,8 +1,9 @@
-export type PrimaryTab = "events" | "calendar" | "board" | "profile";
+export type PrimaryTab = "home" | "events" | "calendar" | "board" | "profile";
 export type BoardSection = "attendance" | "roles" | "instruments";
 export type AttendanceFocusStatus = "going" | "not_going";
 
 export type AppRoute =
+  | { name: "home" }
   | { name: "events" }
   | { name: "calendar" }
   | { name: "eventDetail"; eventId: string }
@@ -17,6 +18,10 @@ export type AppRoute =
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
+  if (route.name === "home") {
+    return "home";
+  }
+
   if (route.name === "profile") {
     return "profile";
   }

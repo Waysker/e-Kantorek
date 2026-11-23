@@ -9,15 +9,14 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-import type { EventDetail } from "../domain/models";
+import type { AttendanceStatus, EventDetail } from "../domain/models";
+import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { formatDateLabel, formatRelativeLabel } from "../utils/format";
-import {
-  AttendanceSummaryStrip,
-  type AttendanceSummaryFocusStatus,
-} from "../ui/AttendanceSummaryStrip";
-import { SurfaceCard } from "../ui/SurfaceCard";
+import { formatDateLabel, formatRelativeLabel, stripTitleDatePrefix } from "../utils/format";
+import type { AttendanceSummaryFocusStatus } from "../ui/AttendanceSummaryStrip";
+import { Icon } from "../ui/Icon";
+import { StatusPill, statusMeta } from "../ui/StatusPill";
 
 type EventDetailScreenProps = {
   event: EventDetail;
@@ -144,146 +143,253 @@ export function EventDetailScreen({
     }
   }
 
+  const forumUrl = getForumThreadUrl(event.id);
+  const needsDeclaration = event.attendanceStatus === "no_response";
+  const summary = event.attendanceSummary;
+  const stats: Array<{
+    key: AttendanceStatus;
+    value: number;
+    label: string;
+    focus?: AttendanceSummaryFocusStatus;
+  }> = [
+    { key: "going", value: summary.going, label: tr("będzie", "going"), focus: "going" },
+    { key: "maybe", value: summary.maybe, label: tr("może", "maybe") },
+    { key: "not_going", value: summary.notGoing, label: tr("nie", "not going"), focus: "not_going" },
+    { key: "no_response", value: summary.noResponse, label: tr("brak", "no reply") },
+  ];
+  const setlistCount = event.setlist.sections.reduce(
+    (count, section) => count + section.items.length,
+    0,
+  );
+
+  const setlistCard = (
+    <View style={styles.card}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.kicker}>
+          {tr("Setlista", "Setlist")}
+          {setlistCount > 0 ? ` · ${setlistCount}` : ""}
+        </Text>
+        <Pressable onPress={onOpenSetlist} accessibilityRole="button" hitSlop={8}>
+          <Text style={styles.linkLabel}>{tr("Tryb pulpitu ›", "Stand mode ›")}</Text>
+        </Pressable>
+      </View>
+      {event.setlist.sections.map((section) => (
+        <View key={section.id}>
+          {event.setlist.sections.length > 1 ? (
+            <Text style={styles.setlistSectionTitle}>{section.title}</Text>
+          ) : null}
+          {section.items.map((item, itemIndex) => (
+            <View key={item.id} style={styles.setlistRow}>
+              <Text style={styles.setlistIndex}>{itemIndex + 1}</Text>
+              <Text style={styles.setlistLabel}>
+                {item.label}
+                {item.detail ? <Text style={styles.muted}>{` · ${item.detail}`}</Text> : null}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+
   return (
     <>
-      <ScrollView
-        style={styles.screenScroll}
-        contentContainerStyle={[styles.screenContent, isDesktop && styles.desktopContent]}
-        showsVerticalScrollIndicator={false}
-      >
-        <Pressable onPress={onBack} style={styles.backLink}>
-          <Text style={styles.backLinkLabel}>{tr("Wróć do wydarzeń", "Back to Events")}</Text>
-        </Pressable>
+      <ScrollView style={styles.screenScroll} showsVerticalScrollIndicator={false}>
+        <View style={[styles.hero, isDesktop && styles.heroDesktop]}>
+          <View style={styles.inner}>
+            <View style={styles.heroTopRow}>
+              <Pressable
+                onPress={onBack}
+                style={styles.heroButton}
+                accessibilityRole="button"
+                accessibilityLabel={tr("Wróć do wydarzeń", "Back to events")}
+              >
+                <Icon name="chevronLeft" size={20} color={tokens.colors.surface} strokeWidth={2.2} />
+                {isDesktop ? (
+                  <Text style={styles.heroButtonLabel}>{tr("Wydarzenia", "Events")}</Text>
+                ) : null}
+              </Pressable>
+              {forumUrl ? (
+                <Pressable
+                  onPress={() => openForumThread(event.id)}
+                  style={styles.heroButton}
+                  accessibilityRole="link"
+                >
+                  <Text style={styles.heroButtonLabel}>{tr("Wątek na forum", "Forum thread")}</Text>
+                  <Icon name="external" size={14} color={tokens.colors.surface} strokeWidth={2.2} />
+                </Pressable>
+              ) : null}
+            </View>
+            <Text style={styles.heroKicker}>{formatDateLabel(event.startsAt)}</Text>
+            <Text style={[styles.heroTitle, isDesktop && styles.heroTitleDesktop]}>
+              {stripTitleDatePrefix(event.title)}
+            </Text>
+            {event.venue ? <Text style={styles.heroVenue}>{event.venue}</Text> : null}
+          </View>
+        </View>
 
-        <View style={[styles.desktopSplit, isDesktop && styles.desktopSplitActive]}>
-          <View style={styles.desktopPrimaryColumn}>
-            <SurfaceCard variant="brandTint">
-              <Text style={styles.cardEyebrow}>{formatDateLabel(event.startsAt)}</Text>
-              <Text style={styles.screenTitle}>{event.title}</Text>
-              {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
-              <Text style={styles.cardBody}>{event.description}</Text>
-
-              {event.updates.length > 0 ? (
-                event.updates.map((update) => (
-                  <View key={update.id} style={styles.updateBlock}>
-                    <Text style={styles.updateMeta}>
-                      {update.authorName} - {formatRelativeLabel(update.createdAt)}
-                    </Text>
-                    <Text style={styles.updateBody}>{update.body}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.cardSecondary}>
-                  {tr(
-                    "Brak aktualizacji od organizatorów.",
-                    "No separate organizer updates were imported from this thread yet.",
-                  )}
-                </Text>
-              )}
-            </SurfaceCard>
-
-            <SurfaceCard variant="default">
-              <View style={styles.cardActionRow}>
-                <View style={styles.cardActionCopy}>
-                  <Text style={styles.cardEyebrow}>
-                    {tr("Deklaracje i skład", "RSVP declarations and roster")}
+        <View style={[styles.inner, styles.body]}>
+          <View style={[styles.columns, isDesktop && styles.columnsDesktop]}>
+            <View style={styles.primaryColumn}>
+              <View style={[styles.card, needsDeclaration && styles.cardAction]}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={[styles.kicker, needsDeclaration && styles.kickerAction]}>
+                    {tr("Twoja deklaracja", "Your declaration")}
                   </Text>
+                  <StatusPill status={event.attendanceStatus} large />
                 </View>
-                {canRemind ? (
+                {forumUrl ? (
                   <Pressable
-                    onPress={() => void handleRemindPress()}
-                    style={[styles.inlineButton, isReminding && styles.inlineButtonDisabled]}
-                    disabled={isReminding}
+                    onPress={() => openForumThread(event.id)}
+                    accessibilityRole="link"
+                    style={[styles.forumButton, needsDeclaration && styles.forumButtonPrimary]}
                   >
-                    <Text style={styles.inlineButtonLabel}>
-                      {isReminding ? tr("Wysyłanie…", "Sending...") : tr("Ponaglij", "Remind")}
+                    <Text
+                      style={[
+                        styles.forumButtonLabel,
+                        needsDeclaration && styles.forumButtonLabelPrimary,
+                      ]}
+                    >
+                      {needsDeclaration
+                        ? tr("Zadeklaruj na forum", "Declare on the forum")
+                        : tr("Zmień na forum", "Change on the forum")}
                     </Text>
+                    <Icon
+                      name="external"
+                      size={16}
+                      color={needsDeclaration ? tokens.colors.surface : tokens.colors.ink}
+                      strokeWidth={2.2}
+                    />
                   </Pressable>
                 ) : null}
-              </View>
-              <AttendanceSummaryStrip
-                summary={event.attendanceSummary}
-                includeMaybe={false}
-                onSelectStatus={(status) => onOpenAttendance(status)}
-              />
-              <Text style={styles.cardHint}>
-                {tr(
-                  "Wybierz kafelek, aby zobaczyć listę osób.",
-                  "Tap Going / Not going tile to open the corresponding list.",
-                )}
-              </Text>
-              {reminderFeedback ? (
-                <Text
-                  style={[
-                    styles.reminderFeedback,
-                    reminderFeedback.tone === "success" && styles.reminderFeedbackSuccess,
-                    reminderFeedback.tone === "error" && styles.reminderFeedbackError,
-                  ]}
-                >
-                  {reminderFeedback.message}
-                </Text>
-              ) : null}
-            </SurfaceCard>
-
-            {!isDesktop ? (
-              <SurfaceCard variant="default">
-                <View style={styles.cardActionRow}>
-                  <View style={styles.cardActionCopy}>
-                    <Text style={styles.cardEyebrow}>Setlista</Text>
-                  </View>
-                  <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                    <Text style={styles.inlineButtonLabel}>{tr("Otwórz", "Open")}</Text>
-                  </Pressable>
-                </View>
-                <Text style={styles.cardBody}>{event.setlist.preview}</Text>
-              </SurfaceCard>
-            ) : null}
-
-            <SurfaceCard variant="outline">
-              <Text style={styles.cardEyebrow}>{tr("Komentarze", "Comments")}</Text>
-              <Text style={styles.cardTitle}>{tr("Dyskusja", "Member discussion")}</Text>
-              {event.comments.length > 0 ? (
-                event.comments.map((comment) => (
-                  <View key={comment.id} style={styles.commentRow}>
-                    <Text style={styles.updateMeta}>
-                      {comment.authorName} - {formatRelativeLabel(comment.createdAt)}
-                    </Text>
-                    <Text style={styles.cardBody}>{comment.body}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.cardSecondary}>
+                <Text style={styles.hint}>
                   {tr(
-                    "Brak komentarzy w wątku na forum.",
-                    "No member replies were imported from the forum thread yet.",
+                    "Deklaracja to ankieta w wątku. Zmiana pojawi się tutaj po synchronizacji (do ~20 min).",
+                    "Declarations are a poll in the thread. Changes show up here after the next sync (up to ~20 min).",
                   )}
                 </Text>
-              )}
-            </SurfaceCard>
-          </View>
-          {isDesktop ? (
-            <View style={styles.desktopRail}>
-              <SurfaceCard variant="paper">
-                <View style={styles.setlistRailHeader}>
-                  <Text style={styles.cardTitle}>Setlista</Text>
-                  <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                    <Text style={styles.inlineButtonLabel}>{tr("Pełny ekran", "Fullscreen")}</Text>
-                  </Pressable>
-                </View>
-                {event.setlist.sections.map((section) => (
-                  <View key={section.id} style={styles.setlistSectionBlock}>
-                    <Text style={styles.setlistSectionTitle}>{section.title}</Text>
-                    {section.items.map((item, itemIndex) => (
-                      <Text key={item.id} style={styles.setlistListText}>
-                        {itemIndex + 1}. {item.label}
-                        {item.detail ? ` - ${item.detail}` : ""}
+              </View>
+
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.kicker}>{tr("Skład", "Line-up")}</Text>
+                  {canRemind ? (
+                    <Pressable
+                      onPress={() => void handleRemindPress()}
+                      style={[styles.smallButton, isReminding && styles.smallButtonDisabled]}
+                      disabled={isReminding}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.smallButtonLabel}>
+                        {isReminding ? tr("Wysyłanie…", "Sending…") : tr("Ponaglij", "Remind")}
                       </Text>
-                    ))}
-                  </View>
-                ))}
-              </SurfaceCard>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.statsRow}>
+                  {stats.map((item) => {
+                    const meta = statusMeta(item.key);
+                    const focus = item.focus;
+                    return (
+                      <Pressable
+                        key={item.key}
+                        disabled={!focus}
+                        onPress={focus ? () => onOpenAttendance(focus) : undefined}
+                        accessibilityRole={focus ? "button" : undefined}
+                        style={[
+                          styles.stat,
+                          { backgroundColor: meta.bg },
+                          meta.needsAction && { borderColor: meta.accent },
+                        ]}
+                      >
+                        <Text style={[styles.statValue, { color: meta.fg }]}>{item.value}</Text>
+                        <Text style={[styles.statLabel, { color: meta.fg }]}>{item.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable onPress={() => onOpenAttendance("going")} accessibilityRole="link">
+                  <Text style={styles.linkLabel}>{tr("Kto gra ›", "Who's playing ›")}</Text>
+                </Pressable>
+                {reminderFeedback ? (
+                  <Text
+                    style={[
+                      styles.reminderFeedback,
+                      reminderFeedback.tone === "success" && styles.reminderFeedbackSuccess,
+                      reminderFeedback.tone === "error" && styles.reminderFeedbackError,
+                    ]}
+                  >
+                    {reminderFeedback.message}
+                  </Text>
+                ) : null}
+              </View>
+
+              {!isDesktop ? setlistCard : null}
+
+              {event.description ? (
+                <View style={styles.card}>
+                  <Text style={styles.kicker}>{tr("Opis", "Details")}</Text>
+                  <Text style={styles.bodyText}>{event.description}</Text>
+                </View>
+              ) : null}
+
+              <View style={styles.card}>
+                <Text style={styles.kicker}>
+                  {tr("Aktualizacje organizatora", "Organizer updates")}
+                </Text>
+                {event.updates.length > 0 ? (
+                  event.updates.map((update, index) => (
+                    <View key={update.id} style={[styles.update, index === 0 && styles.updateLatest]}>
+                      <Text style={styles.meta}>
+                        {update.authorName} · {formatRelativeLabel(update.createdAt)}
+                      </Text>
+                      <Text style={styles.bodyText}>{update.body}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.muted}>
+                    {tr("Brak aktualizacji od organizatorów.", "No organizer updates yet.")}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.card}>
+                <View style={styles.cardHeaderRow}>
+                  <Text style={styles.kicker}>
+                    {tr("Dyskusja", "Discussion")}
+                    {event.comments.length > 0 ? ` · ${event.comments.length}` : ""}
+                  </Text>
+                  {forumUrl ? (
+                    <Pressable
+                      onPress={() => openForumThread(event.id)}
+                      accessibilityRole="link"
+                      hitSlop={8}
+                    >
+                      <Text style={styles.linkLabel}>
+                        {tr("Odpowiedz na forum ↗", "Reply on the forum ↗")}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                {event.comments.length > 0 ? (
+                  event.comments.map((comment) => (
+                    <View key={comment.id} style={styles.comment}>
+                      <Text style={styles.meta}>
+                        {comment.authorName} · {formatRelativeLabel(comment.createdAt)}
+                      </Text>
+                      <Text style={styles.bodyText}>{comment.body}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.muted}>
+                    {tr("Brak komentarzy w wątku na forum.", "No comments in the forum thread yet.")}
+                  </Text>
+                )}
+              </View>
             </View>
-          ) : null}
+
+            {isDesktop ? <View style={styles.rail}>{setlistCard}</View> : null}
+          </View>
         </View>
       </ScrollView>
 
@@ -326,118 +432,191 @@ const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
-  },
-  desktopContent: {
-    alignSelf: "center",
+  inner: {
     width: "100%",
-    maxWidth: 1200,
+    maxWidth: 1080,
+    alignSelf: "center",
   },
-  backLink: {
-    marginBottom: tokens.spacing.xs,
+  hero: {
+    backgroundColor: tokens.colors.brandDeep,
+    paddingHorizontal: tokens.spacing.md,
+    paddingTop: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.lg,
   },
-  backLinkLabel: {
-    color: tokens.colors.brand,
-    fontWeight: "700",
+  heroDesktop: {
+    paddingHorizontal: 48,
+    paddingTop: 28,
+    paddingBottom: 32,
   },
-  desktopSplit: {
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: tokens.spacing.md,
+  },
+  heroButton: {
+    minHeight: 44,
+    minWidth: 44,
+    paddingHorizontal: 12,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.brandDeepRaised,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  heroButtonLabel: {
+    color: tokens.colors.surface,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  heroKicker: {
+    color: tokens.colors.brandDeepAccent,
+    fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+  },
+  heroTitle: {
+    marginTop: 6,
+    color: tokens.colors.surface,
+    fontSize: 30,
+    lineHeight: 34,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  heroTitleDesktop: {
+    fontSize: 44,
+    lineHeight: 48,
+  },
+  heroVenue: {
+    marginTop: tokens.spacing.xs,
+    color: tokens.colors.brandDeepMuted,
+    fontSize: 15,
+  },
+  body: {
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.md,
+  },
+  columns: {
     gap: tokens.spacing.md,
   },
-  desktopSplitActive: {
+  columnsDesktop: {
     flexDirection: "row",
     alignItems: "flex-start",
+    gap: tokens.spacing.lg,
+    paddingTop: tokens.spacing.sm,
   },
-  desktopPrimaryColumn: {
+  primaryColumn: {
     flex: 1,
+    minWidth: 0,
     gap: tokens.spacing.md,
   },
-  desktopRail: {
-    width: 320,
+  rail: {
+    width: 340,
   },
-  cardEyebrow: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    fontWeight: "700",
+  card: {
+    backgroundColor: tokens.colors.surface,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
-  screenTitle: {
-    fontSize: tokens.typography.hero,
-    lineHeight: 34,
-    color: tokens.colors.ink,
-    fontWeight: "700",
+  cardAction: {
+    backgroundColor: tokens.colors.warningSurface,
+    borderColor: tokens.colors.warningBorder,
+    borderWidth: 1.5,
   },
-  cardTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardSecondary: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    color: tokens.colors.muted,
-  },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.body,
-    lineHeight: 23,
-    color: tokens.colors.ink,
-  },
-  updateBlock: {
-    marginTop: tokens.spacing.md,
-    paddingTop: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    gap: tokens.spacing.xs,
-  },
-  updateMeta: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  updateBody: {
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
-    color: tokens.colors.ink,
-  },
-  cardActionRow: {
+  cardHeaderRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: tokens.spacing.sm,
   },
-  cardActionCopy: {
-    flex: 1,
-  },
-  inlineButton: {
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
-  },
-  inlineButtonLabel: {
-    color: tokens.colors.surface,
-    fontWeight: "700",
-  },
-  inlineButtonDisabled: {
-    opacity: 0.75,
-  },
-  cardHint: {
-    marginTop: tokens.spacing.sm,
+  kicker: {
     fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
     color: tokens.colors.muted,
   },
+  kickerAction: {
+    color: tokens.colors.warningInk,
+  },
+  forumButton: {
+    minHeight: 48,
+    borderRadius: tokens.radii.md,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  forumButtonPrimary: {
+    backgroundColor: tokens.colors.brand,
+    borderColor: tokens.colors.brand,
+  },
+  forumButtonLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  forumButtonLabelPrimary: {
+    color: tokens.colors.surface,
+  },
+  hint: {
+    fontSize: tokens.typography.caption,
+    lineHeight: 17,
+    color: tokens.colors.muted,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: tokens.spacing.xs,
+  },
+  stat: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: tokens.spacing.sm,
+    borderRadius: tokens.radii.md,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  statLabel: {
+    fontSize: tokens.typography.caption,
+    fontWeight: "600",
+  },
+  linkLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.brand,
+  },
+  smallButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: tokens.radii.sm,
+    backgroundColor: tokens.colors.brand,
+    justifyContent: "center",
+  },
+  smallButtonDisabled: {
+    opacity: 0.7,
+  },
+  smallButtonLabel: {
+    color: tokens.colors.surface,
+    fontWeight: "600",
+    fontSize: 14,
+  },
   reminderFeedback: {
-    marginTop: tokens.spacing.sm,
     fontSize: tokens.typography.caption,
     lineHeight: 18,
     color: tokens.colors.muted,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   reminderFeedbackSuccess: {
     color: tokens.colors.successInk,
@@ -445,33 +624,56 @@ const styles = StyleSheet.create({
   reminderFeedbackError: {
     color: tokens.colors.dangerInk,
   },
-  commentRow: {
-    marginTop: tokens.spacing.md,
-    paddingTop: tokens.spacing.md,
+  bodyText: {
+    fontSize: tokens.typography.body,
+    lineHeight: 24,
+    color: tokens.colors.ink,
+  },
+  muted: {
+    fontSize: 14,
+    color: tokens.colors.muted,
+  },
+  meta: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  update: {
+    gap: 4,
+    paddingLeft: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: tokens.colors.border,
+  },
+  updateLatest: {
+    borderLeftColor: tokens.colors.brand,
+  },
+  comment: {
+    gap: 4,
+    paddingTop: tokens.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    gap: tokens.spacing.xs,
-  },
-  setlistRailHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
-  },
-  setlistSectionBlock: {
-    marginTop: tokens.spacing.md,
-    gap: tokens.spacing.xs,
+    borderTopColor: tokens.colors.surfaceMuted,
   },
   setlistSectionTitle: {
+    marginTop: tokens.spacing.xs,
     fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
+    fontWeight: "600",
     textTransform: "uppercase",
-    letterSpacing: 1,
-    fontWeight: "700",
+    color: tokens.colors.muted,
   },
-  setlistListText: {
-    fontSize: tokens.typography.body,
-    lineHeight: 20,
+  setlistRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: tokens.colors.surfaceMuted,
+  },
+  setlistIndex: {
+    width: 20,
+    fontSize: 15,
+    color: tokens.colors.muted,
+  },
+  setlistLabel: {
+    flex: 1,
+    fontSize: 15,
     color: tokens.colors.ink,
   },
   popupOverlay: {

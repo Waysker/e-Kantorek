@@ -13,6 +13,8 @@ import type { AttendanceStatus, EventListItem } from "../domain/models";
 import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { stripTitleDatePrefix } from "../utils/format";
+import { StatusPill, statusMeta } from "../ui/StatusPill";
+import { DeclarationPrompt } from "../ui/DeclarationPrompt";
 
 // Pattern: "agenda first". The agenda ("what is coming for me") is the main view;
 // a compact month grid is navigation/overview. Every attendance status is shown
@@ -82,56 +84,6 @@ function buildCells(year: number, month: number): Cell[] {
   return cells;
 }
 
-type StatusMeta = {
-  glyph: string;
-  label: string;
-  bg: string;
-  fg: string;
-  accent: string;
-  needsAction: boolean;
-};
-
-function statusMeta(status: AttendanceStatus): StatusMeta {
-  switch (status) {
-    case "going":
-      return {
-        glyph: "✓",
-        label: tr("Będę", "Going"),
-        bg: tokens.colors.successSurface,
-        fg: tokens.colors.successInk,
-        accent: tokens.colors.successInk,
-        needsAction: false,
-      };
-    case "not_going":
-      return {
-        glyph: "✕",
-        label: tr("Nie będę", "Not going"),
-        bg: tokens.colors.dangerSurface,
-        fg: tokens.colors.dangerInk,
-        accent: tokens.colors.dangerInk,
-        needsAction: false,
-      };
-    case "maybe":
-      return {
-        glyph: "?",
-        label: tr("Może", "Maybe"),
-        bg: tokens.colors.neutralSurface,
-        fg: tokens.colors.neutralInk,
-        accent: tokens.colors.neutralInk,
-        needsAction: false,
-      };
-    default:
-      return {
-        glyph: "!",
-        label: tr("Brak deklaracji", "No response"),
-        bg: tokens.colors.warningSurface,
-        fg: tokens.colors.warningInk,
-        accent: tokens.colors.warningBorder,
-        needsAction: true,
-      };
-  }
-}
-
 // When one day has several events, the cell shows the one that needs attention most.
 const STATUS_PRIORITY: AttendanceStatus[] = ["no_response", "maybe", "going", "not_going"];
 
@@ -142,23 +94,6 @@ function dominantStatus(dayEvents: EventListItem[]): AttendanceStatus {
     }
   }
   return "no_response";
-}
-
-function StatusPill({ status }: { status: AttendanceStatus }) {
-  const meta = statusMeta(status);
-  return (
-    <View
-      style={[
-        styles.pill,
-        { backgroundColor: meta.bg },
-        meta.needsAction && styles.pillDashed,
-      ]}
-    >
-      <Text style={[styles.pillLabel, { color: meta.fg }]}>
-        {meta.glyph} {meta.label}
-      </Text>
-    </View>
-  );
 }
 
 type AgendaItem =
@@ -462,28 +397,7 @@ export function CalendarScreen({ events, onOpenEvent }: CalendarScreenProps) {
   const actionBanner =
     needsResponse.length > 0 ? (
       <View style={styles.actionBanner}>
-        <View style={styles.actionCount}>
-          <Text style={styles.actionCountLabel}>{needsResponse.length}</Text>
-        </View>
-        <View style={styles.actionBody}>
-          <Text style={styles.actionTitle}>
-            {needsResponse.length === 1
-              ? tr("Wydarzenie czeka na Twoją odpowiedź", "An event is waiting for your response")
-              : tr("Wydarzenia czekają na Twoją odpowiedź", "Events are waiting for your response")}
-          </Text>
-          <Text style={styles.actionMeta}>
-            {stripTitleDatePrefix(needsResponse[0].title)} ·{" "}
-            {SHORT_DAY_MONTH.format(new Date(keyToUtc(dateKey(needsResponse[0].startsAt))))}
-            {needsResponse.length > 1 ? ` +${needsResponse.length - 1}` : ""}
-          </Text>
-        </View>
-        <Pressable
-          onPress={() => onOpenEvent(needsResponse[0].id)}
-          style={styles.actionButton}
-          accessibilityRole="button"
-        >
-          <Text style={styles.actionButtonLabel}>{tr("Odpowiedz", "Respond")}</Text>
-        </Pressable>
+        <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />
       </View>
     ) : null;
 
@@ -793,35 +707,8 @@ const styles = StyleSheet.create({
   },
   screenTitle: { fontSize: tokens.typography.hero, lineHeight: 36, color: tokens.colors.ink, fontWeight: "700" },
   actionBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.md,
-    padding: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.ink,
     marginBottom: tokens.spacing.sm,
   },
-  actionCount: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionCountLabel: { fontSize: 18, fontWeight: "700", color: tokens.colors.ink },
-  actionBody: { flex: 1 },
-  actionTitle: { fontSize: tokens.typography.body, fontWeight: "700", color: tokens.colors.surface },
-  actionMeta: { fontSize: 13, color: tokens.colors.surfaceMuted, marginTop: 2 },
-  actionButton: {
-    minHeight: 44,
-    paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionButtonLabel: { fontSize: 14, fontWeight: "700", color: tokens.colors.ink },
   sectionHeader: {
     fontSize: tokens.typography.caption,
     fontWeight: "700",

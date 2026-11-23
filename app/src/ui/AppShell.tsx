@@ -28,6 +28,9 @@ type AppShellProps = {
 };
 
 function getTabLabel(tab: PrimaryTab): string {
+  if (tab === "home") {
+    return tr("Start", "Home");
+  }
   if (tab === "events") {
     return tr("Wydarzenia", "Events");
   }
@@ -41,6 +44,9 @@ function getTabLabel(tab: PrimaryTab): string {
 }
 
 function getTabIcon(tab: PrimaryTab): IconName {
+  if (tab === "home") {
+    return "home";
+  }
   if (tab === "events") {
     return "list";
   }

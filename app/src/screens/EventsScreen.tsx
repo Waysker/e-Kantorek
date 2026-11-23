@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import type { EventListItem } from "../domain/models";
-import { tr } from "../i18n";
+import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { formatDateLabel } from "../utils/format";
-import { SurfaceCard } from "../ui/SurfaceCard";
+import { stripTitleDatePrefix } from "../utils/format";
+import { StatusPill } from "../ui/StatusPill";
 
 type EventsScreenProps = {
   events: EventListItem[];
@@ -14,83 +14,130 @@ type EventsScreenProps = {
 
 type EventsTab = "upcoming" | "past";
 
-const WARSAW_DATE_FORMAT = new Intl.DateTimeFormat("en-CA", {
+const WARSAW_DATE_KEY = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Warsaw",
   year: "numeric",
   month: "2-digit",
   day: "2-digit",
 });
+const WARSAW_WEEKDAY = new Intl.DateTimeFormat(appLocaleTag, {
+  timeZone: "Europe/Warsaw",
+  weekday: "short",
+});
+const WARSAW_DAY = new Intl.DateTimeFormat(appLocaleTag, {
+  timeZone: "Europe/Warsaw",
+  day: "numeric",
+});
+const WARSAW_TIME = new Intl.DateTimeFormat(appLocaleTag, {
+  timeZone: "Europe/Warsaw",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+const WARSAW_MONTH = new Intl.DateTimeFormat(appLocaleTag, {
+  timeZone: "Europe/Warsaw",
+  month: "long",
+  year: "numeric",
+});
 
 function toWarsawDateKey(value: string | Date) {
-  return WARSAW_DATE_FORMAT.format(value instanceof Date ? value : new Date(value));
+  return WARSAW_DATE_KEY.format(value instanceof Date ? value : new Date(value));
 }
 
-function sortByNearestUpcoming(left: EventListItem, right: EventListItem) {
-  return new Date(left.startsAt).getTime() - new Date(right.startsAt).getTime();
+function capitalize(value: string) {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function sortByNearestPast(left: EventListItem, right: EventListItem) {
-  return new Date(right.startsAt).getTime() - new Date(left.startsAt).getTime();
-}
+type MonthGroup = { key: string; label: string; events: EventListItem[] };
 
-function getAttendanceLabel(status: EventListItem["attendanceStatus"]) {
-  if (status === "going") {
-    return tr("Będę", "Going");
+function groupByMonth(events: EventListItem[]): MonthGroup[] {
+  const groups: MonthGroup[] = [];
+  for (const event of events) {
+    const key = toWarsawDateKey(event.startsAt).slice(0, 7);
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.events.push(event);
+    } else {
+      groups.push({
+        key,
+        label: capitalize(WARSAW_MONTH.format(new Date(event.startsAt))),
+        events: [event],
+      });
+    }
   }
-  if (status === "maybe") {
-    return tr("Może", "Maybe");
-  }
-  if (status === "not_going") {
-    return tr("Nie będę", "Not going");
-  }
-  return tr("Brak deklaracji", "No response");
+  return groups;
 }
 
 export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= tokens.breakpoints.desktop;
   const [activeTab, setActiveTab] = useState<EventsTab>("upcoming");
+  const [onlyNeedsResponse, setOnlyNeedsResponse] = useState(false);
   const todayKey = toWarsawDateKey(new Date());
 
-  const upcomingEvents = events
-    .filter((event) => toWarsawDateKey(event.startsAt) >= todayKey)
-    .sort(sortByNearestUpcoming);
-  const pastEvents = events
-    .filter((event) => toWarsawDateKey(event.startsAt) < todayKey)
-    .sort(sortByNearestPast);
+  const { upcomingEvents, pastEvents } = useMemo(() => {
+    const upcoming = events
+      .filter((event) => toWarsawDateKey(event.startsAt) >= todayKey)
+      .sort((left, right) => Date.parse(left.startsAt) - Date.parse(right.startsAt));
+    const past = events
+      .filter((event) => toWarsawDateKey(event.startsAt) < todayKey)
+      .sort((left, right) => Date.parse(right.startsAt) - Date.parse(left.startsAt));
+    return { upcomingEvents: upcoming, pastEvents: past };
+  }, [events, todayKey]);
 
-  const visibleEvents = activeTab === "upcoming" ? upcomingEvents : pastEvents;
+  const needsResponseCount = upcomingEvents.filter(
+    (event) => event.attendanceStatus === "no_response",
+  ).length;
+  const filterActive = activeTab === "upcoming" && onlyNeedsResponse;
+  const visibleEvents = (activeTab === "upcoming" ? upcomingEvents : pastEvents).filter(
+    (event) => !filterActive || event.attendanceStatus === "no_response",
+  );
+  const groups = groupByMonth(visibleEvents);
 
   return (
     <ScrollView
       style={styles.screenScroll}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={[styles.screenContent, isDesktop && styles.screenContentDesktop]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.screenHeaderBlock}>
-        <Text style={styles.kicker}>{tr("Wydarzenia", "Events")}</Text>
-        <Text style={styles.screenTitle}>{tr("Najbliższe wydarzenia", "Closest first by date")}</Text>
+      <Text style={styles.screenTitle}>{tr("Wydarzenia", "Events")}</Text>
+
+      <View style={styles.segmented} accessibilityRole="tablist">
+        {(["upcoming", "past"] as const).map((tab) => {
+          const isActive = activeTab === tab;
+          const count = tab === "upcoming" ? upcomingEvents.length : pastEvents.length;
+          return (
+            <Pressable
+              key={tab}
+              onPress={() => setActiveTab(tab)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.segment, isActive && styles.segmentActive]}
+            >
+              <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>
+                {tab === "upcoming" ? tr("Nadchodzące", "Upcoming") : tr("Minione", "Past")} ·{" "}
+                {count}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
 
-      <View style={styles.tabRow}>
+      {activeTab === "upcoming" && needsResponseCount > 0 ? (
         <Pressable
-          onPress={() => setActiveTab("upcoming")}
-          style={[styles.tabButton, activeTab === "upcoming" && styles.tabButtonActive]}
+          onPress={() => setOnlyNeedsResponse((value) => !value)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: onlyNeedsResponse }}
+          style={[styles.filterChip, onlyNeedsResponse && styles.filterChipActive]}
         >
-          <Text style={[styles.tabLabel, activeTab === "upcoming" && styles.tabLabelActive]}>
-            {tr("Nadchodzące", "Upcoming")} ({upcomingEvents.length})
+          <Text style={[styles.filterChipLabel, onlyNeedsResponse && styles.filterChipLabelActive]}>
+            {onlyNeedsResponse ? "✓ " : "! "}
+            {tr("Bez deklaracji", "No response")} · {needsResponseCount}
           </Text>
         </Pressable>
-        <Pressable
-          onPress={() => setActiveTab("past")}
-          style={[styles.tabButton, activeTab === "past" && styles.tabButtonActive]}
-        >
-          <Text style={[styles.tabLabel, activeTab === "past" && styles.tabLabelActive]}>
-            {tr("Minione", "Past")} ({pastEvents.length})
-          </Text>
-        </Pressable>
-      </View>
+      ) : null}
 
-      {visibleEvents.length === 0 ? (
-        <SurfaceCard variant="outline">
+      {groups.length === 0 ? (
+        <View style={styles.emptyBox}>
           <Text style={styles.emptyTitle}>
             {activeTab === "upcoming"
               ? tr("Brak nadchodzących wydarzeń.", "No upcoming events.")
@@ -99,39 +146,51 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
           <Text style={styles.emptyCopy}>
             {tr(
               "Wątki z forum pojawią się tutaj automatycznie.",
-              "Synced forum threads will appear here automatically.",
+              "Forum threads will appear here automatically.",
             )}
           </Text>
-        </SurfaceCard>
+        </View>
       ) : (
-        visibleEvents.map((event) => (
-          <Pressable key={event.id} onPress={() => onOpenEvent(event.id)}>
-            <SurfaceCard variant="default">
-              <View style={styles.eventCardTop}>
-                <Text style={styles.eventDateLabel}>{formatDateLabel(event.startsAt)}</Text>
-                <View style={styles.eventActionsColumn}>
-                  <Text
-                    style={[
-                      styles.attendanceChip,
-                      event.attendanceStatus === "going" && styles.attendanceChipPositive,
-                      event.attendanceStatus === "maybe" && styles.attendanceChipMuted,
-                      event.attendanceStatus === "not_going" && styles.attendanceChipNegative,
+        groups.map((group) => (
+          <View key={group.key} style={styles.group}>
+            <Text style={styles.groupLabel}>{group.label}</Text>
+            <View style={styles.list}>
+              {group.events.map((event, index) => {
+                const date = new Date(event.startsAt);
+                const isPast = activeTab === "past";
+                return (
+                  <Pressable
+                    key={event.id}
+                    onPress={() => onOpenEvent(event.id)}
+                    accessibilityRole="link"
+                    style={(state) => [
+                      styles.row,
+                      index > 0 && styles.rowDivider,
+                      ((state as { hovered?: boolean }).hovered || state.pressed) &&
+                        styles.rowHovered,
                     ]}
                   >
-                    {getAttendanceLabel(event.attendanceStatus)}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={styles.cardTitle}>{event.title}</Text>
-              {event.venue ? <Text style={styles.cardSecondary}>{event.venue}</Text> : null}
-              <Text style={styles.cardBody}>{event.preview}</Text>
-              <Text style={styles.cardFooter}>
-                {event.updateCount} {tr("aktualizacji", "updates")} - {event.commentCount}{" "}
-                {tr("komentarzy", "comments")}
-              </Text>
-            </SurfaceCard>
-          </Pressable>
+                    <View style={styles.dateAnchor}>
+                      <Text style={styles.weekday}>{WARSAW_WEEKDAY.format(date)}</Text>
+                      <Text style={[styles.day, isPast && styles.dayPast]}>
+                        {WARSAW_DAY.format(date)}
+                      </Text>
+                    </View>
+                    <View style={styles.rowBody}>
+                      <Text style={[styles.rowTitle, isPast && styles.rowTitlePast]} numberOfLines={2}>
+                        {stripTitleDatePrefix(event.title)}
+                      </Text>
+                      <Text style={styles.rowMeta} numberOfLines={1}>
+                        {WARSAW_TIME.format(date)}
+                        {event.venue ? ` · ${event.venue}` : ""}
+                      </Text>
+                    </View>
+                    <StatusPill status={event.attendanceStatus} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
         ))
       )}
     </ScrollView>
@@ -143,124 +202,160 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   screenContent: {
-    padding: tokens.spacing.lg,
+    padding: tokens.spacing.md,
+    paddingTop: tokens.spacing.lg,
     gap: tokens.spacing.md,
   },
-  screenHeaderBlock: {
-    gap: tokens.spacing.xs,
-  },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    color: tokens.colors.muted,
-    fontWeight: "700",
+  screenContentDesktop: {
+    width: "100%",
+    maxWidth: 880,
+    alignSelf: "center",
+    paddingHorizontal: tokens.spacing.xl,
+    paddingTop: tokens.spacing.xl,
   },
   screenTitle: {
     fontSize: tokens.typography.hero,
-    lineHeight: 34,
+    lineHeight: 36,
+    fontWeight: "800",
+    letterSpacing: -0.5,
     color: tokens.colors.ink,
-    fontWeight: "700",
   },
-  tabRow: {
+  segmented: {
     flexDirection: "row",
-    gap: tokens.spacing.sm,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.round,
+    gap: 4,
+    padding: 4,
+    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 9,
     alignItems: "center",
+    justifyContent: "center",
   },
-  tabButtonActive: {
-    backgroundColor: tokens.colors.brandTint,
-    borderColor: tokens.colors.brand,
+  segmentActive: {
+    backgroundColor: tokens.colors.surface,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
-  tabLabel: {
-    fontSize: tokens.typography.caption,
+  segmentLabel: {
+    fontSize: 14,
+    fontWeight: "600",
     color: tokens.colors.muted,
-    fontWeight: "700",
   },
-  tabLabelActive: {
-    color: tokens.colors.brand,
-  },
-  emptyTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
+  segmentLabelActive: {
     color: tokens.colors.ink,
-    fontWeight: "700",
   },
-  emptyCopy: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
-    color: tokens.colors.muted,
+  filterChip: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: tokens.radii.round,
+    borderWidth: 1.5,
+    borderColor: tokens.colors.warningBorder,
+    backgroundColor: tokens.colors.warningSurface,
+    justifyContent: "center",
   },
-  eventCardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: tokens.spacing.sm,
+  filterChipActive: {
+    backgroundColor: tokens.colors.warningBorder,
   },
-  eventActionsColumn: {
-    alignItems: "flex-end",
+  filterChipLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.warningInk,
+  },
+  filterChipLabelActive: {
+    color: tokens.colors.surface,
+  },
+  group: {
     gap: tokens.spacing.xs,
   },
-  eventDateLabel: {
+  groupLabel: {
     fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
     textTransform: "uppercase",
-    letterSpacing: 1,
     color: tokens.colors.muted,
-    fontWeight: "700",
+    paddingHorizontal: 4,
   },
-  attendanceChip: {
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.surfaceMuted,
-    color: tokens.colors.muted,
+  list: {
+    backgroundColor: tokens.colors.surface,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
     overflow: "hidden",
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
   },
-  attendanceChipPositive: {
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 64,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  attendanceChipMuted: {
-    backgroundColor: tokens.colors.surfaceMuted,
+  rowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
+  },
+  rowHovered: {
+    backgroundColor: tokens.colors.paper,
+  },
+  dateAnchor: {
+    width: 44,
+    alignItems: "center",
+  },
+  weekday: {
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "uppercase",
     color: tokens.colors.muted,
   },
-  attendanceChipNegative: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-  },
-  cardTitle: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
+  day: {
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: "800",
     color: tokens.colors.ink,
-    fontWeight: "700",
   },
-  cardSecondary: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
+  dayPast: {
     color: tokens.colors.muted,
   },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.body,
-    lineHeight: 23,
+  rowBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  rowTitle: {
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: "600",
     color: tokens.colors.ink,
   },
-  cardFooter: {
-    marginTop: tokens.spacing.md,
-    fontSize: tokens.typography.caption,
+  rowTitlePast: {
+    color: tokens.colors.muted,
+  },
+  rowMeta: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  emptyBox: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radii.lg,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: tokens.colors.borderStrong,
+    gap: tokens.spacing.xs,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: tokens.colors.ink,
+  },
+  emptyCopy: {
+    fontSize: 14,
+    lineHeight: 20,
     color: tokens.colors.muted,
   },
 });

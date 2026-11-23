@@ -26,6 +26,7 @@ import { BoardSubNav } from "./src/ui/BoardSubNav";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
+import { StartScreen } from "./src/screens/StartScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { EventsScreen } from "./src/screens/EventsScreen";
 import { AuthScreen } from "./src/screens/AuthScreen";
@@ -151,7 +152,7 @@ type ReminderDispatchResult = {
 };
 
 type AuthView = "sign_in" | "register";
-const ROOT_ROUTE: AppRoute = { name: "events" };
+const ROOT_ROUTE: AppRoute = { name: "home" };
 const HISTORY_STATE_MARKER = "__oragh_route_stack__";
 const NOTIFICATION_FETCH_LIMIT = 80;
 
@@ -234,8 +235,10 @@ function isValidAppRoute(value: unknown): value is AppRoute {
   }
 
   if (
+    candidate.name === "home" ||
     candidate.name === "events" ||
     candidate.name === "calendar" ||
+    candidate.name === "instrumentMapping" ||
     candidate.name === "profile" ||
     candidate.name === "attendanceWorkspace" ||
     candidate.name === "attendanceManager" ||
@@ -939,6 +942,7 @@ export default function App() {
   ];
   const activeBoardSection = routeToBoardSection(route);
   const navigationTabs: PrimaryTab[] = [
+    "home",
     "events",
     "calendar",
     ...(boardSections.length > 0 ? (["board"] as const) : []),
@@ -1052,6 +1056,11 @@ export default function App() {
   }
 
   function openTab(tab: PrimaryTab) {
+    if (tab === "home") {
+      resetToRoute({ name: "home" });
+      return;
+    }
+
     if (tab === "events") {
       resetToRoute({ name: "events" });
       return;
@@ -1077,6 +1086,18 @@ export default function App() {
 
   function renderScreen() {
     switch (route.name) {
+      case "home":
+        return (
+          <StartScreen
+            events={events}
+            firstName={effectiveCurrentUser.fullName.trim().split(/\s+/)[0] || null}
+            unreadNotificationsCount={unreadNotificationsCount}
+            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
+            onOpenEvents={() => resetToRoute({ name: "events" })}
+            onOpenCalendar={() => resetToRoute({ name: "calendar" })}
+            onOpenNotifications={() => resetToRoute({ name: "profile" })}
+          />
+        );
       case "events":
         return (
           <EventsScreen

@@ -68,6 +68,10 @@ export function formatRelativeLabel(value: string) {
   const diffHours = Math.round((target - now) / (1000 * 60 * 60));
 
   if (Math.abs(diffHours) < 24) {
+    const diffMinutes = Math.round((target - now) / (1000 * 60));
+    if (Math.abs(diffMinutes) < 60) {
+      return formatRelativeTime(diffMinutes, "minute", { numeric: "auto", style: "long" });
+    }
     return formatRelativeTime(diffHours, "hour", {
       numeric: "always",
       style: "long",
