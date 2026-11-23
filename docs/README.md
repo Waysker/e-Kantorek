@@ -27,7 +27,7 @@
 
 ## App design
 
-- `docs/design-system.md` — the "Partytura" design system: tokens, text styles, components, patterns (status, declarations, people lists, navigation) and copy rules. Read before adding or changing a screen.
+- `docs/design-system.md` — the "Partytura" design system: where its source of truth lives (Claude Design), how a change travels (system first, then code) and where each token and component lives in the code. Read before adding or changing a screen.
 
 ## Supabase hosting
 

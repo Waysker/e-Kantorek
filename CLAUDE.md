@@ -29,14 +29,9 @@ Pełny opis procesu: `docs/ops/forum-instrument-mapping.md`.
 
 ## Design system („Partytura”)
 
-Pełny opis: `docs/design-system.md`. Przeczytaj przed dodaniem lub zmianą ekranu.
-
-- Źródło prawdy to kod: `app/src/theme/tokens.ts`, `app/src/theme/text.ts` (`textStyles`) i komponenty w `app/src/ui/` (`StatusPill`, `DeclarationPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `Icon`). Używaj ich zamiast kopiować style.
-- Kolor = znaczenie. Bursztyn (`warning*`) tylko dla „czeka na Twoją reakcję”. Status zawsze przez `StatusPill`/`statusMeta` (kolor + znak + kształt).
-- Deklaracje tylko przez ankietę na forum (`app/src/domain/forumLinks.ts`, „Zadeklaruj na forum ↗”); aplikacja ich nie zapisuje. Nie pokazuj liczników „może” ani „brak”.
-- Tytuły z forum bez daty (`stripTitleDatePrefix`). Listy osób sortuj po nazwisku, wielokolumnowe wypełniaj kolumnami z góry na dół.
-- Teksty po polsku z pełnymi znakami, bez żargonu technicznego dla członków.
-- Dostępność: obrys kontrolek `controlBorder` (nie `border`/`borderStrong`), fokus klawiatury rysuje się globalnie i nie wolno go wyłączać, cele dotyku ≥ 44 px.
-- Nawigacja: 4 zakładki (Start, Wydarzenia, Zarząd, Ja); narzędzia zarządu jako podzakładki „Zarząd”.
+- **Źródło prawdy to design system w Claude Design: „e-Kantorek — Partytura”** (https://claude.ai/artifact/7t7fK3rmrXjjaeqGui5EAg, slug `37b9de72-575f-43a9-9588-71a46984de75`). Decyzje (tokeny, typografia, zasady, specyfikacja komponentów, ton tekstów) żyją tam. Przed pracą nad UI przeczytaj jego `project/README.md` (narzędzia claude-artifacts: `read_file`), a przy zmianie wartości `project/tokens.json`.
+- **Kod implementuje system:** `app/src/theme/tokens.ts`, `app/src/theme/text.ts` i komponenty w `app/src/ui/`. Mapa kod ↔ system i sposób sprawdzania: `docs/design-system.md`.
+- **Zmiany idą w jedną stronę: najpierw system, potem kod.** Nowy kolor, rozmiar, komponent lub zasada → najpierw do systemu (za zgodą użytkownika), potem wdrożenie w kodzie. Nie zmieniaj wartości tokenów ani wyglądu komponentów tylko w kodzie. Gdy kod i system się różnią, wygrywa system: zgłoś rozbieżność, nie „naprawiaj” systemu pod kod.
+- Używaj komponentów z `app/src/ui/` zamiast kopiować style.
+- Najważniejsze zasady (skrót, pełne w systemie): kolor = znaczenie, bursztyn tylko dla „czeka na Twoją reakcję”; status zawsze przez `StatusPill`; deklaracje tylko przez ankietę na forum (bez liczników „może”/„brak”); tytuły z forum bez daty; listy osób po nazwisku, kolumnami z góry na dół; teksty po polsku z pełnymi znakami, bez żargonu; obrys kontrolek `controlBorder`, globalny fokus klawiatury, cele dotyku ≥ 44 px; 4 zakładki (Start, Wydarzenia, Zarząd, Ja).
 - Ponaglenia ukryte flagą `ATTENDANCE_REMINDERS_ENABLED` w `app/App.tsx`.
-- Sprawdzaj zmiany na webie w obu szerokościach (≥960 i 375); ekran logowania bez wylogowania: `http://[::1]:<port>`.
