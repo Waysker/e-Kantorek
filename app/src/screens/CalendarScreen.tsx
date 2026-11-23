@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -301,6 +302,22 @@ export function CalendarScreen({ events, onOpenEvent }: CalendarScreenProps) {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }
 
+  // Horizontal swipe between weeks (mobile). Claims the gesture only when the
+  // movement is clearly horizontal, so vertical list scrolling is unaffected.
+  const swipeResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_event, gesture) =>
+        Math.abs(gesture.dx) > 20 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 2,
+      onPanResponderRelease: (_event, gesture) => {
+        if (Math.abs(gesture.dx) < 60) {
+          return;
+        }
+        // Swipe left -> next week, swipe right -> previous week.
+        shiftWeek(gesture.dx < 0 ? 1 : -1);
+      },
+    }),
+  ).current;
+
   useEffect(() => {
     offsets.current = {};
   }, [showPast]);
@@ -550,7 +567,7 @@ export function CalendarScreen({ events, onOpenEvent }: CalendarScreenProps) {
   const nextUpcoming = upcoming[0];
 
   return (
-    <View style={styles.mobileRoot}>
+    <View style={styles.mobileRoot} {...swipeResponder.panHandlers}>
       <View style={styles.weekHeader}>
         <View style={styles.monthHeader}>
           <Text style={styles.weekTitle}>{weekLabel}</Text>
