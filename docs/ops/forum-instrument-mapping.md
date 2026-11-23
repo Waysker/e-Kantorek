@@ -41,6 +41,7 @@ Keep the two in sync when adding an instrument.
 | In-app banner | `app/src/ui/UnmappedMembersBanner.tsx`, `app/src/domain/unmappedMembers.ts` |
 | Mapping panel | `app/src/screens/InstrumentMappingScreen.tsx` (tab `instruments`, route `instrumentMapping`) |
 | SQL | `app/supabase/migrations/027_forum_instrument_mapping_rpc.sql` |
+| Tests | `app/scripts/sql-tests/forum-instrument-mapping.test.mjs` (RPCs on in-process Postgres/PGlite) and `app/scripts/lib/overrides-merge.test.mjs`; run `npm test` in `app/`, also in CI (`CI Tests`) |
 
 The RPCs are `security definer` and check `profiles.role in ('board', 'admin')`:
 
