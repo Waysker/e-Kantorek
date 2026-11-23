@@ -34,9 +34,6 @@ function getTabLabel(tab: PrimaryTab): string {
   if (tab === "events") {
     return tr("Wydarzenia", "Events");
   }
-  if (tab === "calendar") {
-    return tr("Kalendarz", "Calendar");
-  }
   if (tab === "board") {
     return tr("Zarząd", "Board");
   }
@@ -49,9 +46,6 @@ function getTabIcon(tab: PrimaryTab): IconName {
   }
   if (tab === "events") {
     return "list";
-  }
-  if (tab === "calendar") {
-    return "calendar";
   }
   if (tab === "board") {
     return "board";

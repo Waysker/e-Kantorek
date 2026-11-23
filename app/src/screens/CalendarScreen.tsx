@@ -23,6 +23,8 @@ import { DeclarationPrompt } from "../ui/DeclarationPrompt";
 type CalendarScreenProps = {
   events: EventListItem[];
   onOpenEvent: (eventId: string) => void;
+  /** Inside the Events hub the hub header already shows the title. */
+  hideTitle?: boolean;
 };
 
 const WARSAW_DATE = new Intl.DateTimeFormat("en-CA", {
@@ -100,7 +102,7 @@ type AgendaItem =
   | { kind: "header"; id: string; label: string; accent?: boolean }
   | { kind: "event"; id: string; event: EventListItem; dayKey: string; muted: boolean };
 
-export function CalendarScreen({ events, onOpenEvent }: CalendarScreenProps) {
+export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const todayKey = dateKey(new Date());
@@ -408,12 +410,14 @@ export function CalendarScreen({ events, onOpenEvent }: CalendarScreenProps) {
       contentContainerStyle={[styles.agendaContent, isDesktop && styles.agendaContentDesktop]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.titleBlock}>
-        <Text style={styles.kicker}>{tr("Kalendarz", "Calendar")}</Text>
-        <View style={styles.titleRow}>
-          <Text style={styles.screenTitle}>{tr("Co mnie czeka", "What's coming up")}</Text>
+      {!hideTitle ? (
+        <View style={styles.titleBlock}>
+          <Text style={styles.kicker}>{tr("Kalendarz", "Calendar")}</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.screenTitle}>{tr("Co mnie czeka", "What's coming up")}</Text>
+          </View>
         </View>
-      </View>
+      ) : null}
 
       {actionBanner}
 

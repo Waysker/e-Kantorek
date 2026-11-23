@@ -10,6 +10,8 @@ import { StatusPill } from "../ui/StatusPill";
 type EventsScreenProps = {
   events: EventListItem[];
   onOpenEvent: (eventId: string) => void;
+  /** Inside the Events hub the hub header already shows the title. */
+  hideTitle?: boolean;
 };
 
 type EventsTab = "upcoming" | "past";
@@ -67,7 +69,7 @@ function groupByMonth(events: EventListItem[]): MonthGroup[] {
   return groups;
 }
 
-export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
+export function EventsScreen({ events, onOpenEvent, hideTitle }: EventsScreenProps) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const [activeTab, setActiveTab] = useState<EventsTab>("upcoming");
@@ -99,7 +101,7 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
       contentContainerStyle={[styles.screenContent, isDesktop && styles.screenContentDesktop]}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.screenTitle}>{tr("Wydarzenia", "Events")}</Text>
+      {!hideTitle ? <Text style={styles.screenTitle}>{tr("Wydarzenia", "Events")}</Text> : null}
 
       <View style={styles.segmented} accessibilityRole="tablist">
         {(["upcoming", "past"] as const).map((tab) => {

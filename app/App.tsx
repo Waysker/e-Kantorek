@@ -26,6 +26,7 @@ import { BoardSubNav } from "./src/ui/BoardSubNav";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
+import { EventsHubScreen, type EventsView } from "./src/screens/EventsHubScreen";
 import { StartScreen } from "./src/screens/StartScreen";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { EventsScreen } from "./src/screens/EventsScreen";
@@ -308,6 +309,7 @@ export default function App() {
   const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
   const [isMarkingNotificationsRead, setIsMarkingNotificationsRead] = useState(false);
   const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
+  const [lastEventsView, setLastEventsView] = useState<EventsView>("events");
   const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
   const browserHistoryRestoreRef = useRef(false);
   const isWeb = Platform.OS === "web";
@@ -953,7 +955,6 @@ export default function App() {
   const navigationTabs: PrimaryTab[] = [
     "home",
     "events",
-    "calendar",
     ...(boardSections.length > 0 ? (["board"] as const) : []),
     "profile",
   ];
@@ -1075,12 +1076,8 @@ export default function App() {
     }
 
     if (tab === "events") {
-      resetToRoute({ name: "events" });
-      return;
-    }
-
-    if (tab === "calendar") {
-      resetToRoute({ name: "calendar" });
+      // Reopen the view (list or calendar) the user used last.
+      resetToRoute({ name: lastEventsView });
       return;
     }
 
@@ -1107,22 +1104,36 @@ export default function App() {
             unreadNotificationsCount={unreadNotificationsCount}
             onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
             onOpenEvents={() => resetToRoute({ name: "events" })}
-            onOpenCalendar={() => resetToRoute({ name: "calendar" })}
+            onOpenCalendar={() => {
+              setLastEventsView("calendar");
+              resetToRoute({ name: "calendar" });
+            }}
             onOpenNotifications={() => resetToRoute({ name: "profile" })}
           />
         );
       case "events":
-        return (
-          <EventsScreen
-            events={events}
-            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
-          />
-        );
       case "calendar":
         return (
-          <CalendarScreen
-            events={events}
-            onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
+          <EventsHubScreen
+            view={route.name}
+            onChangeView={(view) => {
+              setLastEventsView(view);
+              resetToRoute({ name: view });
+            }}
+            renderList={() => (
+              <EventsScreen
+                events={events}
+                hideTitle
+                onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
+              />
+            )}
+            renderCalendar={() => (
+              <CalendarScreen
+                events={events}
+                hideTitle
+                onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
+              />
+            )}
           />
         );
       case "eventDetail":
