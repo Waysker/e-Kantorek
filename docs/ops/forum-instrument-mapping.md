@@ -15,23 +15,24 @@ group "Instrument not mapped yet".
 3. Alerts, so it cannot be missed:
    - ntfy push from `notify.sh unmapped` on the first sync that sees a new member,
      repeated every 24h (`UNMAPPED_REPEAT_HOURS`) while anyone is still unmapped.
-   - In-app banner for `section`, `board` and `admin` roles, listing the names. Board/admin are
-     pointed to the Instruments tab; section leaders (who cannot assign) are asked to tell the board
-     which instrument the person plays. The banner lists all unmapped people, not only one
-     section, because an unmapped member has no section yet.
-4. Board/admin opens the **Instruments** tab (sub-tab "To assign"), picks an instrument for each
+   - In the app, board/admin see a count badge on the "Zarząd" tab and on its "Instrumenty"
+     sub-tab ("N do przypisania"). Section leaders (who cannot assign) instead see a banner with
+     the names, asking them to tell the board which instrument the person plays. The banner lists
+     all unmapped people, not only one section, because an unmapped member has no section yet.
+4. Board/admin opens **Zarząd → Instrumenty** (view "Do przypisania"), picks an instrument for each
    person. The tab calls `set_forum_member_instrument`, which writes the entry to
    `byUid` (forum UID) or `byFullName` (when the member has no numeric UID).
 5. The entry takes effect on the next sync (up to ~20 min). Until then the card shows
-   "Saved, waiting for sync". Once the member is mapped, the banner and push stop.
+   the chosen instrument with a note that it applies after the sync. Once the member is mapped, the
+   badge, banner and push stop.
 
 ## Fixing a mistake
 
-Sub-tab **Mapped** lists every entry in `forum_instrument_overrides` (searchable by name, UID or
+View **Przypisani** lists every entry in `forum_instrument_overrides` (searchable by name, UID or
 instrument). Tap an entry and pick another instrument; this calls
 `change_forum_instrument_mapping`. Names come from the latest snapshot; entries for people who are
 not in the current snapshot show as `UID <n>`. Entries cannot be deleted from the panel.
-Sub-tab **History** shows the last 50 changes (who, when, old and new instrument).
+View **Historia** shows the last 50 changes (who, when, old and new instrument).
 
 Forum UID and full name are visible in the Instruments tab. The instrument is not
 shown on forum profiles, so someone has to know it (ask the section leader).

@@ -1,21 +1,11 @@
 import { useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import type { OraghInstrument } from "../auth/instruments";
 import { ORAGH_INSTRUMENT_OPTIONS } from "../auth/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { AuthLayout } from "../ui/AuthLayout";
 
 export type RegisterPayload = {
   firstName: string;
@@ -111,8 +101,6 @@ export function RegisterScreen({
   isSubmitting,
   errorMessage,
 }: RegisterScreenProps) {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= tokens.breakpoints.desktop;
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [instrument, setInstrument] = useState<OraghInstrument | null>(null);
@@ -198,19 +186,14 @@ export function RegisterScreen({
   const showPasswordConfirmationError = shouldShowError("passwordConfirmation");
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={Platform.select({ ios: "padding", default: undefined })}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-            <Text style={styles.eyebrow}>e-Kantorek</Text>
+    <AuthLayout>
             <Text style={styles.title}>{tr("Załóż konto", "Create account")}</Text>
+            <Text style={styles.subtitle}>
+              {tr(
+                "Konto w e-Kantorku jest osobne od konta na forum.",
+                "Your e-Kantorek account is separate from the forum.",
+              )}
+            </Text>
 
             <Text style={styles.label}>{tr("Imię", "First name")}</Text>
             <TextInput
@@ -222,6 +205,7 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("firstName")}
               placeholder={tr("Imię", "First name")}
+              placeholderTextColor={tokens.colors.muted}
               style={[styles.input, showFirstNameError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
@@ -239,6 +223,7 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("lastName")}
               placeholder={tr("Nazwisko", "Last name")}
+              placeholderTextColor={tokens.colors.muted}
               style={[styles.input, showLastNameError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
@@ -249,66 +234,29 @@ export function RegisterScreen({
             <Text style={styles.label}>
               {tr("Instrument główny", "Primary instrument")}
             </Text>
-            <View style={styles.dropdownWrap}>
-              <Pressable
-                style={[
-                  styles.dropdownField,
-                  isInstrumentMenuOpen && styles.dropdownFieldOpen,
-                  showInstrumentError ? styles.dropdownFieldError : null,
-                ]}
-                onPress={() => {
-                  if (isSubmitting) {
-                    return;
-                  }
-                  setFieldTouched("instrument");
-                  setIsInstrumentMenuOpen((current) => !current);
-                }}
-                disabled={isSubmitting}
-              >
-                <Text
-                  style={[
-                    styles.dropdownFieldLabel,
-                    !instrument && styles.dropdownFieldPlaceholder,
-                  ]}
-                >
-                  {instrument ?? tr("Wybierz instrument...", "Select instrument...")}
-                </Text>
-                <Text style={styles.dropdownFieldChevron}>
-                  {isInstrumentMenuOpen ? "^" : "v"}
-                </Text>
-              </Pressable>
-
-              {isInstrumentMenuOpen ? (
-                <View style={styles.dropdownMenu}>
-                  <ScrollView
-                    nestedScrollEnabled
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator
-                    style={styles.dropdownScroll}
+            <View style={styles.chips} accessibilityRole="radiogroup">
+              {ORAGH_INSTRUMENT_OPTIONS.map((option) => {
+                const isSelected = option === instrument;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => handleInstrumentSelect(option)}
+                    disabled={isSubmitting}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: isSelected }}
+                    style={[
+                      styles.chip,
+                      isSelected && styles.chipSelected,
+                      showInstrumentError ? styles.chipError : null,
+                    ]}
                   >
-                    {ORAGH_INSTRUMENT_OPTIONS.map((option) => (
-                      <Pressable
-                        key={option}
-                        onPress={() => handleInstrumentSelect(option)}
-                        style={[
-                          styles.dropdownOption,
-                          option === instrument && styles.dropdownOptionSelected,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.dropdownOptionLabel,
-                            option === instrument &&
-                              styles.dropdownOptionLabelSelected,
-                          ]}
-                        >
-                          {option}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </ScrollView>
-                </View>
-              ) : null}
+                    <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
+                      {isSelected ? "✓ " : ""}
+                      {option}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
             {showInstrumentError ? (
               <Text style={styles.fieldErrorText}>{errors.instrument}</Text>
@@ -326,7 +274,8 @@ export function RegisterScreen({
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="email-address"
-              placeholder="you@example.com"
+              placeholder="ty@przyklad.pl"
+              placeholderTextColor={tokens.colors.muted}
               style={[styles.input, showEmailError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
@@ -345,6 +294,7 @@ export function RegisterScreen({
               onBlur={() => setFieldTouched("password")}
               secureTextEntry
               placeholder={tr("Hasło", "Password")}
+              placeholderTextColor={tokens.colors.muted}
               style={[styles.input, showPasswordError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
@@ -365,6 +315,7 @@ export function RegisterScreen({
               onBlur={() => setFieldTouched("passwordConfirmation")}
               secureTextEntry
               placeholder={tr("Powtórz hasło", "Repeat password")}
+              placeholderTextColor={tokens.colors.muted}
               style={[
                 styles.input,
                 showPasswordConfirmationError ? styles.inputError : null,
@@ -385,7 +336,7 @@ export function RegisterScreen({
             >
               <Text style={styles.buttonLabel}>
                 {isSubmitting
-                  ? tr("Tworzenie konta...", "Creating account...")
+                  ? tr("Tworzenie konta…", "Creating account…")
                   : tr("Załóż konto", "Create account")}
               </Text>
             </Pressable>
@@ -396,178 +347,117 @@ export function RegisterScreen({
               disabled={isSubmitting}
             >
               <Text style={styles.secondaryButtonLabel}>
-                {tr("Wróć do logowania", "Back to sign in")}
+                {tr("Masz już konto? Zaloguj się", "Have an account? Sign in")}
               </Text>
             </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: tokens.colors.background,
-  },
-  keyboardContainer: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: tokens.spacing.lg,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 560,
-    alignSelf: "center",
-    backgroundColor: tokens.colors.surface,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    padding: tokens.spacing.lg,
-  },
-  cardDesktop: {
-    padding: tokens.spacing.xl,
-  },
-  eyebrow: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1.1,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
   title: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.hero,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
     color: tokens.colors.ink,
-    fontWeight: "700",
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+    color: tokens.colors.muted,
   },
   label: {
     marginTop: tokens.spacing.md,
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.ink,
   },
   input: {
-    marginTop: tokens.spacing.xs,
+    marginTop: 6,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: tokens.colors.borderStrong,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 12,
-    fontSize: tokens.typography.body,
+    paddingHorizontal: 14,
+    fontSize: 16,
     color: tokens.colors.ink,
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: tokens.colors.surface,
   },
   inputError: {
     borderColor: tokens.colors.dangerInk,
   },
   fieldErrorText: {
-    marginTop: tokens.spacing.xs,
+    marginTop: 4,
     color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
+    fontSize: 13,
   },
-  dropdownWrap: {
-    position: "relative",
-    zIndex: 10,
-    marginTop: tokens.spacing.xs,
-  },
-  dropdownField: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 12,
-    backgroundColor: tokens.colors.paper,
+  chips: {
+    marginTop: 8,
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: tokens.spacing.sm,
+    flexWrap: "wrap",
+    gap: 6,
   },
-  dropdownFieldOpen: {
+  chip: {
+    minHeight: 38,
+    paddingHorizontal: 12,
+    borderRadius: tokens.radii.round,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
+  },
+  chipSelected: {
+    backgroundColor: tokens.colors.brand,
     borderColor: tokens.colors.brand,
   },
-  dropdownFieldError: {
+  chipError: {
     borderColor: tokens.colors.dangerInk,
   },
-  dropdownFieldLabel: {
-    flex: 1,
+  chipLabel: {
+    fontSize: 14,
+    fontWeight: "600",
     color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
   },
-  dropdownFieldPlaceholder: {
-    color: tokens.colors.muted,
-  },
-  dropdownFieldChevron: {
-    color: tokens.colors.muted,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  dropdownMenu: {
-    marginTop: 6,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surface,
-    overflow: "hidden",
-    maxHeight: 240,
-  },
-  dropdownScroll: {
-    maxHeight: 240,
-  },
-  dropdownOption: {
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-  },
-  dropdownOptionSelected: {
-    backgroundColor: tokens.colors.brandTint,
-  },
-  dropdownOptionLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
-  },
-  dropdownOptionLabelSelected: {
-    color: tokens.colors.brand,
-    fontWeight: "700",
+  chipLabelSelected: {
+    color: tokens.colors.surface,
   },
   errorText: {
-    marginTop: tokens.spacing.sm,
+    marginTop: tokens.spacing.md,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
+    backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
+    fontSize: 14,
   },
   button: {
     marginTop: tokens.spacing.lg,
-    borderRadius: tokens.radii.round,
+    minHeight: 48,
+    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.brand,
-    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   buttonLabel: {
     color: tokens.colors.surface,
-    fontSize: tokens.typography.body,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
   },
   secondaryButton: {
     marginTop: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    paddingVertical: 12,
+    minHeight: 44,
     alignItems: "center",
-    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
   },
   secondaryButtonLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
-    fontWeight: "700",
+    color: tokens.colors.brand,
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

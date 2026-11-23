@@ -869,8 +869,8 @@ export default function App() {
     return renderCenteredState({
       title: tr("Wczytywanie…", "Loading…"),
       copy: tr(
-        "Pobieram tymczasowe źródła danych i mapuję je do modelu aplikacji.",
-        "Reading the temporary data sources and mapping them into stable app models.",
+        "Pobieram wydarzenia i deklaracje.",
+        "Loading events and declarations.",
       ),
       showSpinner: true,
     });

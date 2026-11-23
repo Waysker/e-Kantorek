@@ -11,6 +11,7 @@ import {
 
 import type { AttendanceStatus, EventDetail } from "../domain/models";
 import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
+import { cleanSetlistLabel, isPlaceholderSetlist } from "../domain/setlist";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { formatDateLabel, formatRelativeLabel, stripTitleDatePrefix } from "../utils/format";
@@ -157,10 +158,10 @@ export function EventDetailScreen({
     { key: "going", value: summary.going, label: tr("będzie", "going"), focus: "going" },
     { key: "not_going", value: summary.notGoing, label: tr("nie będzie", "not going"), focus: "not_going" },
   ];
-  const setlistCount = event.setlist.sections.reduce(
-    (count, section) => count + section.items.length,
-    0,
-  );
+  const hasSetlist = !isPlaceholderSetlist(event.setlist);
+  const setlistCount = hasSetlist
+    ? event.setlist.sections.reduce((count, section) => count + section.items.length, 0)
+    : 0;
 
   const setlistCard = (
     <View style={styles.card}>
@@ -169,11 +170,21 @@ export function EventDetailScreen({
           {tr("Setlista", "Setlist")}
           {setlistCount > 0 ? ` · ${setlistCount}` : ""}
         </Text>
-        <Pressable onPress={onOpenSetlist} accessibilityRole="button" hitSlop={8}>
-          <Text style={styles.linkLabel}>{tr("Tryb pulpitu ›", "Stand mode ›")}</Text>
-        </Pressable>
+        {hasSetlist ? (
+          <Pressable onPress={onOpenSetlist} accessibilityRole="button" hitSlop={8}>
+            <Text style={styles.linkLabel}>{tr("Tryb pulpitu ›", "Stand mode ›")}</Text>
+          </Pressable>
+        ) : null}
       </View>
-      {event.setlist.sections.map((section) => (
+      {!hasSetlist ? (
+        <Text style={styles.muted}>
+          {tr(
+            "Setlisty jeszcze nie ma. Pojawi się, gdy organizator wrzuci ją do wątku.",
+            "No setlist yet. It appears once the organizer posts it in the thread.",
+          )}
+        </Text>
+      ) : null}
+      {(hasSetlist ? event.setlist.sections : []).map((section) => (
         <View key={section.id}>
           {event.setlist.sections.length > 1 ? (
             <Text style={styles.setlistSectionTitle}>{section.title}</Text>
@@ -182,7 +193,7 @@ export function EventDetailScreen({
             <View key={item.id} style={styles.setlistRow}>
               <Text style={styles.setlistIndex}>{itemIndex + 1}</Text>
               <Text style={styles.setlistLabel}>
-                {item.label}
+                {cleanSetlistLabel(item.label)}
                 {item.detail ? <Text style={styles.muted}>{` · ${item.detail}`}</Text> : null}
               </Text>
             </View>

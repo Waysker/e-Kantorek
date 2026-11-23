@@ -1,18 +1,9 @@
 import { useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, StyleSheet, Text, TextInput } from "react-native";
 
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { AuthLayout } from "../ui/AuthLayout";
 
 type AuthScreenProps = {
   onSignIn: (email: string, password: string) => Promise<void>;
@@ -52,8 +43,6 @@ export function AuthScreen({
   errorMessage,
   infoMessage,
 }: AuthScreenProps) {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= tokens.breakpoints.desktop;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -79,14 +68,11 @@ export function AuthScreen({
   const showPasswordError = (passwordTouched || submitAttempted) && errors.password;
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top"]}>
-      <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={Platform.select({ ios: "padding", default: undefined })}
-      >
-        <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-          <Text style={styles.eyebrow}>e-Kantorek</Text>
+    <AuthLayout>
           <Text style={styles.title}>{tr("Zaloguj się", "Sign in")}</Text>
+          <Text style={styles.subtitle}>
+            {tr("Kontem e-Kantorka, osobnym od konta na forum.", "With your e-Kantorek account, separate from the forum.")}
+          </Text>
 
           <Text style={styles.label}>{tr("E-mail", "Email")}</Text>
           <TextInput
@@ -101,7 +87,9 @@ export function AuthScreen({
             autoCapitalize="none"
             autoCorrect={false}
             keyboardType="email-address"
-            placeholder="you@example.com"
+            placeholder="ty@przyklad.pl"
+            placeholderTextColor={tokens.colors.muted}
+            accessibilityLabel={tr("E-mail", "Email")}
             style={[styles.input, showEmailError ? styles.inputError : null]}
             editable={!isSubmitting}
           />
@@ -121,6 +109,8 @@ export function AuthScreen({
             onBlur={() => setPasswordTouched(true)}
             secureTextEntry
             placeholder={tr("Twoje hasło", "Your password")}
+            placeholderTextColor={tokens.colors.muted}
+            accessibilityLabel={tr("Hasło", "Password")}
             style={[styles.input, showPasswordError ? styles.inputError : null]}
             editable={!isSubmitting}
             onSubmitEditing={handleSubmit}
@@ -139,7 +129,7 @@ export function AuthScreen({
           >
             <Text style={styles.buttonLabel}>
               {isSubmitting
-                ? tr("Logowanie...", "Signing in...")
+                ? tr("Logowanie…", "Signing in…")
                 : tr("Zaloguj się", "Sign in")}
             </Text>
           </Pressable>
@@ -150,116 +140,97 @@ export function AuthScreen({
             disabled={isSubmitting}
           >
             <Text style={styles.secondaryButtonLabel}>
-              {tr("Załóż konto", "Create account")}
+              {tr("Nie masz konta? Załóż je", "No account? Create one")}
             </Text>
           </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AuthLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: tokens.colors.background,
-  },
-  keyboardContainer: {
-    flex: 1,
-    justifyContent: "center",
-    padding: tokens.spacing.lg,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 460,
-    alignSelf: "center",
-    backgroundColor: tokens.colors.surface,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    padding: tokens.spacing.lg,
-  },
-  cardDesktop: {
-    padding: tokens.spacing.xl,
-  },
-  eyebrow: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1.1,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
   title: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.hero,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
     color: tokens.colors.ink,
-    fontWeight: "700",
+  },
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+    color: tokens.colors.muted,
   },
   label: {
     marginTop: tokens.spacing.md,
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    fontWeight: "700",
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.ink,
   },
   input: {
-    marginTop: tokens.spacing.xs,
+    marginTop: 6,
+    minHeight: 48,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: tokens.colors.borderStrong,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 12,
-    fontSize: tokens.typography.body,
+    paddingHorizontal: 14,
+    fontSize: 16,
     color: tokens.colors.ink,
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: tokens.colors.surface,
   },
   inputError: {
     borderColor: tokens.colors.dangerInk,
   },
   fieldErrorText: {
-    marginTop: tokens.spacing.xs,
+    marginTop: 4,
     color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
+    fontSize: 13,
   },
   errorText: {
-    marginTop: tokens.spacing.sm,
+    marginTop: tokens.spacing.md,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
+    backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
+    fontSize: 14,
   },
   infoText: {
-    marginTop: tokens.spacing.sm,
+    marginTop: tokens.spacing.md,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
+    backgroundColor: tokens.colors.successSurface,
     color: tokens.colors.successInk,
-    fontSize: tokens.typography.caption,
+    fontSize: 14,
   },
   button: {
     marginTop: tokens.spacing.lg,
-    borderRadius: tokens.radii.round,
+    minHeight: 48,
+    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.brand,
-    paddingVertical: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
   buttonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   buttonLabel: {
     color: tokens.colors.surface,
-    fontSize: tokens.typography.body,
-    fontWeight: "700",
+    fontSize: 16,
+    fontWeight: "600",
   },
   secondaryButton: {
     marginTop: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    paddingVertical: 12,
+    minHeight: 44,
     alignItems: "center",
-    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
   },
   secondaryButtonLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
-    fontWeight: "700",
+    color: tokens.colors.brand,
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

@@ -1,54 +1,131 @@
+import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { EventDetail } from "../domain/models";
+import { cleanSetlistLabel, isPlaceholderSetlist } from "../domain/setlist";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
 
 type SetlistScreenProps = {
   event: EventDetail;
   onBack: () => void;
 };
 
+// Text sizes for reading on a music stand; the musician picks one with A− / A+.
+const TEXT_SIZES = [20, 24, 30, 36] as const;
+const DEFAULT_SIZE_INDEX = 1;
+
+// "Stand mode": a dark frame with a paper page, big numbered titles and
+// adjustable text size, meant to be read from a phone or tablet on the stand.
 export function SetlistScreen({ event, onBack }: SetlistScreenProps) {
-  const shouldScroll = event.setlist.modeHint === "scroll";
   const insets = useSafeAreaInsets();
+  const [sizeIndex, setSizeIndex] = useState(DEFAULT_SIZE_INDEX);
+  const fontSize = TEXT_SIZES[sizeIndex];
+  const isPlaceholder = isPlaceholderSetlist(event.setlist);
+  const showSectionTitles = event.setlist.sections.length > 1;
+  let runningNumber = 0;
 
   return (
-    <View style={styles.readerBackdrop}>
+    <View style={styles.backdrop}>
       <View
         style={[
-          styles.readerHeader,
+          styles.header,
           { paddingTop: Math.max(tokens.spacing.sm, insets.top + tokens.spacing.xs) },
         ]}
       >
-        <Pressable onPress={onBack} style={styles.readerBackButton}>
-          <Text style={styles.readerBackLabel}>{tr("Zamknij", "Close")}</Text>
+        <Pressable
+          onPress={onBack}
+          style={styles.chromeButton}
+          accessibilityRole="button"
+          accessibilityLabel={tr("Zamknij setlistę", "Close setlist")}
+        >
+          <Text style={styles.closeGlyph}>✕</Text>
         </Pressable>
-        <Text style={styles.readerMeta}>{event.title}</Text>
+        <View style={styles.headerText}>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {stripTitleDatePrefix(event.title)}
+          </Text>
+          <Text style={styles.headerMeta} numberOfLines={1}>
+            {tr("Setlista", "Setlist")} · {formatDateLabel(event.startsAt)}
+          </Text>
+        </View>
+        <View style={styles.sizeControls}>
+          <Pressable
+            onPress={() => setSizeIndex((index) => Math.max(0, index - 1))}
+            disabled={sizeIndex === 0}
+            style={[styles.chromeButton, sizeIndex === 0 && styles.chromeButtonDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={tr("Mniejszy tekst", "Smaller text")}
+          >
+            <Text style={styles.sizeLabelSmall}>A−</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setSizeIndex((index) => Math.min(TEXT_SIZES.length - 1, index + 1))}
+            disabled={sizeIndex === TEXT_SIZES.length - 1}
+            style={[
+              styles.chromeButton,
+              sizeIndex === TEXT_SIZES.length - 1 && styles.chromeButtonDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={tr("Większy tekst", "Larger text")}
+          >
+            <Text style={styles.sizeLabelLarge}>A+</Text>
+          </Pressable>
+        </View>
       </View>
 
-      <View
-        style={[styles.readerOuter, { paddingBottom: tokens.spacing.lg + insets.bottom }]}
-      >
+      <View style={[styles.outer, { paddingBottom: tokens.spacing.md + insets.bottom }]}>
         <ScrollView
-          style={styles.readerPage}
-          contentContainerStyle={styles.readerPageContent}
-          showsVerticalScrollIndicator={shouldScroll}
-          scrollEnabled={shouldScroll}
+          style={styles.page}
+          contentContainerStyle={styles.pageContent}
+          showsVerticalScrollIndicator
         >
-          <Text style={styles.readerTitle}>Setlista</Text>
-          {event.setlist.sections.map((section) => (
-            <View key={section.id} style={styles.readerSection}>
-              <Text style={styles.readerSectionTitle}>{section.title}</Text>
-              {section.items.map((item, itemIndex) => (
-                <Text key={item.id} style={styles.readerLine}>
-                  {itemIndex + 1}. {item.label}
-                  {item.detail ? ` (${item.detail})` : ""}
-                </Text>
-              ))}
+          {isPlaceholder ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptyTitle}>
+                {tr("Setlisty jeszcze nie ma", "No setlist yet")}
+              </Text>
+              <Text style={styles.emptyCopy}>
+                {tr(
+                  "Pojawi się tutaj, gdy organizator wrzuci ją do wątku na forum.",
+                  "It appears here once the organizer posts it in the forum thread.",
+                )}
+              </Text>
             </View>
-          ))}
+          ) : (
+            event.setlist.sections.map((section) => (
+              <View key={section.id} style={styles.section}>
+                {showSectionTitles ? <Text style={styles.sectionTitle}>{section.title}</Text> : null}
+                {section.items.map((item) => {
+                  runningNumber += 1;
+                  return (
+                    <View key={item.id} style={styles.row}>
+                      <Text
+                        style={[
+                          styles.number,
+                          { fontSize: Math.round(fontSize * 0.8), lineHeight: Math.round(fontSize * 1.3) },
+                        ]}
+                      >
+                        {runningNumber}
+                      </Text>
+                      <View style={styles.rowText}>
+                        <Text style={[styles.itemLabel, { fontSize, lineHeight: Math.round(fontSize * 1.3) }]}>
+                          {cleanSetlistLabel(item.label)}
+                        </Text>
+                        {item.detail ? (
+                          <Text style={[styles.itemDetail, { fontSize: Math.round(fontSize * 0.65) }]}>
+                            {item.detail}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          )}
         </ScrollView>
       </View>
     </View>
@@ -56,67 +133,127 @@ export function SetlistScreen({ event, onBack }: SetlistScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  readerBackdrop: {
+  backdrop: {
     flex: 1,
     backgroundColor: tokens.colors.readerBackdrop,
   },
-  readerHeader: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: tokens.spacing.lg,
-    paddingBottom: tokens.spacing.md,
-  },
-  readerBackButton: {
-    paddingVertical: tokens.spacing.sm,
+    gap: tokens.spacing.sm,
     paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.round,
+    paddingBottom: tokens.spacing.sm,
+  },
+  chromeButton: {
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 10,
+    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.readerChrome,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  readerBackLabel: {
-    color: tokens.colors.surface,
+  chromeButtonDisabled: {
+    opacity: 0.4,
+  },
+  closeGlyph: {
+    fontSize: 18,
     fontWeight: "700",
+    color: tokens.colors.surface,
   },
-  readerMeta: {
+  headerText: {
     flex: 1,
-    marginLeft: tokens.spacing.md,
-    fontSize: tokens.typography.caption,
+    minWidth: 0,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: tokens.colors.surface,
+  },
+  headerMeta: {
+    fontSize: 12,
     color: tokens.colors.readerMeta,
-    textAlign: "right",
   },
-  readerOuter: {
-    flex: 1,
-    paddingHorizontal: tokens.spacing.lg,
-    paddingBottom: tokens.spacing.lg,
+  sizeControls: {
+    flexDirection: "row",
+    gap: 6,
   },
-  readerPage: {
+  sizeLabelSmall: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: tokens.colors.surface,
+  },
+  sizeLabelLarge: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: tokens.colors.surface,
+  },
+  outer: {
     flex: 1,
-    borderRadius: tokens.radii.xl,
+    paddingHorizontal: tokens.spacing.sm,
+  },
+  page: {
+    flex: 1,
+    width: "100%",
+    maxWidth: 860,
+    alignSelf: "center",
+    borderRadius: tokens.radii.lg,
     backgroundColor: tokens.colors.readerPage,
   },
-  readerPageContent: {
-    paddingHorizontal: tokens.spacing.xl,
-    paddingVertical: tokens.spacing.xl,
-    gap: tokens.spacing.md,
+  pageContent: {
+    paddingHorizontal: tokens.spacing.lg,
+    paddingVertical: tokens.spacing.lg,
+    gap: tokens.spacing.lg,
   },
-  readerTitle: {
-    fontSize: tokens.typography.title,
+  section: {
+    gap: 2,
+  },
+  sectionTitle: {
+    fontSize: 13,
     fontWeight: "700",
-    color: tokens.colors.readerInk,
-  },
-  readerSection: {
-    gap: tokens.spacing.xs,
-  },
-  readerSectionTitle: {
-    fontSize: tokens.typography.caption,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.readerInk,
-    fontWeight: "700",
+    color: tokens.colors.brand,
+    marginBottom: tokens.spacing.xs,
   },
-  readerLine: {
-    fontSize: 17,
-    lineHeight: 23,
+  row: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ECE6DA",
+  },
+  number: {
+    minWidth: 32,
+    textAlign: "right",
+    fontWeight: "700",
+    color: tokens.colors.brand,
+  },
+  rowText: {
+    flex: 1,
+    gap: 2,
+  },
+  itemLabel: {
+    fontWeight: "700",
     color: tokens.colors.readerInk,
+  },
+  itemDetail: {
+    color: tokens.colors.muted,
+  },
+  empty: {
+    paddingVertical: tokens.spacing.xl,
+    gap: tokens.spacing.xs,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: tokens.colors.readerInk,
+  },
+  emptyCopy: {
+    fontSize: 15,
+    textAlign: "center",
+    color: tokens.colors.muted,
   },
 });
