@@ -3,6 +3,7 @@ import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
+import { Icon } from "../../ui/Icon";
 
 export type SectionMemberCard =
   | {
@@ -38,6 +39,16 @@ type SectionMembersPanelProps = {
   formatAttendanceValue: (mark: 0 | 1 | 0.75 | 0.5 | 0.25) => string;
 };
 
+function markColors(mark: 0 | 1 | 0.75 | 0.5 | 0.25) {
+  if (mark === 1) {
+    return { bg: tokens.colors.successSurface, fg: tokens.colors.successInk };
+  }
+  if (mark === 0) {
+    return { bg: tokens.colors.surfaceMuted, fg: tokens.colors.muted };
+  }
+  return { bg: tokens.colors.brandTint, fg: tokens.colors.successInk };
+}
+
 export function SectionMembersPanel({
   sectionLabel,
   sectionSummaryText,
@@ -45,7 +56,6 @@ export function SectionMembersPanel({
   hasMembers,
   memberGridColumns,
   isDesktop,
-  desktopTileWidth,
   selectedSessionKey,
   pendingChangesCount,
   isBatchSaving,
@@ -56,18 +66,29 @@ export function SectionMembersPanel({
 }: SectionMembersPanelProps) {
   return (
     <>
-      <View style={styles.instrumentHeader}>
-        <View style={styles.instrumentHeaderTextCol}>
-          <Pressable onPress={onBackToSections} style={styles.sectionBackButton}>
-            <Text style={styles.sectionBackButtonLabel}>{tr("← Wróć do sekcji", "← Back to sections")}</Text>
-          </Pressable>
-          <Text style={styles.sectionDetailTitle}>{sectionLabel}</Text>
-          <Text style={styles.instrumentSummary}>{sectionSummaryText}</Text>
+      <View style={styles.header}>
+        <Pressable
+          onPress={onBackToSections}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel={tr("Wróć do sekcji", "Back to sections")}
+        >
+          <Icon name="chevronLeft" size={18} color={tokens.colors.ink} />
+        </Pressable>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>{sectionLabel}</Text>
+          <Text style={styles.summary}>{sectionSummaryText}</Text>
         </View>
       </View>
+      <Text style={styles.hint}>
+        {tr(
+          "Kliknij osobę, aby zmienić punkty: 0 → 1 → 0,75 → 0,5 → 0,25 → 0.",
+          "Tap a person to cycle points: 0 → 1 → 0.75 → 0.5 → 0.25 → 0.",
+        )}
+      </Text>
 
       {!hasMembers ? (
-        <Text style={styles.copy}>
+        <Text style={styles.empty}>
           {tr(
             "Ta sekcja nie ma jeszcze przypisanych muzyków w aktywnym składzie.",
             "This section has no active members assigned yet.",
@@ -84,63 +105,52 @@ export function SectionMembersPanel({
           maxToRenderPerBatch={Math.max(memberGridColumns * 8, 16)}
           windowSize={7}
           extraData={`${selectedSessionKey ?? ""}:${pendingChangesCount}:${isBatchSaving ? "saving" : "idle"}:${sectionLabel}`}
-          contentContainerStyle={[
-            styles.memberListContent,
-            isDesktop && styles.memberListContentDesktop,
-          ]}
-          columnWrapperStyle={memberGridColumns > 1 ? styles.memberListColumnWrapper : undefined}
+          contentContainerStyle={[styles.list, isDesktop && styles.listDesktop]}
+          columnWrapperStyle={memberGridColumns > 1 ? styles.columnWrapper : undefined}
           keyExtractor={(item) => item.key}
           renderItem={({ item }) => {
             if (item.kind === "placeholder") {
-              return <View style={styles.memberPlaceholderCell} />;
+              return <View style={styles.placeholderCell} />;
             }
+            const colors = markColors(item.mark);
 
             return (
-              <View style={[styles.memberCell, memberGridColumns > 1 && styles.memberCellMultiCol]}>
+              <View style={[styles.cell, memberGridColumns > 1 && styles.cellMultiCol]}>
                 <Pressable
                   disabled={item.isDisabled}
-                  onPress={() => {
-                    onSetAttendance(item.memberId, item.nextRatio);
-                  }}
-                  style={[
-                    styles.memberRow,
-                    isDesktop && styles.memberRowDesktop,
-                    memberGridColumns === 1 && isDesktop && { width: desktopTileWidth },
-                    item.isRsvpHinted && styles.memberRowHinted,
-                    item.hasPendingOverride && styles.memberRowPending,
-                    item.isDisabled && styles.memberRowDisabled,
+                  onPress={() => onSetAttendance(item.memberId, item.nextRatio)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.fullName}, ${formatMarkLabel(item.mark)}`}
+                  style={(state) => [
+                    styles.row,
+                    item.mark === 1 && styles.rowPresent,
+                    item.isRsvpHinted && item.mark === 0 && styles.rowHinted,
+                    item.hasPendingOverride && styles.rowPending,
+                    item.isDisabled && styles.rowDisabled,
+                    ((state as { hovered?: boolean }).hovered || state.pressed) &&
+                      !item.isDisabled &&
+                      styles.rowHovered,
                   ]}
                 >
-                  <View style={styles.memberTextCol}>
-                    <View style={styles.memberNameRow}>
-                      <Text numberOfLines={1} style={styles.memberName}>{item.fullName}</Text>
-                      {item.isRsvpHinted ? (
-                        <Text style={styles.memberHintBadge}>{tr("RSVP", "RSVP")}</Text>
-                      ) : null}
-                    </View>
-                    <Text
-                      style={[
-                        styles.memberMeta,
-                        item.mark === 1
-                          ? styles.memberMetaPresent
-                          : item.mark === 0
-                            ? styles.memberMetaAbsent
-                            : null,
-                      ]}
-                    >
-                      {formatMarkLabel(item.mark)}
-                      {item.hasPendingOverride ? tr(" · do zapisu", " · pending save") : ""}
+                  <View style={styles.textCol}>
+                    <Text numberOfLines={2} style={styles.name}>
+                      {item.fullName}
                     </Text>
+                    {item.isRsvpHinted || item.hasPendingOverride ? (
+                      <View style={styles.metaRow}>
+                        {item.isRsvpHinted ? (
+                          <Text style={styles.hintBadge}>{tr("✓ forum", "✓ forum")}</Text>
+                        ) : null}
+                        {item.hasPendingOverride ? (
+                          <Text style={styles.pendingLabel}>{tr("do zapisu", "unsaved")}</Text>
+                        ) : null}
+                      </View>
+                    ) : null}
                   </View>
-
-                  <View
-                    style={[
-                      styles.cycleButton,
-                      styles.cycleButtonActive,
-                      item.mark === 1 ? styles.cycleButtonActiveStrong : null,
-                    ]}
-                  >
-                    <Text style={styles.cycleButtonLabel}>{formatAttendanceValue(item.mark)}</Text>
+                  <View style={[styles.markPill, { backgroundColor: colors.bg }]}>
+                    <Text style={[styles.markLabel, { color: colors.fg }]}>
+                      {formatAttendanceValue(item.mark)}
+                    </Text>
                   </View>
                 </Pressable>
               </View>
@@ -153,144 +163,127 @@ export function SectionMembersPanel({
 }
 
 const styles = StyleSheet.create({
-  copy: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.body,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radii.sm,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerText: {
+    flex: 1,
+    gap: 2,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: tokens.colors.ink,
+  },
+  summary: {
+    fontSize: 12,
+    color: tokens.colors.muted,
+  },
+  hint: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  empty: {
+    fontSize: 15,
     lineHeight: 22,
     color: tokens.colors.muted,
   },
-  instrumentHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
-    paddingBottom: tokens.spacing.xs,
-  },
-  instrumentHeaderTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  instrumentSummary: {
-    fontSize: 11,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  sectionBackButton: {
-    alignSelf: "flex-start",
-    marginBottom: 2,
-  },
-  sectionBackButtonLabel: {
-    color: tokens.colors.brand,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  sectionDetailTitle: {
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  memberListContent: {
-    marginTop: tokens.spacing.xs,
+  list: {
     gap: 6,
   },
-  memberListContentDesktop: {
+  listDesktop: {
     gap: 8,
   },
-  memberListColumnWrapper: {
+  columnWrapper: {
     gap: 8,
   },
-  memberCell: {
+  cell: {
     width: "100%",
   },
-  memberCellMultiCol: {
+  cellMultiCol: {
     flex: 1,
   },
-  memberPlaceholderCell: {
+  placeholderCell: {
     flex: 1,
     minHeight: 1,
   },
-  memberRow: {
-    borderWidth: 1,
+  row: {
+    minHeight: 52,
+    borderWidth: 1.5,
     borderColor: tokens.colors.border,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     backgroundColor: tokens.colors.surface,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 10,
   },
-  memberRowHinted: {
-    backgroundColor: tokens.colors.brandTint,
-    borderColor: tokens.colors.brand,
+  rowPresent: {
+    borderColor: tokens.colors.successSurface,
+    backgroundColor: tokens.colors.paper,
   },
-  memberRowPending: {
-    borderColor: tokens.colors.brand,
+  rowHinted: {
+    borderStyle: "dashed",
+    borderColor: tokens.colors.brandDeepAccent,
   },
-  memberRowDisabled: {
-    opacity: 0.65,
+  rowPending: {
+    borderStyle: "solid",
+    borderColor: tokens.colors.warningBorder,
   },
-  memberRowDesktop: {
-    minHeight: 54,
+  rowDisabled: {
+    opacity: 0.5,
   },
-  memberTextCol: {
+  rowHovered: {
+    backgroundColor: tokens.colors.paper,
+  },
+  textCol: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
   },
-  memberNameRow: {
+  name: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  metaRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  memberName: {
-    flexShrink: 1,
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  memberHintBadge: {
-    fontSize: 10,
-    color: tokens.colors.brand,
-    borderWidth: 1,
-    borderColor: tokens.colors.brand,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    fontWeight: "700",
-  },
-  memberMeta: {
+  hintBadge: {
     fontSize: 11,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  memberMetaPresent: {
+    fontWeight: "600",
     color: tokens.colors.successInk,
   },
-  memberMetaAbsent: {
-    color: tokens.colors.dangerInk,
+  pendingLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: tokens.colors.warningInk,
   },
-  cycleButton: {
-    minWidth: 66,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
+  markPill: {
+    minWidth: 48,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: tokens.radii.sm,
     alignItems: "center",
+    justifyContent: "center",
   },
-  cycleButtonActive: {
-    borderColor: tokens.colors.brand,
-    backgroundColor: tokens.colors.brandTint,
-  },
-  cycleButtonActiveStrong: {
-    borderColor: tokens.colors.successInk,
-    backgroundColor: tokens.colors.successSurface,
-  },
-  cycleButtonLabel: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.ink,
+  markLabel: {
+    fontSize: 15,
     fontWeight: "700",
   },
 });

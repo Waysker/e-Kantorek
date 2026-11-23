@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 
+import { CsvExportPanel } from "./attendance-manager/CsvExportPanel";
 import { SectionGridPanel, type SectionGridTile } from "./attendance-manager/SectionGridPanel";
 import { SectionMembersPanel, type SectionMemberCard } from "./attendance-manager/SectionMembersPanel";
 import { useAttendanceBootData, useAttendanceEntries } from "./attendance-manager/useAttendanceManagerData";
@@ -22,11 +23,11 @@ import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { canonicalizeInstrumentLabel, normalizeInstrumentKey } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { SurfaceCard } from "../ui/SurfaceCard";
+import { Icon } from "../ui/Icon";
 import { formatDateLabel } from "../utils/format";
 
 type AttendanceManagerScreenProps = {
-  onBack: () => void;
+  onBack?: () => void;
 };
 
 type ManagerSession = {
@@ -989,310 +990,330 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     }
   }
 
-  return (
-    <ScrollView
-      style={styles.screenScroll}
-      contentContainerStyle={[
-        styles.screenContent,
-        isDesktop && styles.desktopContent,
-      ]}
-      showsVerticalScrollIndicator={false}
-    >
-      <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>{tr("Wróć do obecności", "Back to attendance")}</Text>
-      </Pressable>
+  const sessionTotals = sectionGridRowsDisplay.flat().reduce(
+    (totals, tile) => ({
+      marked: totals.marked + tile.markedMembers,
+      total: totals.total + tile.totalMembers,
+    }),
+    { marked: 0, total: 0 },
+  );
+  const saveDisabled = !canWrite || !selectedSession || pendingChangesCount === 0 || isBatchSaving;
 
-      <SurfaceCard variant="default">
-        <Text style={styles.cardEyebrow}>{tr("Panel zarządu", "Management panel")}</Text>
-        <Text style={styles.title}>{tr("Faktyczna obecność", "Actual attendance")}</Text>
-        {!canWrite ? (
-          <Text style={[styles.notice, styles.noticeError]}>
-            {tr(
-              ATTENDANCE_WRITE_UI_ENABLED
-                ? "Zapis jest wyłączony: brak konfiguracji funkcji attendance_write_sheet_first dla tego buildu."
-                : "Zapis jest wyłączony flagą EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED w tym buildzie.",
-              ATTENDANCE_WRITE_UI_ENABLED
-                ? "Write is disabled: attendance_write_sheet_first is not configured for this build."
-                : "Write is disabled by EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED in this build.",
-            )}
-          </Text>
-        ) : null}
-        {infoMessage ? <Text style={[styles.notice, styles.noticeInfo]}>{infoMessage}</Text> : null}
-        {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
-      </SurfaceCard>
-
-      <SurfaceCard variant="outline">
-        <Text style={styles.sectionTitle}>{tr("Kalendarz sesji", "Session calendar")}</Text>
-        <Text style={styles.copy}>
-          {tr(
-            "Wybierz dzień z kalendarza, a poniżej sesję dla tego dnia. Liczba oznacza ile sesji jest w dacie; P oznacza planowaną próbę (wt/czw).",
-            "Pick a day from the calendar and then pick a session for that day. Number means how many sessions are on that date; R marks expected rehearsal days (Tue/Thu).",
-          )}
-        </Text>
-        {isBootLoading ? (
-          <Text style={styles.copy}>{tr("Ładowanie sesji...", "Loading sessions...")}</Text>
-        ) : (
-          <>
-            <View style={styles.monthHeader}>
+  const sessionPicker = (
+    <View style={styles.card}>
+      {isBootLoading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color={tokens.colors.brand} size="small" />
+          <Text style={styles.muted}>{tr("Ładowanie sesji…", "Loading sessions…")}</Text>
+        </View>
+      ) : (
+        <>
+          <View style={styles.monthHeader}>
+            <Text style={styles.monthLabel}>{formatMonthLabel(visibleMonthKey)}</Text>
+            <View style={styles.monthNav}>
               <Pressable
                 onPress={() => setVisibleMonthKey((current) => shiftMonthKey(current, -1))}
-                style={styles.monthNavButton}
+                style={styles.iconButton}
+                accessibilityRole="button"
+                accessibilityLabel={tr("Poprzedni miesiąc", "Previous month")}
               >
-                <Text style={styles.monthNavButtonLabel}>{tr("Poprzedni", "Prev")}</Text>
+                <Icon name="chevronLeft" size={18} color={tokens.colors.ink} />
               </Pressable>
-              <Text style={styles.monthLabel}>{formatMonthLabel(visibleMonthKey)}</Text>
               <Pressable
                 onPress={() => setVisibleMonthKey((current) => shiftMonthKey(current, 1))}
-                style={styles.monthNavButton}
+                style={styles.iconButton}
+                accessibilityRole="button"
+                accessibilityLabel={tr("Następny miesiąc", "Next month")}
               >
-                <Text style={styles.monthNavButtonLabel}>{tr("Następny", "Next")}</Text>
+                <Icon name="chevronRight" size={18} color={tokens.colors.ink} />
               </Pressable>
             </View>
+          </View>
 
-            <View style={styles.weekdayRow}>
-              {weekdayLabels.map((label) => (
-                <View key={label} style={styles.weekdayCell}>
-                  <Text style={styles.weekdayLabel}>{label}</Text>
-                </View>
-              ))}
-            </View>
+          <View style={styles.weekdayRow}>
+            {weekdayLabels.map((label) => (
+              <Text key={label} style={styles.weekdayLabel}>
+                {label}
+              </Text>
+            ))}
+          </View>
 
-            <View style={styles.calendarGrid}>
-              {calendarCells.map((cell) => {
-                const sessionsForDate = sessionsByDate.get(cell.date) ?? [];
-                const hasSessions = sessionsForDate.length > 0;
-                const isSelected = cell.date === selectedDate;
-                const isToday = cell.date === todayIso;
-                const rehearsalExpected = expectedRehearsalSet.has(cell.date);
-                const rehearsalMissingMapping = rehearsalExpected && !sessionsForDate.some((session) => isRehearsalLikeSession(session));
+          <View style={styles.calendarGrid}>
+            {calendarCells.map((cell) => {
+              const sessionsForDate = sessionsByDate.get(cell.date) ?? [];
+              const hasSessions = sessionsForDate.length > 0;
+              const isSelected = cell.date === selectedDate;
+              const isToday = cell.date === todayIso;
+              const rehearsalExpected = expectedRehearsalSet.has(cell.date);
+              const rehearsalMissingMapping =
+                rehearsalExpected && !sessionsForDate.some((session) => isRehearsalLikeSession(session));
 
-                return (
+              return (
+                <View key={cell.date} style={styles.dayCellSlot}>
                   <Pressable
-                    key={cell.date}
                     onPress={() => {
                       setSelectedDate(cell.date);
                       setVisibleMonthKey(getMonthKeyFromIsoDate(cell.date));
                     }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
                     style={[
                       styles.dayCell,
-                      !cell.inCurrentMonth && styles.dayCellOutsideMonth,
-                      isSelected && styles.dayCellSelected,
-                      isToday && styles.dayCellToday,
+                      hasSessions && styles.dayCellHasSessions,
                       rehearsalMissingMapping && styles.dayCellGap,
+                      isToday && styles.dayCellToday,
+                      isSelected && styles.dayCellSelected,
                     ]}
                   >
                     <Text
                       style={[
                         styles.dayNumber,
-                        !cell.inCurrentMonth && styles.dayNumberOutsideMonth,
+                        !cell.inCurrentMonth && styles.dayNumberOutside,
+                        hasSessions && styles.dayNumberStrong,
                         isSelected && styles.dayNumberSelected,
                       ]}
                     >
                       {String(Number(cell.date.slice(8, 10)))}
                     </Text>
-
-                    <View style={styles.dayIndicators}>
+                    <View style={styles.dayMarks}>
                       {hasSessions ? (
-                        <View style={[styles.dayPill, styles.dayPillEvents]}>
-                          <Text style={styles.dayPillLabel}>{sessionsForDate.length}</Text>
-                        </View>
+                        <Text style={[styles.dayMark, isSelected && styles.dayNumberSelected]}>
+                          {sessionsForDate.length}
+                        </Text>
                       ) : null}
                       {rehearsalExpected ? (
-                        <View
+                        <Text
                           style={[
-                            styles.dayPill,
-                            rehearsalMissingMapping ? styles.dayPillMissing : styles.dayPillRehearsal,
+                            styles.dayMark,
+                            rehearsalMissingMapping && styles.dayMarkMissing,
+                            isSelected && styles.dayNumberSelected,
                           ]}
                         >
-                          <Text style={styles.dayPillLabel}>{tr("P", "R")}</Text>
-                        </View>
+                          {tr("P", "R")}
+                        </Text>
                       ) : null}
                     </View>
                   </Pressable>
-                );
-              })}
-            </View>
-
-            <Text style={styles.legendText}>
-              {tr(
-                "Liczba = ilość sesji, P = plan próby wt/czw, czerwone P = brak mapowania kolumny na ten dzień.",
-                "Number = count of sessions, R = expected Tue/Thu rehearsal, red R = no mapped rehearsal column for that day.",
-              )}
-            </Text>
-
-            <View style={styles.daySelectionBlock}>
-              <Text style={styles.daySelectionTitle}>
-                {tr("Wybrany dzień", "Selected day")}: {formatDateLabel(`${selectedDate}T12:00:00`)}
-              </Text>
-              {selectedDateSessions.length === 0 ? (
-                <Text style={[styles.notice, styles.noticeError]}>
-                  {tr(
-                    "Brak sesji dla tej daty.",
-                    "No sessions for this date.",
-                  )}
-                </Text>
-              ) : (
-                <View style={styles.sessionList}>
-                  {selectedDateSessions.map((session) => {
-                    const isSelected = session.key === selectedSessionKey;
-                    const sourceMeta = normalizeWhitespace([session.source_header, session.source_column].filter(Boolean).join(" / "));
-
-                    return (
-                      <Pressable
-                        key={session.key}
-                        onPress={() => setSelectedSessionKey(session.key)}
-                        style={[
-                          styles.sessionListItem,
-                          session.isVirtual && styles.sessionListItemVirtual,
-                          isSelected && styles.sessionListItemActive,
-                        ]}
-                      >
-                        <Text style={[styles.sessionListItemTitle, isSelected && styles.sessionListItemTitleActive]}>
-                          {session.title}
-                        </Text>
-                        <Text style={styles.sessionListItemMeta}>
-                          {session.isVirtual
-                            ? tr(
-                              "Próba bez kolumny w arkuszu: pierwszy zapis utworzy kolumnę automatycznie.",
-                              "Rehearsal without sheet column: first write will create the column automatically.",
-                            )
-                            : sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
                 </View>
-              )}
-            </View>
-          </>
-        )}
-      </SurfaceCard>
+              );
+            })}
+          </View>
 
-      <SurfaceCard variant="default">
-        <Text style={styles.sectionTitle}>{tr("Odklikiwanie obecności", "Mark attendance")}</Text>
-        {selectedSession ? (
-          <Text style={styles.copy}>
-            {tr("Aktywna sesja", "Active session")}: {formatDateLabel(`${selectedSession.event_date}T12:00:00`)}
-            {" - "}
-            {selectedSession.title}
-            {selectedSession.isVirtual ? tr(" (utworzy nową kolumnę)", " (will create a new column)") : ""}
-          </Text>
-        ) : (
-          <Text style={styles.copy}>{tr("Wybierz sesję z kalendarza powyżej.", "Pick a session from calendar above.")}</Text>
-        )}
-        {!selectedSession?.isVirtual && rsvpHintMemberIds.size > 0 ? (
-          <Text style={styles.copy}>
+          <Text style={styles.legend}>
             {tr(
-              `Lekko podświetlono ${rsvpHintMemberIds.size} osób z deklaracją RSVP (podpowiedź).`,
-              `${rsvpHintMemberIds.size} RSVP-declared members are softly highlighted (hint).`,
+              "Liczba = sesje w dniu · P = planowana próba (wt/czw) · bursztynowe = próba bez kolumny w arkuszu",
+              "Number = sessions that day · R = planned rehearsal (Tue/Thu) · amber = rehearsal without a sheet column",
             )}
           </Text>
-        ) : null}
-        {pendingChangesCount > 0 ? (
-          <Text style={styles.copy}>
-            {tr(
-              `Masz ${pendingChangesCount} zmian roboczych. Kliknij "Zapisz zmiany", gdy skończysz odklikiwanie.`,
-              `${pendingChangesCount} staged changes. Click "Save changes" when done.`,
+
+          <View style={styles.sessionBlock}>
+            <Text style={styles.kicker}>{formatDateLabel(`${selectedDate}T12:00:00`)}</Text>
+            {selectedDateSessions.length === 0 ? (
+              <Text style={styles.muted}>{tr("Brak sesji w tym dniu.", "No sessions on this day.")}</Text>
+            ) : (
+              selectedDateSessions.map((session) => {
+                const isSelected = session.key === selectedSessionKey;
+                const sourceMeta = normalizeWhitespace(
+                  [session.source_header, session.source_column].filter(Boolean).join(" / "),
+                );
+                return (
+                  <Pressable
+                    key={session.key}
+                    onPress={() => setSelectedSessionKey(session.key)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    style={[
+                      styles.sessionRow,
+                      session.isVirtual && styles.sessionRowVirtual,
+                      isSelected && styles.sessionRowSelected,
+                    ]}
+                  >
+                    <Text style={[styles.sessionTitle, isSelected && styles.sessionTitleSelected]}>
+                      {session.title}
+                    </Text>
+                    <Text style={styles.sessionMeta} numberOfLines={2}>
+                      {session.isVirtual
+                        ? tr(
+                            "Brak kolumny w arkuszu: pierwszy zapis ją utworzy.",
+                            "No sheet column yet: the first save creates it.",
+                          )
+                        : sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
+                    </Text>
+                  </Pressable>
+                );
+              })
             )}
+          </View>
+        </>
+      )}
+    </View>
+  );
+
+  const markingPanel = (
+    <View style={styles.card}>
+      {!selectedSection ? (
+        <SectionGridPanel rows={sectionGridRowsDisplay} onSelectSection={setSelectedSectionKey} />
+      ) : (
+        <SectionMembersPanel
+          sectionLabel={selectedSection.label}
+          sectionSummaryText={selectedSectionSummaryText}
+          cards={selectedSectionMemberCards}
+          hasMembers={selectedSectionMembers.length > 0}
+          memberGridColumns={memberGridColumns}
+          isDesktop={isDesktop}
+          desktopTileWidth={desktopTileWidth}
+          selectedSessionKey={selectedSessionKey}
+          pendingChangesCount={pendingChangesCount}
+          isBatchSaving={isBatchSaving}
+          onBackToSections={() => setSelectedSectionKey(null)}
+          onSetAttendance={handleSetAttendance}
+          formatMarkLabel={formatMarkLabel}
+          formatAttendanceValue={formatAttendanceValue}
+        />
+      )}
+    </View>
+  );
+
+  return (
+    <ScrollView
+      style={styles.screenScroll}
+      contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
+      showsVerticalScrollIndicator={false}
+    >
+      {onBack ? (
+        <Pressable onPress={onBack} style={styles.backLink} accessibilityRole="button">
+          <Text style={styles.backLinkLabel}>{tr("‹ Wróć", "‹ Back")}</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={[styles.header, isDesktop && styles.headerDesktop]}>
+        <View style={styles.headerText}>
+          <Text style={styles.kicker}>{tr("Wpisywanie obecności", "Attendance entry")}</Text>
+          <Text style={styles.title} numberOfLines={2}>
+            {selectedSession
+              ? `${selectedSession.title}`
+              : tr("Wybierz sesję", "Pick a session")}
           </Text>
-        ) : null}
-        {isBatchSaving ? (
-          <View style={styles.saveProgressBox}>
-            <ActivityIndicator color={tokens.colors.brand} size="small" />
-            <View style={styles.saveProgressTextCol}>
-              <Text style={styles.saveProgressTitle}>
-                {tr(`Zapisywanie ${pendingChangesCount} zmian...`, `Saving ${pendingChangesCount} changes...`)}
-              </Text>
-              <Text style={styles.saveProgressMeta}>
-                {tr(
-                  "Trwa aktualizacja obecności w bazie i synchronizacja.",
-                  "Updating attendance in DB and synchronizing.",
-                )}
-              </Text>
+          <Text style={styles.muted}>
+            {selectedSession
+              ? `${formatDateLabel(`${selectedSession.event_date}T12:00:00`)}${
+                  selectedSession.isVirtual
+                    ? tr(" · utworzy nową kolumnę", " · will create a new column")
+                    : ""
+                }`
+              : tr("Dzień i sesję wybierzesz w kalendarzu.", "Pick the day and session in the calendar.")}
+          </Text>
+        </View>
+        <View style={styles.headerActions}>
+          {selectedSession && sessionTotals.total > 0 ? (
+            <View style={styles.counter} accessibilityLabel={tr("Odklikani", "Marked")}>
+              <Text style={styles.counterValue}>{sessionTotals.marked}</Text>
+              <Text style={styles.counterTotal}> / {sessionTotals.total}</Text>
             </View>
-          </View>
-        ) : null}
-        {!isBatchSaving && lastSaveFeedback ? (
-          <View style={styles.saveSuccessBox}>
-            <Text style={styles.saveSuccessTitle}>
-              {lastSaveFeedback.wasAppliedDirectly
-                ? tr("Zapis zakończony", "Save completed")
-                : tr("Zapis zakończony (kolejka)", "Save completed (queued)")}
-            </Text>
-            <Text style={styles.saveSuccessMeta}>
-              {(lastSaveFeedback.wasAppliedDirectly
-                ? tr(
-                  `Zapisano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
-                  `${lastSaveFeedback.count} changes saved at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
-                )
-                : tr(
-                  `Zakolejkowano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
-                  `${lastSaveFeedback.count} changes queued at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
-                ))}
-            </Text>
-            {lastSaveFeedback.notes ? (
-              <Text style={styles.saveSuccessMeta}>{lastSaveFeedback.notes}</Text>
-            ) : null}
-          </View>
-        ) : null}
-        {isEntriesLoading ? (
-          <Text style={styles.copy}>{tr("Ładowanie wpisów...", "Loading entries...")}</Text>
-        ) : null}
-        <View style={styles.batchActionsRow}>
-          <Pressable
-            disabled={!canWrite || !selectedSession || pendingChangesCount === 0 || isBatchSaving}
-            onPress={() => {
-              void handleSavePendingChanges();
-            }}
-            style={[
-              styles.batchPrimaryButton,
-              (!canWrite || !selectedSession || pendingChangesCount === 0 || isBatchSaving) && styles.batchButtonDisabled,
-            ]}
-          >
-            <Text style={styles.batchPrimaryButtonLabel}>
-              {isBatchSaving
-                ? tr("Zapisywanie...", "Saving...")
-                : tr(`Zapisz zmiany (${pendingChangesCount})`, `Save changes (${pendingChangesCount})`)}
-            </Text>
-          </Pressable>
+          ) : null}
           <Pressable
             disabled={pendingChangesCount === 0 || isBatchSaving}
             onPress={handleClearPendingChanges}
+            accessibilityRole="button"
             style={[
-              styles.batchSecondaryButton,
-              (pendingChangesCount === 0 || isBatchSaving) && styles.batchButtonDisabled,
+              styles.secondaryButton,
+              (pendingChangesCount === 0 || isBatchSaving) && styles.buttonDisabled,
             ]}
           >
-            <Text style={styles.batchSecondaryButtonLabel}>{tr("Wyczyść", "Clear")}</Text>
+            <Text style={styles.secondaryButtonLabel}>{tr("Wyczyść", "Clear")}</Text>
+          </Pressable>
+          <Pressable
+            disabled={saveDisabled}
+            onPress={() => void handleSavePendingChanges()}
+            accessibilityRole="button"
+            style={[styles.primaryButton, saveDisabled && styles.buttonDisabled]}
+          >
+            {isBatchSaving ? <ActivityIndicator color={tokens.colors.surface} size="small" /> : null}
+            <Text style={styles.primaryButtonLabel}>
+              {isBatchSaving
+                ? tr("Zapisywanie…", "Saving…")
+                : pendingChangesCount > 0
+                  ? tr(`Zapisz (${pendingChangesCount})`, `Save (${pendingChangesCount})`)
+                  : tr("Zapisz", "Save")}
+            </Text>
           </Pressable>
         </View>
-      </SurfaceCard>
+      </View>
 
-      <SurfaceCard variant="outline">
-        {!selectedSection ? (
-          <SectionGridPanel
-            rows={sectionGridRowsDisplay}
-            onSelectSection={setSelectedSectionKey}
-          />
-        ) : (
-          <SectionMembersPanel
-            sectionLabel={selectedSection.label}
-            sectionSummaryText={selectedSectionSummaryText}
-            cards={selectedSectionMemberCards}
-            hasMembers={selectedSectionMembers.length > 0}
-            memberGridColumns={memberGridColumns}
-            isDesktop={isDesktop}
-            desktopTileWidth={desktopTileWidth}
-            selectedSessionKey={selectedSessionKey}
-            pendingChangesCount={pendingChangesCount}
-            isBatchSaving={isBatchSaving}
-            onBackToSections={() => setSelectedSectionKey(null)}
-            onSetAttendance={handleSetAttendance}
-            formatMarkLabel={formatMarkLabel}
-            formatAttendanceValue={formatAttendanceValue}
-          />
-        )}
-      </SurfaceCard>
+      {!canWrite ? (
+        <Text style={[styles.notice, styles.noticeError]}>
+          {tr(
+            ATTENDANCE_WRITE_UI_ENABLED
+              ? "Zapis jest wyłączony: brak konfiguracji funkcji attendance_write_sheet_first dla tego buildu."
+              : "Zapis jest wyłączony flagą EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED w tym buildzie.",
+            ATTENDANCE_WRITE_UI_ENABLED
+              ? "Write is disabled: attendance_write_sheet_first is not configured for this build."
+              : "Write is disabled by EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED in this build.",
+          )}
+        </Text>
+      ) : null}
+      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
+      {infoMessage ? <Text style={[styles.notice, styles.noticeInfo]}>{infoMessage}</Text> : null}
+      {isBatchSaving ? (
+        <Text style={[styles.notice, styles.noticeInfo]}>
+          {tr(
+            `Zapisywanie ${pendingChangesCount} zmian: aktualizacja bazy i synchronizacja z arkuszem.`,
+            `Saving ${pendingChangesCount} changes: updating the database and syncing the sheet.`,
+          )}
+        </Text>
+      ) : null}
+      {!isBatchSaving && lastSaveFeedback ? (
+        <Text style={[styles.notice, styles.noticeSuccess]}>
+          {lastSaveFeedback.wasAppliedDirectly
+            ? tr(
+                `Zapisano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                `${lastSaveFeedback.count} changes saved at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+              )
+            : tr(
+                `Zakolejkowano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+                `${lastSaveFeedback.count} changes queued at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
+              )}
+          {lastSaveFeedback.notes ? ` ${lastSaveFeedback.notes}` : ""}
+        </Text>
+      ) : null}
+      {pendingChangesCount > 0 && !isBatchSaving ? (
+        <Text style={[styles.notice, styles.noticeWarning]}>
+          {tr(
+            `${pendingChangesCount} niezapisanych zmian. Kliknij „Zapisz”, gdy skończysz.`,
+            `${pendingChangesCount} unsaved changes. Click "Save" when you're done.`,
+          )}
+        </Text>
+      ) : null}
+      {!selectedSession?.isVirtual && rsvpHintMemberIds.size > 0 ? (
+        <Text style={styles.hint}>
+          {tr(
+            `Podświetlono ${rsvpHintMemberIds.size} osób zadeklarowanych na forum (podpowiedź).`,
+            `${rsvpHintMemberIds.size} members who declared on the forum are highlighted (hint).`,
+          )}
+        </Text>
+      ) : null}
+      {isEntriesLoading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color={tokens.colors.brand} size="small" />
+          <Text style={styles.muted}>{tr("Ładowanie wpisów…", "Loading entries…")}</Text>
+        </View>
+      ) : null}
+
+      {isDesktop ? (
+        <View style={styles.columns}>
+          <View style={styles.sideColumn}>
+            {sessionPicker}
+            <CsvExportPanel />
+          </View>
+          <View style={styles.mainColumn}>{markingPanel}</View>
+        </View>
+      ) : (
+        <>
+          {sessionPicker}
+          {markingPanel}
+          <CsvExportPanel />
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -1301,308 +1322,290 @@ const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
+  content: {
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
-  desktopContent: {
-    alignSelf: "center",
+  contentDesktop: {
     width: "100%",
-    maxWidth: 1800,
+    maxWidth: 1280,
+    alignSelf: "center",
+    paddingHorizontal: tokens.spacing.xl,
+    paddingTop: tokens.spacing.lg,
   },
   backLink: {
-    marginBottom: tokens.spacing.xs,
+    alignSelf: "flex-start",
+    minHeight: 32,
+    justifyContent: "center",
   },
   backLinkLabel: {
     color: tokens.colors.brand,
-    fontWeight: "700",
+    fontWeight: "600",
   },
-  cardEyebrow: {
+  header: {
+    gap: tokens.spacing.sm,
+    paddingBottom: tokens.spacing.xs,
+  },
+  headerDesktop: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  headerText: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  kicker: {
     fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
     textTransform: "uppercase",
-    letterSpacing: 1,
     color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    fontWeight: "700",
   },
   title: {
-    fontSize: tokens.typography.hero,
-    lineHeight: 34,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
     color: tokens.colors.ink,
-    fontWeight: "700",
   },
-  sectionTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  copy: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
+  muted: {
+    fontSize: 14,
     color: tokens.colors.muted,
   },
-  notice: {
-    marginTop: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
-    borderRadius: tokens.radii.md,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
+  hint: {
+    fontSize: 13,
+    color: tokens.colors.muted,
   },
-  noticeInfo: {
-    backgroundColor: tokens.colors.brandTint,
-    color: tokens.colors.brand,
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.xs,
+  },
+  counter: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginRight: tokens.spacing.sm,
+  },
+  counterValue: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: tokens.colors.ink,
+  },
+  counterTotal: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: tokens.colors.muted,
+  },
+  primaryButton: {
+    minHeight: 44,
+    paddingHorizontal: 20,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.brand,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  primaryButtonLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.surface,
+  },
+  secondaryButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: tokens.radii.md,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  buttonDisabled: {
+    opacity: 0.45,
+  },
+  notice: {
+    fontSize: 14,
+    lineHeight: 20,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
   },
   noticeError: {
     backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
   },
-  monthHeader: {
-    marginTop: tokens.spacing.md,
+  noticeInfo: {
+    backgroundColor: tokens.colors.surfaceMuted,
+    color: tokens.colors.neutralInk,
+  },
+  noticeSuccess: {
+    backgroundColor: tokens.colors.successSurface,
+    color: tokens.colors.successInk,
+  },
+  noticeWarning: {
+    backgroundColor: tokens.colors.warningSurface,
+    color: tokens.colors.warningInk,
+  },
+  loadingRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: tokens.spacing.xs,
+  },
+  columns: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: tokens.spacing.md,
+    marginTop: tokens.spacing.xs,
+  },
+  sideColumn: {
+    width: 320,
+    gap: tokens.spacing.md,
+  },
+  mainColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  card: {
+    backgroundColor: tokens.colors.surface,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
   },
-  monthNavButton: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
-    backgroundColor: tokens.colors.surface,
-  },
-  monthNavButtonLabel: {
-    color: tokens.colors.muted,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
+  monthHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   monthLabel: {
-    flex: 1,
-    textAlign: "center",
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
+    fontSize: 17,
     fontWeight: "700",
+    color: tokens.colors.ink,
+    textTransform: "capitalize",
+  },
+  monthNav: {
+    flexDirection: "row",
+    gap: 4,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: tokens.radii.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
   weekdayRow: {
-    marginTop: tokens.spacing.sm,
     flexDirection: "row",
-  },
-  weekdayCell: {
-    width: "14.2857%",
-    alignItems: "center",
   },
   weekdayLabel: {
+    width: `${100 / 7}%`,
+    textAlign: "center",
     fontSize: 11,
+    fontWeight: "600",
     color: tokens.colors.muted,
-    fontWeight: "700",
-    textTransform: "uppercase",
   },
   calendarGrid: {
-    marginTop: tokens.spacing.xs,
     flexDirection: "row",
     flexWrap: "wrap",
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    overflow: "hidden",
-    backgroundColor: tokens.colors.surface,
+  },
+  dayCellSlot: {
+    width: `${100 / 7}%`,
+    padding: 2,
   },
   dayCell: {
-    width: "14.2857%",
-    minHeight: 72,
-    borderWidth: 0.5,
-    borderColor: tokens.colors.border,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    justifyContent: "space-between",
-    backgroundColor: tokens.colors.surface,
+    height: 44,
+    borderRadius: tokens.radii.sm,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  dayCellOutsideMonth: {
+  dayCellHasSessions: {
     backgroundColor: tokens.colors.surfaceMuted,
-    opacity: 0.55,
+  },
+  dayCellGap: {
+    backgroundColor: tokens.colors.warningSurface,
+    borderColor: tokens.colors.warningBorder,
   },
   dayCellToday: {
     borderColor: tokens.colors.brand,
   },
   dayCellSelected: {
-    backgroundColor: tokens.colors.brandTint,
+    backgroundColor: tokens.colors.brand,
     borderColor: tokens.colors.brand,
-  },
-  dayCellGap: {
-    backgroundColor: tokens.colors.dangerSurface,
   },
   dayNumber: {
+    fontSize: 14,
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
   },
-  dayNumberOutsideMonth: {
-    color: tokens.colors.muted,
+  dayNumberOutside: {
+    color: tokens.colors.borderStrong,
+  },
+  dayNumberStrong: {
+    fontWeight: "700",
   },
   dayNumberSelected: {
-    color: tokens.colors.brand,
-  },
-  dayIndicators: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginTop: 2,
-  },
-  dayPill: {
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  dayPillEvents: {
-    backgroundColor: tokens.colors.brandTint,
-  },
-  dayPillRehearsal: {
-    backgroundColor: tokens.colors.successSurface,
-  },
-  dayPillMissing: {
-    backgroundColor: tokens.colors.dangerSurface,
-  },
-  dayPillLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: tokens.colors.ink,
-  },
-  legendText: {
-    marginTop: tokens.spacing.xs,
-    fontSize: 11,
-    lineHeight: 16,
-    color: tokens.colors.muted,
-  },
-  daySelectionBlock: {
-    marginTop: tokens.spacing.sm,
-    gap: tokens.spacing.xs,
-  },
-  daySelectionTitle: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.body,
-    fontWeight: "700",
-  },
-  sessionList: {
-    gap: tokens.spacing.xs,
-  },
-  sessionListItem: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
-    backgroundColor: tokens.colors.surface,
-  },
-  sessionListItemVirtual: {
-    borderStyle: "dashed",
-    borderColor: tokens.colors.brand,
-    backgroundColor: tokens.colors.brandTint,
-  },
-  sessionListItemActive: {
-    borderColor: tokens.colors.brand,
-    backgroundColor: tokens.colors.brandTint,
-  },
-  sessionListItemTitle: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  sessionListItemTitleActive: {
-    color: tokens.colors.brand,
-  },
-  sessionListItemMeta: {
-    marginTop: 2,
-    color: tokens.colors.muted,
-    fontSize: 11,
-  },
-  batchActionsRow: {
-    marginTop: tokens.spacing.sm,
-    flexDirection: "row",
-    gap: tokens.spacing.xs,
-  },
-  batchPrimaryButton: {
-    flex: 1,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  batchPrimaryButtonLabel: {
     color: tokens.colors.surface,
-    fontWeight: "700",
-    fontSize: tokens.typography.caption,
   },
-  batchSecondaryButton: {
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surfaceMuted,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  batchSecondaryButtonLabel: {
-    color: tokens.colors.muted,
-    fontWeight: "700",
-    fontSize: tokens.typography.caption,
-  },
-  batchButtonDisabled: {
-    opacity: 0.45,
-  },
-  saveProgressBox: {
-    marginTop: tokens.spacing.sm,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+  dayMarks: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
+    gap: 3,
   },
-  saveProgressTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  saveProgressTitle: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
+  dayMark: {
+    fontSize: 10,
     fontWeight: "700",
-  },
-  saveProgressMeta: {
     color: tokens.colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: "700",
   },
-  saveSuccessBox: {
-    marginTop: tokens.spacing.sm,
-    borderWidth: 1,
-    borderColor: tokens.colors.successInk,
+  dayMarkMissing: {
+    color: tokens.colors.warningInk,
+  },
+  legend: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: tokens.colors.muted,
+  },
+  sessionBlock: {
+    gap: 6,
+    paddingTop: tokens.spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
+  },
+  sessionRow: {
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.successSurface,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 2,
   },
-  saveSuccessTitle: {
-    color: tokens.colors.successInk,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
+  sessionRowVirtual: {
+    borderStyle: "dashed",
+    borderColor: tokens.colors.borderStrong,
   },
-  saveSuccessMeta: {
+  sessionRowSelected: {
+    backgroundColor: tokens.colors.brandTint,
+    borderColor: tokens.colors.brand,
+    borderStyle: "solid",
+  },
+  sessionTitle: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  sessionTitleSelected: {
     color: tokens.colors.successInk,
-    fontSize: 11,
-    lineHeight: 16,
-    fontWeight: "700",
+  },
+  sessionMeta: {
+    fontSize: 12,
+    color: tokens.colors.muted,
   },
 });

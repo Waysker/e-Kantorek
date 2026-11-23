@@ -19,10 +19,10 @@ import {
 } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { SurfaceCard } from "../ui/SurfaceCard";
+import { formatDateLabel } from "../utils/format";
 
 type AttendanceSummaryScreenProps = {
-  onBack: () => void;
+  onBack?: () => void;
 };
 
 type MemberRow = {
@@ -205,8 +205,31 @@ function compareSectionLabels(left: string, right: string): number {
   return left.localeCompare(right, "pl");
 }
 
+function surnameKey(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? fullName;
+}
+
+// Sorted by surname (last word of "First Last"), then by full name.
 function compareMembersByName(left: MemberSummaryRow, right: MemberSummaryRow): number {
-  return left.fullName.localeCompare(right.fullName, "pl");
+  return (
+    surnameKey(left.fullName).localeCompare(surnameKey(right.fullName), "pl") ||
+    left.fullName.localeCompare(right.fullName, "pl")
+  );
+}
+
+const SCOPE_DATE_FORMAT = new Intl.DateTimeFormat("pl-PL", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+function formatScopeDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  if (!year || !month || !day) {
+    return isoDate;
+  }
+  return SCOPE_DATE_FORMAT.format(new Date(year, month - 1, day, 12));
 }
 
 function compareMembersByPoints(left: MemberSummaryRow, right: MemberSummaryRow): number {
@@ -415,6 +438,8 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
   const [latestRefSyncAt, setLatestRefSyncAt] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("alpha");
+  const [activeScope, setActiveScope] = useState<ScopePreset | "custom" | "month">("season");
+  const [showCustomScope, setShowCustomScope] = useState(false);
 
   const displaySections = useMemo<SectionSummary[]>(() => {
     if (sortMode === "alpha") {
@@ -443,6 +468,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
   const applyPreset = useCallback((preset: ScopePreset) => {
     const next = getPresetScope(preset);
+    setActiveScope(preset);
     setStartDateInput(next.startDate);
     setEndDateInput(next.endDate);
     setScopeStartDate(next.startDate);
@@ -473,6 +499,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
     setScopeStartDate(parsedStartDate);
     setScopeEndDate(parsedEndDate);
+    setActiveScope("custom");
     setErrorMessage(null);
   }, [endDateInput, startDateInput]);
 
@@ -494,6 +521,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     setEndDateInput(monthBounds.endDate);
     setScopeStartDate(monthBounds.startDate);
     setScopeEndDate(monthBounds.endDate);
+    setActiveScope("month");
     setErrorMessage(null);
   }, [singleMonthInput]);
 
@@ -585,21 +613,21 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         if (hasSyncMetadataError) {
           setConsistencyNotice(
             tr(
-              "Nie udało się pobrać metadanych ostatniego syncu ref -> DB. Pokazuję bieżące dane z DB.",
+              "Nie wiemy, kiedy ostatnio zsynchronizowano arkusz obecności. Pokazuję bieżące dane z bazy.",
               "Could not load latest ref -> DB sync metadata. Showing current DB data.",
             ),
           );
         } else if (!latestSyncFinishedAt) {
           setConsistencyNotice(
             tr(
-              "Brak zakończonego syncu ref -> DB. Pokazuję bieżące dane z DB; mogą różnić się od arkusza ref.",
+              "Arkusz obecności nie był jeszcze synchronizowany z bazą. Pokazuję bieżące dane z bazy; mogą różnić się od arkusza.",
               "No completed ref -> DB sync found. Showing current DB data, which may differ from the ref sheet.",
             ),
           );
         } else if (changedAfterSyncCount > 0) {
           setConsistencyNotice(
             tr(
-              `Wykryto ${changedAfterSyncCount} zmian obecności po ostatnim syncu ref -> DB. Pokazuję aktualny stan DB, który może chwilowo różnić się od ref.`,
+              `${changedAfterSyncCount} zmian obecności wpisano po ostatniej synchronizacji z arkuszem. Pokazuję aktualny stan bazy; arkusz może się chwilowo różnić.`,
               `Detected ${changedAfterSyncCount} attendance changes after the last ref -> DB sync. Showing current DB state, which may temporarily differ from ref.`,
             ),
           );
@@ -672,218 +700,244 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     };
   }, [scopeEndDate, scopeStartDate]);
 
-  return (
-    <ScrollView style={styles.screenScroll} contentContainerStyle={styles.screenContent}>
-      <SurfaceCard variant="default">
-        <Text style={styles.cardEyebrow}>{tr("Panel obecności", "Attendance panel")}</Text>
-        <Text style={styles.cardTitle}>{tr("Podsumowanie sekcyjne", "Section attendance summary")}</Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Ostatnia synchronizacja danych", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
-        </Text>
-        <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonLabel}>{tr("← Wróć do obecności", "← Back to attendance")}</Text>
-        </Pressable>
-      </SurfaceCard>
+  const presetOptions: Array<{ key: ScopePreset; label: string }> = [
+    { key: "season", label: tr("Sezon", "Season") },
+    { key: "current_month", label: tr("Ten miesiąc", "This month") },
+    { key: "previous_month", label: tr("Poprzedni miesiąc", "Last month") },
+    { key: "30d", label: tr("30 dni", "30 days") },
+    { key: "90d", label: tr("90 dni", "90 days") },
+    { key: "last_3_months", label: tr("3 miesiące", "3 months") },
+    { key: "ytd", label: tr("Ten rok", "This year") },
+    { key: "all", label: tr("Wszystko", "All") },
+  ];
+  const sortOptions: Array<{ key: SortMode; label: string }> = [
+    { key: "alpha", label: tr("A–Z", "A–Z") },
+    { key: "points_section", label: tr("Punkty w sekcjach", "Points by section") },
+    { key: "points_all", label: tr("Ranking", "Ranking") },
+  ];
 
-      <SurfaceCard variant="default">
-        <Text style={styles.sectionTitle}>{tr("Zakres liczenia", "Calculation scope")}</Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Domyślnie: od 1 października do dziś.", "Default: from October 1st to today.")}
-        </Text>
+  const scopeLabel =
+    activeScope === "all"
+      ? tr(`Wszystkie dane, do ${formatScopeDate(scopeEndDate)}`, `All data, up to ${formatScopeDate(scopeEndDate)}`)
+      : `${formatScopeDate(scopeStartDate)} – ${formatScopeDate(scopeEndDate)}`;
 
-        <View style={styles.presetRow}>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("season")}>
-            <Text style={styles.presetButtonLabel}>{tr("Sezon", "Season")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("30d")}>
-            <Text style={styles.presetButtonLabel}>{tr("30 dni", "30 days")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("90d")}>
-            <Text style={styles.presetButtonLabel}>{tr("90 dni", "90 days")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("current_month")}>
-            <Text style={styles.presetButtonLabel}>{tr("Aktualny miesiąc", "Current month")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("previous_month")}>
-            <Text style={styles.presetButtonLabel}>{tr("Poprzedni miesiąc", "Previous month")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("last_3_months")}>
-            <Text style={styles.presetButtonLabel}>{tr("Ostatnie 3 miesiące", "Last 3 months")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("ytd")}>
-            <Text style={styles.presetButtonLabel}>{tr("Rok", "YTD")}</Text>
-          </Pressable>
-          <Pressable style={styles.presetButton} onPress={() => applyPreset("all")}>
-            <Text style={styles.presetButtonLabel}>{tr("Wszystko", "All")}</Text>
-          </Pressable>
-        </View>
+  // Desktop: two balanced columns of section cards (no gaps between cards of
+  // different heights). The "ranking" view is a single long list.
+  const sectionColumns: SectionSummary[][] =
+    isDesktopLayout && sortMode !== "points_all" ? [[], []] : [[]];
+  const columnLoad = sectionColumns.map(() => 0);
+  for (const section of displaySections) {
+    const target = columnLoad.length > 1 && columnLoad[1] < columnLoad[0] ? 1 : 0;
+    sectionColumns[target].push(section);
+    columnLoad[target] += section.members.length + 2;
+  }
 
-        <View style={styles.singleMonthRow}>
-          <View style={styles.singleMonthInputBlock}>
-            <Text style={styles.scopeInputLabel}>{tr("Miesiąc", "Month")}</Text>
-            <TextInput
-              {...(webMonthInputProps as any)}
-              value={singleMonthInput}
-              onChangeText={setSingleMonthInput}
-              placeholder="YYYY-MM"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-              style={styles.scopeInput}
-            />
-          </View>
-          <Pressable style={styles.singleMonthApplyButton} onPress={applySingleMonthScope}>
-            <Text style={styles.applyButtonLabel}>{tr("Ustaw miesiąc", "Apply month")}</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.scopeInputsRow}>
-          <View style={styles.scopeInputBlock}>
-            <Text style={styles.scopeInputLabel}>{tr("Od", "From")}</Text>
-            <TextInput
-              {...(webDateInputProps as any)}
-              value={startDateInput}
-              onChangeText={setStartDateInput}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-              style={styles.scopeInput}
-            />
-          </View>
-          <View style={styles.scopeInputBlock}>
-            <Text style={styles.scopeInputLabel}>{tr("Do", "To")}</Text>
-            <TextInput
-              {...(webDateInputProps as any)}
-              value={endDateInput}
-              onChangeText={setEndDateInput}
-              placeholder="YYYY-MM-DD"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-              style={styles.scopeInput}
-            />
-          </View>
-        </View>
-
-        <Pressable style={styles.applyButton} onPress={applyCustomScope}>
-          <Text style={styles.applyButtonLabel}>{tr("Przelicz zakres", "Apply scope")}</Text>
-        </Pressable>
-
-        <Text style={styles.cardSecondary}>
-          {tr("Aktywny zakres", "Active scope")}: {scopeStartDate} → {scopeEndDate}
-        </Text>
-      </SurfaceCard>
-
-      <SurfaceCard variant="default">
-        <Text style={styles.sectionTitle}>{tr("Wynik", "Result")}</Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Liczba wydarzeń w zakresie", "Number of events in scope")}: {totalEvents}
-        </Text>
-        <View style={styles.sortRow}>
-          <Pressable
-            style={[styles.presetButton, sortMode === "alpha" && styles.presetButtonActive]}
-            onPress={() => setSortMode("alpha")}
-          >
-            <Text style={[styles.presetButtonLabel, sortMode === "alpha" && styles.presetButtonLabelActive]}>
-              {tr("A-Z", "A-Z")}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.presetButton, sortMode === "points_section" && styles.presetButtonActive]}
-            onPress={() => setSortMode("points_section")}
-          >
-            <Text
-              style={[
-                styles.presetButtonLabel,
-                sortMode === "points_section" && styles.presetButtonLabelActive,
-              ]}
-            >
-              {tr("Punkty sekcje", "Points by section")}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.presetButton, sortMode === "points_all" && styles.presetButtonActive]}
-            onPress={() => setSortMode("points_all")}
-          >
-            <Text
-              style={[
-                styles.presetButtonLabel,
-                sortMode === "points_all" && styles.presetButtonLabelActive,
-              ]}
-            >
-              {tr("Punkty wszyscy", "Points all")}
-            </Text>
-          </Pressable>
-        </View>
-
-        {isLoading ? (
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={tokens.colors.brand} />
+  function renderSection(section: SectionSummary) {
+    const isRanking = sortMode === "points_all";
+    return (
+      <View key={section.key} style={styles.sectionCard}>
+        {!isRanking ? (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.label}</Text>
+            <Text style={styles.sectionCount}>{section.members.length}</Text>
           </View>
         ) : null}
-
-        {!isLoading && errorMessage ? (
-          <View style={styles.errorBox}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        {!isLoading && !errorMessage && consistencyNotice ? (
-          <View style={styles.noticeBox}>
-            <Text style={styles.noticeText}>{consistencyNotice}</Text>
-          </View>
-        ) : null}
-
-        {!isLoading && !errorMessage && displaySections.length === 0 ? (
-          <Text style={styles.cardBody}>
-            {tr("Brak muzyków lub danych do policzenia w tym zakresie.", "No members or no data to compute in this scope.")}
-          </Text>
-        ) : null}
-
-        {!isLoading && !errorMessage
-          ? displaySections.map((section) => (
-              <View key={section.key} style={styles.sectionBlock}>
-                <Text style={styles.sectionLabel}>{section.label}</Text>
-                <View
-                  style={[
-                    styles.memberTable,
-                    isDesktopLayout && styles.memberTableDesktop,
-                    isDesktopLayout && memberTableMaxWidth ? { maxWidth: memberTableMaxWidth } : null,
-                  ]}
-                >
-                  {section.members.map((member) => (
-                    <View
-                      key={member.memberId}
-                      style={[styles.memberRow, isDesktopLayout && styles.memberRowDesktop]}
-                    >
-                      <Text
-                        style={[styles.memberName, isDesktopLayout && styles.memberNameDesktop]}
-                        numberOfLines={1}
-                      >
-                        {member.fullName}
-                      </Text>
-                      <View
-                        style={[styles.memberMetrics, isDesktopLayout && styles.memberMetricsDesktop]}
-                      >
-                        <Text
-                          style={[styles.memberPercent, isDesktopLayout && styles.memberPercentDesktop]}
-                        >
-                          {formatPercent(member.percent)}
-                        </Text>
-                        <Text
-                          style={[styles.memberPoints, isDesktopLayout && styles.memberPointsDesktop]}
-                        >
-                          {formatPoints(member.points)} {tr("pkt", "pts")}
-                        </Text>
-                      </View>
-                    </View>
-                  ))}
+        {section.members.map((member, index) => {
+          const percent = Math.max(0, Math.min(100, member.percent));
+          return (
+            <View key={member.memberId} style={[styles.memberRow, index > 0 && styles.memberRowDivider]}>
+              {isRanking ? <Text style={styles.rank}>{index + 1}</Text> : null}
+              <View style={styles.memberMain}>
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {member.fullName}
+                </Text>
+                <View style={styles.track}>
+                  <View
+                    style={[
+                      styles.fill,
+                      { width: `${percent}%` },
+                      percent < 50 && styles.fillLow,
+                    ]}
+                  />
                 </View>
               </View>
-            ))
-          : null}
-      </SurfaceCard>
+              <View style={styles.memberMetrics}>
+                <Text style={styles.memberPercent}>{formatPercent(member.percent)}</Text>
+                <Text style={styles.memberPoints}>
+                  {formatPoints(member.points)} {tr("pkt", "pts")}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.screenScroll}
+      contentContainerStyle={[styles.content, isDesktopLayout && styles.contentDesktop]}
+      showsVerticalScrollIndicator={false}
+    >
+      {onBack ? (
+        <Pressable style={styles.backLink} onPress={onBack} accessibilityRole="button">
+          <Text style={styles.backLinkLabel}>{tr("‹ Wróć", "‹ Back")}</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.header}>
+        <Text style={styles.kicker}>{tr("Podsumowanie i punkty", "Summary and points")}</Text>
+        <Text style={styles.title}>{scopeLabel}</Text>
+        <Text style={styles.muted}>
+          {isLoading
+            ? tr("Liczę…", "Calculating…")
+            : tr(`Wydarzeń w zakresie: ${totalEvents}`, `Events in range: ${totalEvents}`)}
+          {" · "}
+          {tr("synchronizacja danych", "data sync")}:{" "}
+          {latestRefSyncAt ? formatDateLabel(latestRefSyncAt) : tr("brak", "none")}
+        </Text>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.chips}>
+          {presetOptions.map((option) => {
+            const isActive = activeScope === option.key;
+            return (
+              <Pressable
+                key={option.key}
+                onPress={() => applyPreset(option.key)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                style={[styles.chip, isActive && styles.chipActive]}
+              >
+                <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>{option.label}</Text>
+              </Pressable>
+            );
+          })}
+          <Pressable
+            onPress={() => setShowCustomScope((value) => !value)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showCustomScope }}
+            style={[
+              styles.chip,
+              (activeScope === "custom" || activeScope === "month") && styles.chipActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipLabel,
+                (activeScope === "custom" || activeScope === "month") && styles.chipLabelActive,
+              ]}
+            >
+              {tr("Własny zakres", "Custom range")} {showCustomScope ? "▴" : "▾"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {showCustomScope ? (
+          <View style={styles.customScope}>
+            <View style={styles.inputRow}>
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>{tr("Miesiąc", "Month")}</Text>
+                <TextInput
+                  {...(webMonthInputProps as any)}
+                  value={singleMonthInput}
+                  onChangeText={setSingleMonthInput}
+                  placeholder="RRRR-MM"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+                  style={styles.input}
+                />
+              </View>
+              <Pressable style={styles.secondaryButton} onPress={applySingleMonthScope} accessibilityRole="button">
+                <Text style={styles.secondaryButtonLabel}>{tr("Pokaż miesiąc", "Show month")}</Text>
+              </Pressable>
+            </View>
+            <View style={styles.inputRow}>
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>{tr("Od", "From")}</Text>
+                <TextInput
+                  {...(webDateInputProps as any)}
+                  value={startDateInput}
+                  onChangeText={setStartDateInput}
+                  placeholder="RRRR-MM-DD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+                  style={styles.input}
+                />
+              </View>
+              <View style={styles.inputBlock}>
+                <Text style={styles.inputLabel}>{tr("Do", "To")}</Text>
+                <TextInput
+                  {...(webDateInputProps as any)}
+                  value={endDateInput}
+                  onChangeText={setEndDateInput}
+                  placeholder="RRRR-MM-DD"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+                  style={styles.input}
+                />
+              </View>
+              <Pressable style={styles.secondaryButton} onPress={applyCustomScope} accessibilityRole="button">
+                <Text style={styles.secondaryButtonLabel}>{tr("Przelicz", "Apply")}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.segmented} accessibilityRole="tablist">
+        {sortOptions.map((option) => {
+          const isActive = sortMode === option.key;
+          return (
+            <Pressable
+              key={option.key}
+              onPress={() => setSortMode(option.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.segment, isActive && styles.segmentActive]}
+            >
+              <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {isLoading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color={tokens.colors.brand} />
+        </View>
+      ) : null}
+
+      {!isLoading && errorMessage ? (
+        <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text>
+      ) : null}
+
+      {!isLoading && !errorMessage && consistencyNotice ? (
+        <Text style={[styles.notice, styles.noticeWarning]}>{consistencyNotice}</Text>
+      ) : null}
+
+      {!isLoading && !errorMessage && displaySections.length === 0 ? (
+        <Text style={styles.muted}>
+          {tr("Brak muzyków lub danych do policzenia w tym zakresie.", "No members or no data in this range.")}
+        </Text>
+      ) : null}
+
+      {!isLoading && !errorMessage && displaySections.length > 0 ? (
+        <View style={[styles.sections, sectionColumns.length > 1 && styles.sectionsColumns]}>
+          {sectionColumns.map((column, columnIndex) => (
+            <View key={columnIndex} style={styles.sectionColumn}>
+              {column.map((section) => renderSection(section))}
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -892,250 +946,267 @@ const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
-    padding: tokens.spacing.lg,
+  content: {
+    padding: tokens.spacing.md,
     gap: tokens.spacing.md,
   },
-  cardEyebrow: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    fontWeight: "700",
+  contentDesktop: {
+    width: "100%",
+    maxWidth: 1120,
+    alignSelf: "center",
+    paddingHorizontal: tokens.spacing.xl,
+    paddingTop: tokens.spacing.lg,
   },
-  cardTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.body,
-    lineHeight: 23,
-    color: tokens.colors.ink,
-  },
-  cardSecondary: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    color: tokens.colors.muted,
-  },
-  backButton: {
-    marginTop: tokens.spacing.md,
+  backLink: {
     alignSelf: "flex-start",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.surfaceMuted,
+    minHeight: 32,
+    justifyContent: "center",
+  },
+  backLinkLabel: {
+    color: tokens.colors.brand,
+    fontWeight: "600",
+  },
+  header: {
+    gap: 2,
+  },
+  kicker: {
+    fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    color: tokens.colors.muted,
+  },
+  title: {
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    color: tokens.colors.ink,
+  },
+  muted: {
+    fontSize: 14,
+    color: tokens.colors.muted,
+  },
+  card: {
+    backgroundColor: tokens.colors.surface,
     borderWidth: 1,
     borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.sm,
+    gap: tokens.spacing.sm,
   },
-  backButtonLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  sectionTitle: {
-    fontSize: tokens.typography.body,
-    lineHeight: 24,
-    fontWeight: "700",
-    color: tokens.colors.ink,
-  },
-  presetRow: {
-    marginTop: tokens.spacing.sm,
+  chips: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
+    gap: 6,
   },
-  presetButton: {
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.xs,
+  chip: {
+    minHeight: 36,
+    paddingHorizontal: 12,
     borderRadius: tokens.radii.round,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surfaceMuted,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
   },
-  presetButtonLabel: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  presetButtonActive: {
+  chipActive: {
     backgroundColor: tokens.colors.brand,
     borderColor: tokens.colors.brand,
   },
-  presetButtonLabelActive: {
+  chipLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  chipLabelActive: {
     color: tokens.colors.surface,
   },
-  scopeInputsRow: {
-    marginTop: tokens.spacing.md,
-    flexDirection: "row",
+  customScope: {
     gap: tokens.spacing.sm,
-    flexWrap: "wrap",
+    paddingTop: tokens.spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
   },
-  singleMonthRow: {
-    marginTop: tokens.spacing.md,
+  inputRow: {
     flexDirection: "row",
-    gap: tokens.spacing.sm,
     flexWrap: "wrap",
     alignItems: "flex-end",
+    gap: tokens.spacing.xs,
   },
-  singleMonthInputBlock: {
+  inputBlock: {
     flexGrow: 1,
-    minWidth: 160,
+    flexBasis: 140,
+    gap: 4,
   },
-  scopeInputBlock: {
-    flexGrow: 1,
-    minWidth: 160,
-  },
-  scopeInputLabel: {
-    fontSize: tokens.typography.caption,
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
     color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
   },
-  scopeInput: {
+  input: {
+    minHeight: 44,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: tokens.colors.borderStrong,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+    paddingHorizontal: 12,
+    fontSize: 15,
     color: tokens.colors.ink,
     backgroundColor: tokens.colors.surface,
   },
-  applyButton: {
-    marginTop: tokens.spacing.md,
-    alignSelf: "flex-start",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
+  secondaryButton: {
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: tokens.radii.md,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  singleMonthApplyButton: {
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
+  secondaryButtonLabel: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
   },
-  applyButtonLabel: {
-    color: tokens.colors.surface,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  segmented: {
+    flexDirection: "row",
+    gap: 4,
+    padding: 4,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.surfaceMuted,
   },
-  loadingWrap: {
-    marginTop: tokens.spacing.md,
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  segmentActive: {
+    backgroundColor: tokens.colors.surface,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  segmentLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.muted,
+    textAlign: "center",
+  },
+  segmentLabelActive: {
+    color: tokens.colors.ink,
+  },
+  loadingRow: {
+    paddingVertical: tokens.spacing.lg,
+    alignItems: "center",
+  },
+  notice: {
+    fontSize: 14,
+    lineHeight: 20,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
+  },
+  noticeError: {
+    backgroundColor: tokens.colors.dangerSurface,
+    color: tokens.colors.dangerInk,
+  },
+  noticeWarning: {
+    backgroundColor: tokens.colors.warningSurface,
+    color: tokens.colors.warningInk,
+  },
+  sections: {
+    gap: tokens.spacing.sm,
+  },
+  sectionsColumns: {
+    flexDirection: "row",
     alignItems: "flex-start",
   },
-  sortRow: {
-    marginTop: tokens.spacing.sm,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.spacing.xs,
+  sectionColumn: {
+    flex: 1,
+    minWidth: 0,
+    gap: tokens.spacing.sm,
   },
-  errorBox: {
-    marginTop: tokens.spacing.md,
-    padding: tokens.spacing.sm,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.dangerSurface,
-  },
-  errorText: {
-    color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
-  },
-  noticeBox: {
-    marginTop: tokens.spacing.md,
-    padding: tokens.spacing.sm,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brandTint,
+  sectionCard: {
+    backgroundColor: tokens.colors.surface,
     borderWidth: 1,
     borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 6,
   },
-  noticeText: {
-    color: tokens.colors.successInk,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingBottom: 6,
   },
-  sectionBlock: {
-    marginTop: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    paddingTop: tokens.spacing.sm,
-  },
-  sectionLabel: {
-    fontSize: tokens.typography.body,
-    lineHeight: 24,
+  sectionTitle: {
+    fontSize: 16,
     fontWeight: "700",
     color: tokens.colors.ink,
-    marginBottom: tokens.spacing.xs,
   },
-  memberTable: {
-    gap: tokens.spacing.xs,
-  },
-  memberTableDesktop: {
-    width: "100%",
-    alignSelf: "center",
+  sectionCount: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: tokens.colors.muted,
   },
   memberRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: tokens.spacing.sm,
-    paddingVertical: 4,
-    direction: "ltr",
+    gap: 12,
+    paddingVertical: 9,
   },
-  memberRowDesktop: {
-    justifyContent: "flex-start",
-    gap: tokens.spacing.md,
+  memberRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
+  },
+  rank: {
+    width: 24,
+    fontSize: 13,
+    fontWeight: "600",
+    color: tokens.colors.muted,
+    textAlign: "right",
+  },
+  memberMain: {
+    flex: 1,
+    minWidth: 0,
+    gap: 5,
   },
   memberName: {
-    flex: 1,
-    fontSize: tokens.typography.body,
-    lineHeight: 22,
+    fontSize: 15,
     color: tokens.colors.ink,
-    textAlign: "left",
   },
-  memberNameDesktop: {
-    flexGrow: 1,
-    flexShrink: 1,
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: tokens.colors.surfaceMuted,
+    overflow: "hidden",
+  },
+  fill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: tokens.colors.brand,
+  },
+  fillLow: {
+    backgroundColor: tokens.colors.warningBorder,
   },
   memberMetrics: {
     alignItems: "flex-end",
-    minWidth: 110,
-  },
-  memberMetricsDesktop: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "flex-end",
-    gap: tokens.spacing.md,
-    minWidth: 210,
-    flexShrink: 0,
+    minWidth: 64,
   },
   memberPercent: {
-    fontSize: tokens.typography.body,
-    lineHeight: 20,
+    fontSize: 15,
     fontWeight: "700",
     color: tokens.colors.ink,
   },
-  memberPercentDesktop: {
-    minWidth: 72,
-    textAlign: "right",
-  },
   memberPoints: {
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
+    fontSize: 12,
     color: tokens.colors.muted,
-  },
-  memberPointsDesktop: {
-    minWidth: 84,
-    textAlign: "right",
   },
 });

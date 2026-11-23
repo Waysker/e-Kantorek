@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
@@ -15,38 +15,78 @@ type SectionGridPanelProps = {
   onSelectSection: (sectionKey: string) => void;
 };
 
+// Sections laid out like the rehearsal seating; each tile shows marking progress.
 export function SectionGridPanel({ rows, onSelectSection }: SectionGridPanelProps) {
+  const { width } = useWindowDimensions();
+  // On narrow screens the seating rows (up to 5 tiles) get too cramped, so the
+  // tiles are laid out two per row in the same order instead.
+  const isNarrow = width < 600;
+  const layoutRows = isNarrow
+    ? rows.flat().reduce<SectionGridTile[][]>((acc, tile, index) => {
+        if (index % 2 === 0) {
+          acc.push([tile]);
+        } else {
+          acc[acc.length - 1].push(tile);
+        }
+        return acc;
+      }, [])
+    : rows;
+
   return (
     <>
-      <Text style={styles.sectionTitle}>
-        {tr("Sekcje według ustawienia na próbie", "Sections by rehearsal seating")}
-      </Text>
+      <View style={styles.header}>
+        <Text style={styles.kicker}>{tr("Sekcje", "Sections")}</Text>
+        <Text style={styles.hint}>
+          {tr("Układ jak na próbie. Wybierz sekcję, aby odklikać obecność.", "Laid out like rehearsal seating. Pick a section to mark attendance.")}
+        </Text>
+      </View>
 
-      <View style={styles.sectionGrid}>
-        {rows.map((row, rowIndex) => (
-          <View key={`section-row-${rowIndex}`} style={styles.sectionGridRow}>
+      <View style={styles.grid}>
+        {layoutRows.map((row, rowIndex) => (
+          <View key={`section-row-${rowIndex}`} style={styles.row}>
             {row.map((item) => {
+              const isEmpty = item.totalMembers === 0;
+              const isDone = !isEmpty && item.markedMembers >= item.totalMembers;
+              const progress = isEmpty ? 0 : item.markedMembers / item.totalMembers;
               return (
                 <Pressable
                   key={item.key}
                   onPress={() => onSelectSection(item.key)}
-                  style={[
-                    styles.sectionTile,
-                    item.totalMembers === 0 && styles.sectionTileEmpty,
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.label}, ${item.markedMembers}/${item.totalMembers}`}
+                  style={(state) => [
+                    styles.tile,
+                    isEmpty && styles.tileEmpty,
+                    isDone && styles.tileDone,
+                    ((state as { hovered?: boolean }).hovered || state.pressed) && styles.tileHovered,
                   ]}
                 >
-                  <Text style={styles.sectionTileLabel}>{item.label}</Text>
-                  <Text style={styles.sectionTileMeta}>
-                    {item.totalMembers > 0
-                      ? tr(
-                        `${item.markedMembers}/${item.totalMembers} odklikane`,
-                        `${item.markedMembers}/${item.totalMembers} marked`,
-                      )
-                      : tr("Brak składu", "No members")}
+                  <Text style={[styles.label, isEmpty && styles.labelEmpty]} numberOfLines={2}>
+                    {item.label}
                   </Text>
+                  {isEmpty ? (
+                    <Text style={styles.meta}>{tr("Brak składu", "No members")}</Text>
+                  ) : (
+                    <View style={styles.progressBlock}>
+                      <Text style={[styles.meta, isDone && styles.metaDone]}>
+                        {isDone ? "✓ " : ""}
+                        {item.markedMembers}/{item.totalMembers}
+                      </Text>
+                      <View style={styles.track}>
+                        <View
+                          style={[
+                            styles.fill,
+                            { width: `${Math.round(progress * 100)}%` },
+                            isDone && styles.fillDone,
+                          ]}
+                        />
+                      </View>
+                    </View>
+                  )}
                 </Pressable>
               );
             })}
+            {isNarrow && row.length === 1 ? <View style={styles.tileSpacer} /> : null}
           </View>
         ))}
       </View>
@@ -55,45 +95,84 @@ export function SectionGridPanel({ rows, onSelectSection }: SectionGridPanelProp
 }
 
 const styles = StyleSheet.create({
-  sectionTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
+  header: {
+    gap: 2,
   },
-  sectionGrid: {
-    marginTop: tokens.spacing.sm,
+  kicker: {
+    fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
+    color: tokens.colors.muted,
+  },
+  hint: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  grid: {
     gap: tokens.spacing.xs,
   },
-  sectionGridRow: {
+  row: {
     flexDirection: "row",
     alignItems: "stretch",
     gap: tokens.spacing.xs,
   },
-  sectionTile: {
+  tile: {
     flex: 1,
-    minHeight: 84,
+    minHeight: 76,
     borderWidth: 1,
     borderColor: tokens.colors.border,
     borderRadius: tokens.radii.md,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: tokens.spacing.sm,
+    padding: tokens.spacing.sm,
     backgroundColor: tokens.colors.surface,
     justifyContent: "space-between",
     gap: tokens.spacing.xs,
   },
-  sectionTileEmpty: {
-    opacity: 0.65,
-    backgroundColor: tokens.colors.surfaceMuted,
+  tileSpacer: {
+    flex: 1,
   },
-  sectionTileLabel: {
+  tileHovered: {
+    borderColor: tokens.colors.brand,
+  },
+  tileEmpty: {
+    backgroundColor: tokens.colors.paper,
+    borderStyle: "dashed",
+  },
+  tileDone: {
+    backgroundColor: tokens.colors.successSurface,
+    borderColor: tokens.colors.successSurface,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
   },
-  sectionTileMeta: {
+  labelEmpty: {
     color: tokens.colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
+  },
+  progressBlock: {
+    gap: 4,
+  },
+  meta: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: tokens.colors.muted,
+  },
+  metaDone: {
+    color: tokens.colors.successInk,
+  },
+  track: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: tokens.colors.surfaceMuted,
+    overflow: "hidden",
+  },
+  fill: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: tokens.colors.brand,
+  },
+  fillDone: {
+    backgroundColor: tokens.colors.successInk,
   },
 });

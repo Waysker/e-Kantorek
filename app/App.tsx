@@ -33,7 +33,6 @@ import { AuthScreen } from "./src/screens/AuthScreen";
 import { MissingEventScreen } from "./src/screens/MissingEventScreen";
 import { AttendanceManagerScreen } from "./src/screens/AttendanceManagerScreen";
 import { AttendanceSummaryScreen } from "./src/screens/AttendanceSummaryScreen";
-import { AttendanceWorkspaceScreen } from "./src/screens/AttendanceWorkspaceScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
 import { InstrumentMappingScreen } from "./src/screens/InstrumentMappingScreen";
@@ -924,7 +923,10 @@ export default function App() {
   const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
   const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
   const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
-  const canSendAttendanceReminders = canViewAttendanceSummary;
+  // Reminders ("Ponaglij") are hidden for now; the code stays so the feature
+  // can be revived on a branch by flipping this flag.
+  const ATTENDANCE_REMINDERS_ENABLED = false;
+  const canSendAttendanceReminders = ATTENDANCE_REMINDERS_ENABLED && canViewAttendanceSummary;
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
   const canManageInstrumentMapping = canManageInstrumentMappingByRole(
     effectiveCurrentUser.role,
@@ -936,11 +938,18 @@ export default function App() {
     ? findUnmappedSquadMembers(eventDetailsById)
     : [];
   const boardSections: BoardSection[] = [
-    ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
+    ...(canWriteAttendance ? (["attendance"] as const) : []),
+    ...(canViewAttendanceSummary ? (["summary"] as const) : []),
     ...(canManageRoles ? (["roles"] as const) : []),
     ...(canManageInstrumentMapping ? (["instruments"] as const) : []),
   ];
-  const activeBoardSection = routeToBoardSection(route);
+  // The old attendance hub route now opens the first attendance tool directly.
+  const activeBoardSection =
+    route.name === "attendanceWorkspace"
+      ? canWriteAttendance
+        ? "attendance"
+        : "summary"
+      : routeToBoardSection(route);
   const navigationTabs: PrimaryTab[] = [
     "home",
     "events",
@@ -1045,7 +1054,11 @@ export default function App() {
 
   function openBoardSection(section: BoardSection) {
     if (section === "attendance") {
-      resetToRoute({ name: "attendanceWorkspace" });
+      resetToRoute({ name: "attendanceManager" });
+      return;
+    }
+    if (section === "summary") {
+      resetToRoute({ name: "attendanceSummary" });
       return;
     }
     if (section === "roles") {
@@ -1207,21 +1220,11 @@ export default function App() {
           />
         );
       case "attendanceWorkspace":
-        return canAccessAttendanceWorkspace ? (
-          <AttendanceWorkspaceScreen
-            canWriteAttendance={canWriteAttendance}
-            canViewAttendanceSummary={canViewAttendanceSummary}
-            onOpenAttendanceManager={
-              canWriteAttendance
-                ? () => pushRoute({ name: "attendanceManager" })
-                : undefined
-            }
-            onOpenAttendanceSummary={
-              canViewAttendanceSummary
-                ? () => pushRoute({ name: "attendanceSummary" })
-                : undefined
-            }
-          />
+        // Kept for links/history saved before the hub was removed.
+        return canWriteAttendance ? (
+          <AttendanceManagerScreen />
+        ) : canViewAttendanceSummary ? (
+          <AttendanceSummaryScreen />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "events" })}
@@ -1230,23 +1233,19 @@ export default function App() {
         );
       case "attendanceManager":
         return canWriteAttendance ? (
-          <AttendanceManagerScreen
-            onBack={() => goBack({ name: "attendanceWorkspace" })}
-          />
+          <AttendanceManagerScreen />
         ) : (
           <MissingEventScreen
-            onBack={() => goBack({ name: "attendanceWorkspace" })}
+            onBack={() => goBack({ name: "events" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );
       case "attendanceSummary":
         return canViewAttendanceSummary ? (
-          <AttendanceSummaryScreen
-            onBack={() => goBack({ name: "attendanceWorkspace" })}
-          />
+          <AttendanceSummaryScreen />
         ) : (
           <MissingEventScreen
-            onBack={() => goBack({ name: "attendanceWorkspace" })}
+            onBack={() => goBack({ name: "events" })}
             title={tr("Brak uprawnień", "No permission")}
           />
         );

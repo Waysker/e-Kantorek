@@ -15,6 +15,9 @@ function getSectionLabel(section: BoardSection) {
   if (section === "attendance") {
     return tr("Obecność", "Attendance");
   }
+  if (section === "summary") {
+    return tr("Podsumowanie i punkty", "Summary and points");
+  }
   if (section === "roles") {
     return tr("Role", "Roles");
   }
