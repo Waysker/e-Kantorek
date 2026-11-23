@@ -32,8 +32,8 @@ export function UnmappedMembersBanner({ members }: UnmappedMembersBannerProps) {
       </Text>
       <Text style={styles.detailsLabel}>
         {namesLabel}. {tr(
-          "Dodaj mapping, żeby trafiły do właściwej sekcji.",
-          "Add a mapping so they land in the right section.",
+          "Przypisz je w zakładce Instrumenty.",
+          "Assign them in the Instruments tab.",
         )}
       </Text>
     </View>

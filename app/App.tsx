@@ -33,6 +33,7 @@ import { AttendanceSummaryScreen } from "./src/screens/AttendanceSummaryScreen";
 import { AttendanceWorkspaceScreen } from "./src/screens/AttendanceWorkspaceScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { RegisterScreen } from "./src/screens/RegisterScreen";
+import { InstrumentMappingScreen } from "./src/screens/InstrumentMappingScreen";
 import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
 import { SquadScreen } from "./src/screens/SquadScreen";
@@ -41,6 +42,7 @@ import { tokens } from "./src/theme/tokens";
 import { AppShell } from "./src/ui/AppShell";
 import { UnmappedMembersBanner } from "./src/ui/UnmappedMembersBanner";
 import {
+  canManageInstrumentMappingByRole,
   canSeeUnmappedMembersAlertByRole,
   findUnmappedSquadMembers,
 } from "./src/domain/unmappedMembers";
@@ -919,6 +921,9 @@ export default function App() {
   const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
   const canSendAttendanceReminders = canViewAttendanceSummary;
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
+  const canManageInstrumentMapping = canManageInstrumentMappingByRole(
+    effectiveCurrentUser.role,
+  );
   const canSeeUnmappedMembersAlert = canSeeUnmappedMembersAlertByRole(
     effectiveCurrentUser.role,
   );
@@ -930,6 +935,7 @@ export default function App() {
     "calendar",
     ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
     ...(canManageRoles ? (["roles"] as const) : []),
+    ...(canManageInstrumentMapping ? (["instruments"] as const) : []),
     "profile",
   ];
   const unreadNotificationsCount = notifications.reduce(
@@ -1050,6 +1056,15 @@ export default function App() {
     if (tab === "roles") {
       if (canManageRoles) {
         resetToRoute({ name: "roleManagement" });
+      } else {
+        resetToRoute({ name: "events" });
+      }
+      return;
+    }
+
+    if (tab === "instruments") {
+      if (canManageInstrumentMapping) {
+        resetToRoute({ name: "instrumentMapping" });
       } else {
         resetToRoute({ name: "events" });
       }
@@ -1216,6 +1231,15 @@ export default function App() {
       case "roleManagement":
         return canManageRoles ? (
           <RoleManagementScreen currentUserId={effectiveCurrentUser.id} />
+        ) : (
+          <MissingEventScreen
+            onBack={() => goBack({ name: "events" })}
+            title={tr("Brak uprawnień", "No permission")}
+          />
+        );
+      case "instrumentMapping":
+        return canManageInstrumentMapping ? (
+          <InstrumentMappingScreen />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "events" })}

@@ -39,6 +39,9 @@ function getTabLabel(tab: PrimaryTab): string {
   if (tab === "roles") {
     return tr("Role", "Roles");
   }
+  if (tab === "instruments") {
+    return tr("Instrumenty", "Instruments");
+  }
   return tr("Profil", "Profile");
 }
 

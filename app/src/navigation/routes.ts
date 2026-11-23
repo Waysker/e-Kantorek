@@ -1,4 +1,4 @@
-export type PrimaryTab = "events" | "calendar" | "attendance" | "roles" | "profile";
+export type PrimaryTab = "events" | "calendar" | "attendance" | "roles" | "instruments" | "profile";
 export type AttendanceFocusStatus = "going" | "not_going";
 
 export type AppRoute =
@@ -12,6 +12,7 @@ export type AppRoute =
   | { name: "attendanceManager" }
   | { name: "attendanceSummary" }
   | { name: "roleManagement" }
+  | { name: "instrumentMapping" }
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
@@ -33,6 +34,10 @@ export function routeToTab(route: AppRoute): PrimaryTab {
 
   if (route.name === "roleManagement") {
     return "roles";
+  }
+
+  if (route.name === "instrumentMapping") {
+    return "instruments";
   }
 
   return "events";

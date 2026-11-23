@@ -31,3 +31,5 @@ export function findUnmappedSquadMembers(
 export function canSeeUnmappedMembersAlertByRole(role: string): boolean {
   return role === "board" || role === "admin";
 }
+
+export const canManageInstrumentMappingByRole = canSeeUnmappedMembersAlertByRole;
