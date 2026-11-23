@@ -209,7 +209,7 @@ export function RegisterScreen({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-            <Text style={styles.eyebrow}>ORAGH</Text>
+            <Text style={styles.eyebrow}>e-Kantorek</Text>
             <Text style={styles.title}>{tr("Załóż konto", "Create account")}</Text>
 
             <Text style={styles.label}>{tr("Imię", "First name")}</Text>

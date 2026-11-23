@@ -35,15 +35,15 @@ function sortByNearestPast(left: EventListItem, right: EventListItem) {
 
 function getAttendanceLabel(status: EventListItem["attendanceStatus"]) {
   if (status === "going") {
-    return tr("Bede", "Going");
+    return tr("Będę", "Going");
   }
   if (status === "maybe") {
-    return tr("Moze", "Maybe");
+    return tr("Może", "Maybe");
   }
   if (status === "not_going") {
-    return tr("Nie bede", "Not going");
+    return tr("Nie będę", "Not going");
   }
-  return tr("Brak odpowiedzi", "No response");
+  return tr("Brak deklaracji", "No response");
 }
 
 export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
@@ -67,7 +67,7 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
     >
       <View style={styles.screenHeaderBlock}>
         <Text style={styles.kicker}>{tr("Wydarzenia", "Events")}</Text>
-        <Text style={styles.screenTitle}>{tr("Najblizsze na gorze", "Closest first by date")}</Text>
+        <Text style={styles.screenTitle}>{tr("Najbliższe wydarzenia", "Closest first by date")}</Text>
       </View>
 
       <View style={styles.tabRow}>
@@ -76,7 +76,7 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
           style={[styles.tabButton, activeTab === "upcoming" && styles.tabButtonActive]}
         >
           <Text style={[styles.tabLabel, activeTab === "upcoming" && styles.tabLabelActive]}>
-            {tr("Nadchodzace", "Upcoming")} ({upcomingEvents.length})
+            {tr("Nadchodzące", "Upcoming")} ({upcomingEvents.length})
           </Text>
         </Pressable>
         <Pressable
@@ -84,7 +84,7 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
           style={[styles.tabButton, activeTab === "past" && styles.tabButtonActive]}
         >
           <Text style={[styles.tabLabel, activeTab === "past" && styles.tabLabelActive]}>
-            {tr("Archiwum", "Past")} ({pastEvents.length})
+            {tr("Minione", "Past")} ({pastEvents.length})
           </Text>
         </Pressable>
       </View>
@@ -93,12 +93,12 @@ export function EventsScreen({ events, onOpenEvent }: EventsScreenProps) {
         <SurfaceCard variant="outline">
           <Text style={styles.emptyTitle}>
             {activeTab === "upcoming"
-              ? tr("Brak nadchodzacych wydarzen.", "No upcoming events.")
-              : tr("Brak wydarzen archiwalnych.", "No past events.")}
+              ? tr("Brak nadchodzących wydarzeń.", "No upcoming events.")
+              : tr("Brak minionych wydarzeń.", "No past events.")}
           </Text>
           <Text style={styles.emptyCopy}>
             {tr(
-              "Zsynchronizowane watki forum pojawia sie tutaj automatycznie.",
+              "Wątki z forum pojawią się tutaj automatycznie.",
               "Synced forum threads will appear here automatically.",
             )}
           </Text>

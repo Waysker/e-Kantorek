@@ -1,4 +1,5 @@
-export type PrimaryTab = "events" | "calendar" | "attendance" | "roles" | "instruments" | "profile";
+export type PrimaryTab = "events" | "calendar" | "board" | "profile";
+export type BoardSection = "attendance" | "roles" | "instruments";
 export type AttendanceFocusStatus = "going" | "not_going";
 
 export type AppRoute =
@@ -27,18 +28,29 @@ export function routeToTab(route: AppRoute): PrimaryTab {
   if (
     route.name === "attendanceWorkspace" ||
     route.name === "attendanceManager" ||
+    route.name === "attendanceSummary" ||
+    route.name === "roleManagement" ||
+    route.name === "instrumentMapping"
+  ) {
+    return "board";
+  }
+
+  return "events";
+}
+
+export function routeToBoardSection(route: AppRoute): BoardSection | null {
+  if (
+    route.name === "attendanceWorkspace" ||
+    route.name === "attendanceManager" ||
     route.name === "attendanceSummary"
   ) {
     return "attendance";
   }
-
   if (route.name === "roleManagement") {
     return "roles";
   }
-
   if (route.name === "instrumentMapping") {
     return "instruments";
   }
-
-  return "events";
+  return null;
 }

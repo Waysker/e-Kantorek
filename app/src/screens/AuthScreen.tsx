@@ -85,7 +85,7 @@ export function AuthScreen({
         behavior={Platform.select({ ios: "padding", default: undefined })}
       >
         <View style={[styles.card, isDesktop && styles.cardDesktop]}>
-          <Text style={styles.eyebrow}>ORAGH</Text>
+          <Text style={styles.eyebrow}>e-Kantorek</Text>
           <Text style={styles.title}>{tr("Zaloguj się", "Sign in")}</Text>
 
           <Text style={styles.label}>{tr("E-mail", "Email")}</Text>

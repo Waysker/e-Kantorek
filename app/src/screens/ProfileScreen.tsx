@@ -19,25 +19,9 @@ function formatRoleLabel(role: UserProfile["role"]) {
   return tr("Członek", "Member");
 }
 
-function formatDataSourceLabel(label: string) {
-  if (label === "Supabase cloud") {
-    return tr("Supabase (chmura)", "Supabase cloud");
-  }
-  if (label === "Local fallback") {
-    return tr("Lokalny fallback", "Local fallback");
-  }
-  if (label === "Supabase cloud (pending)") {
-    return tr("Supabase (oczekiwanie)", "Supabase cloud (pending)");
-  }
-  if (label === "Local snapshot") {
-    return tr("Lokalny snapshot", "Local snapshot");
-  }
-  return label;
-}
-
 function formatNotificationKindLabel(kind: AppNotification["kind"]) {
   if (kind === "attendance_reminder") {
-    return tr("Ponaglenie obecnosci", "Attendance reminder");
+    return tr("Ponaglenie do deklaracji", "Attendance reminder");
   }
   if (kind === "event_reminder") {
     return tr("Przypomnienie wydarzenia", "Event reminder");
@@ -46,7 +30,7 @@ function formatNotificationKindLabel(kind: AppNotification["kind"]) {
     return tr("Aktualizacja wydarzenia", "Event update");
   }
   if (kind === "feed_post") {
-    return tr("Aktualnosc", "Feed post");
+    return tr("Aktualność", "Feed post");
   }
   return kind;
 }
@@ -105,10 +89,7 @@ export function ProfileScreen({
           </Text>
         ) : null}
         <Text style={styles.cardSecondary}>
-          {tr("Źródło danych", "Data source")}: {formatDataSourceLabel(dataSourceLabel)}
-        </Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Ostatnia synchronizacja", "Last synced")}: {freshnessLabel}
+          {tr("Synchronizacja z forum", "Forum sync")}: {freshnessLabel}
         </Text>
         {onSignOut ? (
           <Pressable style={styles.signOutButton} onPress={onSignOut}>
@@ -130,7 +111,7 @@ export function ProfileScreen({
             disabled={isNotificationsLoading}
           >
             <Text style={styles.actionButtonLabel}>
-              {isNotificationsLoading ? tr("Odswiezanie...", "Refreshing...") : tr("Odswiez", "Refresh")}
+              {isNotificationsLoading ? tr("Odświeżanie…", "Refreshing...") : tr("Odśwież", "Refresh")}
             </Text>
           </Pressable>
           <Pressable
@@ -157,14 +138,14 @@ export function ProfileScreen({
           <View style={styles.loadingRow}>
             <ActivityIndicator color={tokens.colors.brand} />
             <Text style={styles.loadingLabel}>
-              {tr("Wczytuje powiadomienia...", "Loading notifications...")}
+              {tr("Wczytuję powiadomienia…", "Loading notifications...")}
             </Text>
           </View>
         ) : null}
 
         {!isNotificationsLoading && latestNotifications.length === 0 ? (
           <Text style={styles.emptyNotificationsLabel}>
-            {tr("Brak powiadomien.", "No notifications yet.")}
+            {tr("Brak powiadomień.", "No notifications yet.")}
           </Text>
         ) : null}
 

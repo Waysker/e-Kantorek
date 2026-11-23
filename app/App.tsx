@@ -20,7 +20,9 @@ import {
   canManageRolesByRole,
   normalizePrimaryRole,
 } from "./src/domain/roles";
-import type { AppRoute, PrimaryTab } from "./src/navigation/routes";
+import type { AppRoute, BoardSection, PrimaryTab } from "./src/navigation/routes";
+import { routeToBoardSection } from "./src/navigation/routes";
+import { BoardSubNav } from "./src/ui/BoardSubNav";
 import { routeToTab } from "./src/navigation/routes";
 import { AttendanceScreen } from "./src/screens/AttendanceScreen";
 import { EventDetailScreen } from "./src/screens/EventDetailScreen";
@@ -107,12 +109,12 @@ function applySignedInUserAttendance(
       ? matchingResponses[0].status
       : "no_response";
     const userStatusLabel = userStatus === "going"
-      ? tr("Bede", "Going")
+      ? tr("Będę", "Going")
       : userStatus === "maybe"
-        ? tr("Moze", "Maybe")
+        ? tr("Może", "Maybe")
         : userStatus === "not_going"
-          ? tr("Nie bede", "Not going")
-          : tr("Brak odpowiedzi", "No response");
+          ? tr("Nie będę", "Not going")
+          : tr("Brak deklaracji", "No response");
     return {
       ...event,
       attendanceStatus: userStatus,
@@ -809,8 +811,8 @@ export default function App() {
     return renderCenteredState({
       title: tr("Sprawdzam sesję", "Checking your session"),
       copy: tr(
-        "Przygotowuję logowanie przed wczytaniem danych ORAGH.",
-        "Preparing authentication before loading ORAGH data.",
+        "Przygotowuję logowanie przed wczytaniem danych.",
+        "Preparing sign-in before loading data.",
       ),
       showSpinner: true,
     });
@@ -861,7 +863,7 @@ export default function App() {
 
   if (state.status === "loading") {
     return renderCenteredState({
-      title: tr("Wczytywanie prototypu ORAGH", "Loading ORAGH prototype"),
+      title: tr("Wczytywanie…", "Loading…"),
       copy: tr(
         "Pobieram tymczasowe źródła danych i mapuję je do modelu aplikacji.",
         "Reading the temporary data sources and mapping them into stable app models.",
@@ -930,12 +932,16 @@ export default function App() {
   const unmappedMembers = canSeeUnmappedMembersAlert
     ? findUnmappedSquadMembers(eventDetailsById)
     : [];
-  const navigationTabs: PrimaryTab[] = [
-    "events",
-    "calendar",
+  const boardSections: BoardSection[] = [
     ...(canAccessAttendanceWorkspace ? (["attendance"] as const) : []),
     ...(canManageRoles ? (["roles"] as const) : []),
     ...(canManageInstrumentMapping ? (["instruments"] as const) : []),
+  ];
+  const activeBoardSection = routeToBoardSection(route);
+  const navigationTabs: PrimaryTab[] = [
+    "events",
+    "calendar",
+    ...(boardSections.length > 0 ? (["board"] as const) : []),
     "profile",
   ];
   const unreadNotificationsCount = notifications.reduce(
@@ -955,7 +961,7 @@ export default function App() {
     if (!canSendAttendanceReminders) {
       throw new Error(
         tr(
-          "Tylko role sekcyjny/zarzad/admin moga wysylac ponaglenia.",
+          "Tylko sekcyjni, zarząd i administratorzy mogą wysyłać ponaglenia.",
           "Only section/board/admin roles can send reminders.",
         ),
       );
@@ -1033,6 +1039,18 @@ export default function App() {
     }
   }
 
+  function openBoardSection(section: BoardSection) {
+    if (section === "attendance") {
+      resetToRoute({ name: "attendanceWorkspace" });
+      return;
+    }
+    if (section === "roles") {
+      resetToRoute({ name: "roleManagement" });
+      return;
+    }
+    resetToRoute({ name: "instrumentMapping" });
+  }
+
   function openTab(tab: PrimaryTab) {
     if (tab === "events") {
       resetToRoute({ name: "events" });
@@ -1044,27 +1062,10 @@ export default function App() {
       return;
     }
 
-    if (tab === "attendance") {
-      if (canAccessAttendanceWorkspace) {
-        resetToRoute({ name: "attendanceWorkspace" });
-      } else {
-        resetToRoute({ name: "events" });
-      }
-      return;
-    }
-
-    if (tab === "roles") {
-      if (canManageRoles) {
-        resetToRoute({ name: "roleManagement" });
-      } else {
-        resetToRoute({ name: "events" });
-      }
-      return;
-    }
-
-    if (tab === "instruments") {
-      if (canManageInstrumentMapping) {
-        resetToRoute({ name: "instrumentMapping" });
+    if (tab === "board") {
+      const firstSection = boardSections[0];
+      if (firstSection) {
+        openBoardSection(firstSection);
       } else {
         resetToRoute({ name: "events" });
       }
@@ -1256,13 +1257,19 @@ export default function App() {
       <AppShell
         tabs={navigationTabs}
         activeTab={activeTab}
-        tabBadges={unreadNotificationsCount > 0 ? { profile: unreadNotificationsCount } : undefined}
+        tabBadges={{
+          ...(unreadNotificationsCount > 0 ? { profile: unreadNotificationsCount } : {}),
+          ...(canManageInstrumentMapping && unmappedMembers.length > 0
+            ? { board: unmappedMembers.length }
+            : {}),
+        }}
         hideNavigation={route.name === "setlist"}
         dataSourceLabel={dataSourceLabel}
         dataSourceGeneratedAt={dataSourceGeneratedAt}
         expectedSyncIntervalHours={2}
         alertBanner={
-          canSeeUnmappedMembersAlert ? (
+          // People who can assign instruments see a badge on "Zarząd" instead.
+          canSeeUnmappedMembersAlert && !canManageInstrumentMapping ? (
             <UnmappedMembersBanner
               members={unmappedMembers}
               canAssign={canManageInstrumentMapping}
@@ -1272,6 +1279,18 @@ export default function App() {
         onNavigate={openTab}
       >
         <StatusBar style={route.name === "setlist" ? "light" : "dark"} />
+        {activeBoardSection ? (
+          <BoardSubNav
+            sections={boardSections}
+            activeSection={activeBoardSection}
+            badges={
+              canManageInstrumentMapping && unmappedMembers.length > 0
+                ? { instruments: unmappedMembers.length }
+                : undefined
+            }
+            onSelect={openBoardSection}
+          />
+        ) : null}
         {renderScreen()}
       </AppShell>
     </SafeAreaProvider>

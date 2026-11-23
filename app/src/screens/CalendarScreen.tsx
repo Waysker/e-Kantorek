@@ -115,18 +115,18 @@ function statusMeta(status: AttendanceStatus): StatusMeta {
       return {
         glyph: "?",
         label: tr("Może", "Maybe"),
-        bg: tokens.colors.warningSurface,
-        fg: tokens.colors.warningInk,
-        accent: tokens.colors.warningInk,
+        bg: tokens.colors.neutralSurface,
+        fg: tokens.colors.neutralInk,
+        accent: tokens.colors.neutralInk,
         needsAction: false,
       };
     default:
       return {
         glyph: "!",
-        label: tr("Brak odpowiedzi", "No response"),
-        bg: tokens.colors.surface,
-        fg: tokens.colors.ink,
-        accent: tokens.colors.ink,
+        label: tr("Brak deklaracji", "No response"),
+        bg: tokens.colors.warningSurface,
+        fg: tokens.colors.warningInk,
+        accent: tokens.colors.warningBorder,
         needsAction: true,
       };
   }
@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  cellDashed: { borderStyle: "dashed", borderColor: tokens.colors.ink },
+  cellDashed: { borderStyle: "solid", borderColor: tokens.colors.warningBorder },
   cellSelected: { borderStyle: "solid", borderColor: tokens.colors.brand },
   dayBubble: {
     width: 22,
@@ -860,7 +860,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "transparent",
   },
-  pillDashed: { borderStyle: "dashed", borderColor: tokens.colors.muted },
+  pillDashed: { borderStyle: "solid", borderColor: tokens.colors.warningBorder },
   pillLabel: { fontSize: 13, fontWeight: "700" },
   emptyBox: {
     padding: tokens.spacing.md,

@@ -12,6 +12,7 @@ import type { PrimaryTab } from "../navigation/routes";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { DataFreshnessBanner } from "./DataFreshnessBanner";
+import { Icon, type IconName } from "./Icon";
 
 type AppShellProps = {
   tabs: PrimaryTab[];
@@ -33,16 +34,27 @@ function getTabLabel(tab: PrimaryTab): string {
   if (tab === "calendar") {
     return tr("Kalendarz", "Calendar");
   }
-  if (tab === "attendance") {
-    return tr("Obecność", "Attendance");
+  if (tab === "board") {
+    return tr("Zarząd", "Board");
   }
-  if (tab === "roles") {
-    return tr("Role", "Roles");
+  return tr("Ja", "Me");
+}
+
+function getTabIcon(tab: PrimaryTab): IconName {
+  if (tab === "events") {
+    return "list";
   }
-  if (tab === "instruments") {
-    return tr("Instrumenty", "Instruments");
+  if (tab === "calendar") {
+    return "calendar";
   }
-  return tr("Profil", "Profile");
+  if (tab === "board") {
+    return "board";
+  }
+  return "user";
+}
+
+function formatBadge(count: number) {
+  return count > 99 ? "99+" : String(count);
 }
 
 export function AppShell({
@@ -61,14 +73,18 @@ export function AppShell({
   const insets = useSafeAreaInsets();
   const isDesktop = width >= tokens.breakpoints.desktop;
 
+  const freshnessBanner = (
+    <DataFreshnessBanner
+      dataSourceLabel={dataSourceLabel}
+      dataSourceGeneratedAt={dataSourceGeneratedAt}
+      expectedSyncIntervalHours={expectedSyncIntervalHours}
+    />
+  );
+
   if (hideNavigation) {
     return (
       <View style={styles.immersiveRoot}>
-        <DataFreshnessBanner
-          dataSourceLabel={dataSourceLabel}
-          dataSourceGeneratedAt={dataSourceGeneratedAt}
-          expectedSyncIntervalHours={expectedSyncIntervalHours}
-        />
+        {freshnessBanner}
         {alertBanner}
         <View style={styles.immersiveContent}>{children}</View>
       </View>
@@ -80,38 +96,38 @@ export function AppShell({
       <SafeAreaView style={styles.root} edges={["top"]}>
         <View style={styles.desktopLayout}>
           <View style={styles.sidebar}>
-            <Text style={styles.sidebarKicker}>ORAGH</Text>
-            <Text style={styles.sidebarTitle}>Orkiestra Reprezentacyjna AGH</Text>
-            <View style={styles.sidebarNav}>
+            <View style={styles.brandBlock}>
+              <Text style={styles.brandName}>e-Kantorek</Text>
+              <Text style={styles.brandSubtitle}>Orkiestra Reprezentacyjna AGH</Text>
+            </View>
+            <View style={styles.sidebarNav} accessibilityRole="tablist">
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;
-                const label = getTabLabel(tab);
                 const badgeCount = tabBadges?.[tab] ?? 0;
-                const showBadge = badgeCount > 0;
+                const color = isActive ? tokens.colors.successInk : tokens.colors.neutralInk;
 
                 return (
                   <Pressable
                     key={tab}
                     onPress={() => onNavigate(tab)}
-                    style={[styles.sidebarLink, isActive && styles.sidebarLinkActive]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isActive }}
+                    style={(state) => [
+                      styles.sidebarLink,
+                      // `hovered` exists on react-native-web only.
+                      (state as { hovered?: boolean }).hovered &&
+                        !isActive &&
+                        styles.sidebarLinkHovered,
+                      isActive && styles.sidebarLinkActive,
+                    ]}
                   >
-                    <View style={styles.navItemLabelRow}>
-                      <Text
-                        style={[
-                          styles.sidebarLinkLabel,
-                          isActive && styles.sidebarLinkLabelActive,
-                        ]}
-                      >
-                        {label}
-                      </Text>
-                      {showBadge ? (
-                        <View style={styles.navBadge}>
-                          <Text style={styles.navBadgeLabel}>
-                            {badgeCount > 99 ? "99+" : String(badgeCount)}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
+                    <Icon name={getTabIcon(tab)} size={20} color={color} />
+                    <Text style={[styles.sidebarLinkLabel, { color }]}>{getTabLabel(tab)}</Text>
+                    {badgeCount > 0 ? (
+                      <View style={[styles.navBadge, styles.navBadgeSidebar]}>
+                        <Text style={styles.navBadgeLabel}>{formatBadge(badgeCount)}</Text>
+                      </View>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -119,11 +135,7 @@ export function AppShell({
           </View>
 
           <View style={styles.desktopMain}>
-            <DataFreshnessBanner
-              dataSourceLabel={dataSourceLabel}
-              dataSourceGeneratedAt={dataSourceGeneratedAt}
-              expectedSyncIntervalHours={expectedSyncIntervalHours}
-            />
+            {freshnessBanner}
             {alertBanner}
             <View style={styles.desktopContent}>{children}</View>
           </View>
@@ -135,49 +147,39 @@ export function AppShell({
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.mobileLayout}>
-        <DataFreshnessBanner
-          dataSourceLabel={dataSourceLabel}
-          dataSourceGeneratedAt={dataSourceGeneratedAt}
-          expectedSyncIntervalHours={expectedSyncIntervalHours}
-        />
+        {freshnessBanner}
         {alertBanner}
         <View style={styles.mobileContent}>{children}</View>
       </View>
       <View
-        style={[
-          styles.bottomNav,
-          { paddingBottom: tokens.spacing.sm + insets.bottom },
-        ]}
+        style={[styles.bottomNav, { paddingBottom: tokens.spacing.xs + insets.bottom }]}
+        accessibilityRole="tablist"
       >
         {tabs.map((tab) => {
           const isActive = tab === activeTab;
-          const label = getTabLabel(tab);
           const badgeCount = tabBadges?.[tab] ?? 0;
-          const showBadge = badgeCount > 0;
+          const color = isActive ? tokens.colors.brand : tokens.colors.muted;
 
           return (
             <Pressable
               key={tab}
               onPress={() => onNavigate(tab)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={
+                badgeCount > 0 ? `${getTabLabel(tab)}, ${badgeCount}` : getTabLabel(tab)
+              }
               style={styles.bottomNavItem}
             >
-              <View style={styles.navItemLabelRow}>
-                <Text
-                  style={[
-                    styles.bottomNavLabel,
-                    isActive && styles.bottomNavLabelActive,
-                  ]}
-                >
-                  {label}
-                </Text>
-                {showBadge ? (
-                  <View style={styles.navBadge}>
-                    <Text style={styles.navBadgeLabel}>
-                      {badgeCount > 99 ? "99+" : String(badgeCount)}
-                    </Text>
+              <View>
+                <Icon name={getTabIcon(tab)} size={22} color={color} />
+                {badgeCount > 0 ? (
+                  <View style={[styles.navBadge, styles.navBadgeBottom]}>
+                    <Text style={styles.navBadgeLabel}>{formatBadge(badgeCount)}</Text>
                   </View>
                 ) : null}
               </View>
+              <Text style={[styles.bottomNavLabel, { color }]}>{getTabLabel(tab)}</Text>
             </Pressable>
           );
         })}
@@ -203,62 +205,72 @@ const styles = StyleSheet.create({
     flexDirection: "row",
   },
   sidebar: {
-    width: 260,
+    width: 240,
     borderRightWidth: 1,
     borderRightColor: tokens.colors.border,
-    paddingHorizontal: tokens.spacing.lg,
-    paddingVertical: tokens.spacing.xl,
+    paddingHorizontal: 14,
+    paddingVertical: tokens.spacing.lg,
     gap: tokens.spacing.lg,
     backgroundColor: tokens.colors.surface,
   },
-  sidebarKicker: {
-    fontSize: tokens.typography.caption,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-    color: tokens.colors.muted,
-    fontWeight: "700",
+  brandBlock: {
+    paddingHorizontal: 12,
+    gap: 2,
   },
-  sidebarTitle: {
+  brandName: {
     fontSize: tokens.typography.title,
-    lineHeight: 28,
+    fontWeight: "800",
+    letterSpacing: -0.3,
     color: tokens.colors.ink,
-    fontWeight: "700",
+  },
+  brandSubtitle: {
+    fontSize: tokens.typography.caption,
+    color: tokens.colors.muted,
   },
   sidebarNav: {
-    gap: tokens.spacing.sm,
+    gap: 2,
   },
   sidebarLink: {
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: tokens.radii.sm,
+  },
+  sidebarLinkHovered: {
+    backgroundColor: tokens.colors.surfaceMuted,
   },
   sidebarLinkActive: {
     backgroundColor: tokens.colors.brandTint,
   },
   sidebarLinkLabel: {
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  sidebarLinkLabelActive: {
-    color: tokens.colors.brand,
-  },
-  navItemLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.xs,
+    fontSize: 15,
+    fontWeight: "600",
   },
   navBadge: {
-    minWidth: 18,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 6,
     borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: tokens.colors.warningBorder,
     alignItems: "center",
     justifyContent: "center",
   },
+  navBadgeSidebar: {
+    marginLeft: "auto",
+  },
+  navBadgeBottom: {
+    position: "absolute",
+    top: -6,
+    right: -12,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+  },
   navBadgeLabel: {
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 11,
+    lineHeight: 13,
     color: tokens.colors.surface,
     fontWeight: "700",
   },
@@ -276,25 +288,21 @@ const styles = StyleSheet.create({
   },
   bottomNav: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    alignItems: "stretch",
     borderTopWidth: 1,
     borderTopColor: tokens.colors.border,
     backgroundColor: tokens.colors.surface,
   },
   bottomNavItem: {
     flex: 1,
+    minHeight: 56,
     alignItems: "center",
-    paddingVertical: tokens.spacing.sm,
+    justifyContent: "center",
+    gap: 3,
+    paddingTop: tokens.spacing.xs,
   },
   bottomNavLabel: {
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
-    fontWeight: "700",
-  },
-  bottomNavLabelActive: {
-    color: tokens.colors.brand,
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

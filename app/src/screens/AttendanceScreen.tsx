@@ -102,8 +102,8 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
   }, [focusStatus]);
 
   const options: Array<{ key: SelectableAttendanceStatus; label: string }> = [
-    { key: "going", label: tr("Bede", "Going") },
-    { key: "not_going", label: tr("Nie bede", "Not going") },
+    { key: "going", label: tr("Będę", "Going") },
+    { key: "not_going", label: tr("Nie będę", "Not going") },
   ];
 
   const responseSelector = (
@@ -126,8 +126,8 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
               </Text>
               <Text style={styles.responsePillMeta}>
                 {isActive
-                  ? tr("Zaimportowane RSVP", "Imported RSVP")
-                  : tr("Tylko podglad", "Preview only")}
+                  ? tr("Deklaracje z forum", "Imported RSVP")
+                  : tr("Tylko podgląd", "Preview only")}
               </Text>
             </View>
           );
@@ -135,7 +135,7 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       </View>
 
       <Text style={[styles.responseNotice, styles.responseNoticeInfo]}>
-        {tr("Stan z forum.", "Forum state.")}
+        {tr("Stan z ankiety na forum.", "Forum state.")}
       </Text>
     </View>
   );
@@ -147,14 +147,14 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       showsVerticalScrollIndicator={false}
     >
       <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>{tr("Wroc do wydarzenia", "Back to Event")}</Text>
+        <Text style={styles.backLinkLabel}>{tr("Wróć do wydarzenia", "Back to Event")}</Text>
       </Pressable>
 
       {isDesktop ? (
         <View style={styles.headerSplitDesktop}>
           <SurfaceCard variant="default" style={styles.headerPrimary}>
             <Text style={styles.cardEyebrow}>
-              {tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}
+              {tr("Deklaracje i skład", "RSVP declaration and roster")}
             </Text>
             <Text style={styles.screenTitle}>{event.title}</Text>
             <AttendanceSummaryStrip
@@ -164,7 +164,7 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
             />
             <Text style={styles.helperText}>
               {tr(
-                "Kliknij Bede / Nie bede, aby przelaczyc liste.",
+                "Przełącz listę: Będę / Nie będę.",
                 "Tap Going / Not going to switch list.",
               )}
             </Text>
@@ -172,7 +172,7 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
 
           <SurfaceCard variant="outline" style={styles.headerSecondary}>
             <Text style={styles.cardEyebrow}>
-              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
+              {tr("Twoja deklaracja", "Your RSVP declaration")}
             </Text>
             {responseSelector}
           </SurfaceCard>
@@ -180,7 +180,7 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       ) : (
         <SurfaceCard variant="default">
           <Text style={styles.cardEyebrow}>
-            {tr("Deklaracja RSVP i sklad", "RSVP declaration and roster")}
+            {tr("Deklaracje i skład", "RSVP declaration and roster")}
           </Text>
           <Text style={styles.screenTitle}>{event.title}</Text>
 
@@ -194,14 +194,14 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
           </View>
           <Text style={styles.helperText}>
             {tr(
-              "Kliknij Bede / Nie bede, aby przelaczyc liste.",
+              "Przełącz listę: Będę / Nie będę.",
               "Tap Going / Not going to switch list.",
             )}
           </Text>
 
           <View style={styles.mobileResponseBlock}>
             <Text style={styles.mobileResponseTitle}>
-              {tr("Twoja deklaracja RSVP", "Your RSVP declaration")}
+              {tr("Twoja deklaracja", "Your RSVP declaration")}
             </Text>
             {responseSelector}
           </View>
@@ -211,8 +211,8 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
           {activeList === "going"
-            ? tr("Bede wedlug instrumentu", "Going by instrument")
-            : tr("Nie bede wedlug instrumentu", "Not going by instrument")}
+            ? tr("Będę – według instrumentów", "Going by instrument")
+            : tr("Nie będę – według instrumentów", "Not going by instrument")}
         </Text>
       </View>
 
@@ -221,9 +221,9 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       ) : (
         <InstrumentRosterGrid
           groups={declinedGroups}
-          confirmedLabel={tr("odmowilo", "declined")}
+          confirmedLabel={tr("odmówiło", "declined")}
           emptyStateLabel={tr(
-            "Brak osob, ktore odmowily udzialu.",
+            "Brak osób, które odmówiły udziału.",
             "No declined members for this event.",
           )}
         />

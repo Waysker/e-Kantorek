@@ -49,9 +49,9 @@ function buildReminderPopupState(
 ): ReminderPopupState {
   if (notifiedCount <= 0) {
     return {
-      title: tr("Ponaglenie wyslane", "Reminder sent"),
+      title: tr("Ponaglenie wysłane", "Reminder sent"),
       intro: tr(
-        "Brak osob do ponaglenia przy tym wydarzeniu.",
+        "Brak osób do ponaglenia przy tym wydarzeniu.",
         "There are no members left to remind for this event.",
       ),
       lines: [],
@@ -61,9 +61,9 @@ function buildReminderPopupState(
 
   if (names.length === 0) {
     return {
-      title: tr("Ponaglenie wyslane", "Reminder sent"),
+      title: tr("Ponaglenie wysłane", "Reminder sent"),
       intro: tr(
-        `Wyslano ponaglenie do ${notifiedCount} osob.`,
+        `Wysłano ponaglenie do ${notifiedCount} osób.`,
         `Sent reminders to ${notifiedCount} member(s).`,
       ),
       lines: [],
@@ -75,15 +75,15 @@ function buildReminderPopupState(
   const shownNames = names.slice(0, MAX_NAMES);
   const hiddenCount = Math.max(names.length - shownNames.length, 0);
   return {
-    title: tr("Ponaglenie wyslane", "Reminder sent"),
+    title: tr("Ponaglenie wysłane", "Reminder sent"),
     intro: tr(
-      `Wyslano ponaglenie do ${notifiedCount} osob:`,
+      `Wysłano ponaglenie do ${notifiedCount} osób:`,
       `Sent reminders to ${notifiedCount} member(s):`,
     ),
     lines: shownNames.map((name, index) => `${index + 1}. ${name}`),
     footer:
       hiddenCount > 0
-        ? tr(`+ ${hiddenCount} kolejnych osob`, `+ ${hiddenCount} more member(s)`)
+        ? tr(`+ ${hiddenCount} kolejnych osób`, `+ ${hiddenCount} more member(s)`)
         : null,
   };
 }
@@ -118,14 +118,14 @@ export function EventDetailScreen({
           ? {
               tone: "success",
               message: tr(
-                `Wyslano ponaglenie do ${notifiedCount} osob.`,
+                `Wysłano ponaglenie do ${notifiedCount} osób.`,
                 `Sent reminders to ${notifiedCount} member(s).`,
               ),
             }
           : {
               tone: "info",
               message: tr(
-                "Wszyscy sa juz zadeklarowani przy tym wydarzeniu.",
+                "Wszyscy są już zadeklarowani przy tym wydarzeniu.",
                 "Everyone has already responded for this event.",
               ),
             },
@@ -137,7 +137,7 @@ export function EventDetailScreen({
         message:
           error instanceof Error
             ? error.message
-            : tr("Nie udalo sie wyslac ponaglenia.", "Could not send reminders."),
+            : tr("Nie udało się wysłać ponaglenia.", "Could not send reminders."),
       });
     } finally {
       setIsReminding(false);
@@ -152,7 +152,7 @@ export function EventDetailScreen({
         showsVerticalScrollIndicator={false}
       >
         <Pressable onPress={onBack} style={styles.backLink}>
-          <Text style={styles.backLinkLabel}>{tr("Wroc do wydarzen", "Back to Events")}</Text>
+          <Text style={styles.backLinkLabel}>{tr("Wróć do wydarzeń", "Back to Events")}</Text>
         </Pressable>
 
         <View style={[styles.desktopSplit, isDesktop && styles.desktopSplitActive]}>
@@ -175,7 +175,7 @@ export function EventDetailScreen({
               ) : (
                 <Text style={styles.cardSecondary}>
                   {tr(
-                    "Brak osobnych aktualizacji organizatorow w tym watku.",
+                    "Brak aktualizacji od organizatorów.",
                     "No separate organizer updates were imported from this thread yet.",
                   )}
                 </Text>
@@ -186,7 +186,7 @@ export function EventDetailScreen({
               <View style={styles.cardActionRow}>
                 <View style={styles.cardActionCopy}>
                   <Text style={styles.cardEyebrow}>
-                    {tr("Deklaracje RSVP i sklad", "RSVP declarations and roster")}
+                    {tr("Deklaracje i skład", "RSVP declarations and roster")}
                   </Text>
                 </View>
                 {canRemind ? (
@@ -196,7 +196,7 @@ export function EventDetailScreen({
                     disabled={isReminding}
                   >
                     <Text style={styles.inlineButtonLabel}>
-                      {isReminding ? tr("Ponaglanie...", "Sending...") : tr("Ponaglij", "Remind")}
+                      {isReminding ? tr("Wysyłanie…", "Sending...") : tr("Ponaglij", "Remind")}
                     </Text>
                   </Pressable>
                 ) : null}
@@ -208,7 +208,7 @@ export function EventDetailScreen({
               />
               <Text style={styles.cardHint}>
                 {tr(
-                  "Kliknij kafelek Bede / Nie bede, aby otworzyc odpowiednia liste.",
+                  "Wybierz kafelek, aby zobaczyć listę osób.",
                   "Tap Going / Not going tile to open the corresponding list.",
                 )}
               </Text>
@@ -232,7 +232,7 @@ export function EventDetailScreen({
                     <Text style={styles.cardEyebrow}>Setlista</Text>
                   </View>
                   <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                    <Text style={styles.inlineButtonLabel}>{tr("Otworz", "Open")}</Text>
+                    <Text style={styles.inlineButtonLabel}>{tr("Otwórz", "Open")}</Text>
                   </Pressable>
                 </View>
                 <Text style={styles.cardBody}>{event.setlist.preview}</Text>
@@ -241,7 +241,7 @@ export function EventDetailScreen({
 
             <SurfaceCard variant="outline">
               <Text style={styles.cardEyebrow}>{tr("Komentarze", "Comments")}</Text>
-              <Text style={styles.cardTitle}>{tr("Dyskusja czlonkow", "Member discussion")}</Text>
+              <Text style={styles.cardTitle}>{tr("Dyskusja", "Member discussion")}</Text>
               {event.comments.length > 0 ? (
                 event.comments.map((comment) => (
                   <View key={comment.id} style={styles.commentRow}>
@@ -254,7 +254,7 @@ export function EventDetailScreen({
               ) : (
                 <Text style={styles.cardSecondary}>
                   {tr(
-                    "Brak odpowiedzi czlonkow zaimportowanych z forum.",
+                    "Brak komentarzy w wątku na forum.",
                     "No member replies were imported from the forum thread yet.",
                   )}
                 </Text>
@@ -267,7 +267,7 @@ export function EventDetailScreen({
                 <View style={styles.setlistRailHeader}>
                   <Text style={styles.cardTitle}>Setlista</Text>
                   <Pressable onPress={onOpenSetlist} style={styles.inlineButton}>
-                    <Text style={styles.inlineButtonLabel}>{tr("Pelny ekran", "Fullscreen")}</Text>
+                    <Text style={styles.inlineButtonLabel}>{tr("Pełny ekran", "Fullscreen")}</Text>
                   </Pressable>
                 </View>
                 {event.setlist.sections.map((section) => (
@@ -296,7 +296,7 @@ export function EventDetailScreen({
         <View style={styles.popupOverlay}>
           <View style={styles.popupCard}>
             <Text style={styles.popupTitle}>
-              {reminderPopup?.title ?? tr("Ponaglenie wyslane", "Reminder sent")}
+              {reminderPopup?.title ?? tr("Ponaglenie wysłane", "Reminder sent")}
             </Text>
             <Text style={styles.popupIntro}>
               {reminderPopup?.intro ?? ""}

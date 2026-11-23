@@ -999,7 +999,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       showsVerticalScrollIndicator={false}
     >
       <Pressable onPress={onBack} style={styles.backLink}>
-        <Text style={styles.backLinkLabel}>{tr("Wróć do profilu", "Back to profile")}</Text>
+        <Text style={styles.backLinkLabel}>{tr("Wróć do obecności", "Back to attendance")}</Text>
       </Pressable>
 
       <SurfaceCard variant="default">

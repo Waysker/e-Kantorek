@@ -678,10 +678,10 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         <Text style={styles.cardEyebrow}>{tr("Panel obecności", "Attendance panel")}</Text>
         <Text style={styles.cardTitle}>{tr("Podsumowanie sekcyjne", "Section attendance summary")}</Text>
         <Text style={styles.cardSecondary}>
-          {tr("Ostatni sync ref -> DB", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
+          {tr("Ostatnia synchronizacja danych", "Last ref -> DB sync")}: {latestRefSyncAt ?? tr("brak", "none")}
         </Text>
         <Pressable style={styles.backButton} onPress={onBack}>
-          <Text style={styles.backButtonLabel}>{tr("← Wróć do profilu", "← Back to profile")}</Text>
+          <Text style={styles.backButtonLabel}>{tr("← Wróć do obecności", "← Back to attendance")}</Text>
         </Pressable>
       </SurfaceCard>
 

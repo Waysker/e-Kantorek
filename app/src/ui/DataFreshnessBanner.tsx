@@ -13,22 +13,6 @@ type DataFreshnessBannerProps = {
   expectedSyncIntervalHours?: number;
 };
 
-function formatDataSourceLabel(label: string) {
-  if (label === "Supabase cloud") {
-    return tr("Supabase (chmura)", "Supabase cloud");
-  }
-  if (label === "Local fallback") {
-    return tr("Lokalny fallback", "Local fallback");
-  }
-  if (label === "Supabase cloud (pending)") {
-    return tr("Supabase (oczekiwanie)", "Supabase cloud (pending)");
-  }
-  if (label === "Local snapshot") {
-    return tr("Lokalny snapshot", "Local snapshot");
-  }
-  return label;
-}
-
 function formatRelativeAgeLabel(targetTimestampMs: number, nowTimestampMs: number) {
   const diffMs = targetTimestampMs - nowTimestampMs;
 
@@ -96,23 +80,18 @@ export function DataFreshnessBanner({
 
   const statusLabel =
     freshness.tone === "stale"
-      ? tr("Uwaga: dane moga byc nieaktualne", "Warning: data may be outdated")
-      : tr("Brak metadanych synchronizacji", "Sync metadata unavailable");
+      ? tr("Dane mogą być nieaktualne", "Data may be outdated")
+      : tr("Nie wiemy, kiedy dane były aktualizowane", "Last update time unknown");
 
   const detailsLabel =
     freshness.syncedAtMs == null
-      ? `${tr("Zrodlo", "Source")}: ${formatDataSourceLabel(dataSourceLabel)}. ${tr(
-          "Brak czasu ostatniej synchronizacji, traktuj dane ostroznie.",
-          "Last sync timestamp is missing, treat data carefully.",
-        )}`
-      : `${tr("Ostatnia synchronizacja", "Last sync")}: ${formatDateLabel(
+      ? tr(
+          "Sprawdź szczegóły wydarzeń na forum.",
+          "Check event details on the forum.",
+        )
+      : `${tr("Ostatnia synchronizacja z forum", "Last forum sync")}: ${formatDateLabel(
           new Date(freshness.syncedAtMs).toISOString(),
-        )} (${formatRelativeAgeLabel(freshness.syncedAtMs, nowTimestampMs)}). ${tr(
-          "Oczekiwane odswiezenie",
-          "Expected refresh",
-        )}: <= ${expectedSyncIntervalHours}h. ${tr("Zrodlo", "Source")}: ${formatDataSourceLabel(
-          dataSourceLabel,
-        )}.`;
+        )} (${formatRelativeAgeLabel(freshness.syncedAtMs, nowTimestampMs)}).`;
 
   return (
     <View
