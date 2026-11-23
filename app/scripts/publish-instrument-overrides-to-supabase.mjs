@@ -7,12 +7,14 @@ import {
   parseAttendanceWorkbookFromFile,
   resolveAttendanceSourcePath,
 } from "./lib/attendance-workbook-utils.mjs";
+import { mergeOverrides } from "./lib/overrides-merge.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const APP_ROOT = path.resolve(__dirname, "..");
 const DEFAULT_OVERRIDES_PATH = path.join(APP_ROOT, "forum-sync.instrument-overrides.json");
 const FORUM_OVERRIDES_TABLE = "forum_instrument_overrides";
+const BACKUP_DIR = path.join(APP_ROOT, ".cache", "forum-sync");
 const ENV_PATHS = [
   path.join(APP_ROOT, ".env.local"),
   path.join(APP_ROOT, ".env"),
@@ -153,6 +155,7 @@ async function main() {
     process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const overridesKey = resolveOverridesKey();
   const forcePublish = process.env.FORUM_SYNC_FORCE_OVERRIDE_PUBLISH === "1";
+  const replaceExisting = process.env.FORUM_SYNC_OVERRIDE_REPLACE === "1";
 
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error(
@@ -166,7 +169,7 @@ async function main() {
 
   const { data: existingRow, error: readError } = await client
     .from(FORUM_OVERRIDES_TABLE)
-    .select("overrides_key")
+    .select("overrides_key,payload")
     .eq("overrides_key", overridesKey)
     .maybeSingle();
 
@@ -185,11 +188,38 @@ async function main() {
     console.log(
       `Supabase overrides key '${overridesKey}' already exists. Skipping publish to avoid overriding DB state.`,
     );
-    console.log("Set FORUM_SYNC_FORCE_OVERRIDE_PUBLISH=1 to overwrite the existing row.");
+    console.log(
+      "Set FORUM_SYNC_FORCE_OVERRIDE_PUBLISH=1 to merge into the existing row (existing entries are kept).",
+    );
+    console.log("Add FORUM_SYNC_OVERRIDE_REPLACE=1 to replace the whole payload instead (drops entries added via the board panel).");
     return;
   }
 
-  const { source, overrides } = await readOverridesPayload();
+  const { source, overrides: incomingOverrides } = await readOverridesPayload();
+  let overrides = incomingOverrides;
+
+  if (existingRow) {
+    // Always keep a copy of what is about to be changed.
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    const backupPath = path.join(
+      BACKUP_DIR,
+      `overrides-backup-${overridesKey}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
+    );
+    await fs.writeFile(backupPath, JSON.stringify(existingRow.payload ?? {}, null, 2), "utf8");
+    console.log(`Backed up existing overrides to ${backupPath}.`);
+
+    if (replaceExisting) {
+      console.warn(
+        "FORUM_SYNC_OVERRIDE_REPLACE=1: replacing the whole payload; entries not in the source are dropped.",
+      );
+    } else {
+      const { merged, summary } = mergeOverrides(existingRow.payload, incomingOverrides);
+      overrides = normalizeOverridesShape(merged);
+      console.log(
+        `Merging into existing overrides: ${summary.kept} kept, ${summary.added} added, ${summary.changed} changed.`,
+      );
+    }
+  }
 
   const { error: writeError } = await client.from(FORUM_OVERRIDES_TABLE).upsert(
     {
