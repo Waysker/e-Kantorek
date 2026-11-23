@@ -29,7 +29,9 @@ export function findUnmappedSquadMembers(
 }
 
 export function canSeeUnmappedMembersAlertByRole(role: string): boolean {
-  return role === "board" || role === "admin";
+  return role === "section" || role === "board" || role === "admin";
 }
 
-export const canManageInstrumentMappingByRole = canSeeUnmappedMembersAlertByRole;
+export function canManageInstrumentMappingByRole(role: string): boolean {
+  return role === "board" || role === "admin";
+}

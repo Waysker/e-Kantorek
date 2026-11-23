@@ -6,11 +6,13 @@ import { tokens } from "../theme/tokens";
 
 type UnmappedMembersBannerProps = {
   members: SquadMember[];
+  /** Whether the viewer can open the Instruments tab and assign instruments. */
+  canAssign: boolean;
 };
 
 const MAX_NAMES_SHOWN = 4;
 
-export function UnmappedMembersBanner({ members }: UnmappedMembersBannerProps) {
+export function UnmappedMembersBanner({ members, canAssign }: UnmappedMembersBannerProps) {
   if (members.length === 0) {
     return null;
   }
@@ -31,10 +33,13 @@ export function UnmappedMembersBanner({ members }: UnmappedMembersBannerProps) {
         )}
       </Text>
       <Text style={styles.detailsLabel}>
-        {namesLabel}. {tr(
-          "Przypisz je w zakładce Instrumenty.",
-          "Assign them in the Instruments tab.",
-        )}
+        {namesLabel}.{" "}
+        {canAssign
+          ? tr("Przypisz je w zakładce Instrumenty.", "Assign them in the Instruments tab.")
+          : tr(
+              "Daj znać zarządowi, jaki grają instrument.",
+              "Let the board know which instrument they play.",
+            )}
       </Text>
     </View>
   );

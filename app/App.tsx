@@ -1263,7 +1263,10 @@ export default function App() {
         expectedSyncIntervalHours={2}
         alertBanner={
           canSeeUnmappedMembersAlert ? (
-            <UnmappedMembersBanner members={unmappedMembers} />
+            <UnmappedMembersBanner
+              members={unmappedMembers}
+              canAssign={canManageInstrumentMapping}
+            />
           ) : undefined
         }
         onNavigate={openTab}

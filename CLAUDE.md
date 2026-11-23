@@ -20,7 +20,7 @@
 Pełny opis procesu: `docs/ops/forum-instrument-mapping.md`.
 
 - Osoby bez instrumentu trafiają do grupy „Instrument not mapped yet". Sync zapisuje je do `app/.cache/forum-sync/unmapped.json` i loguje ostrzeżenie.
-- Alerty: push ntfy (`notify.sh unmapped`, powtarzany co 24 h) oraz baner w aplikacji dla `board`/`admin`.
+- Alerty: push ntfy (`notify.sh unmapped`, powtarzany co 24 h) oraz baner w aplikacji dla `section`/`board`/`admin` (sekcyjni tylko widzą, przypisuje zarząd).
 - Mapping to tabela `forum_instrument_overrides` (klucz `forum`, payload `{ byUid, byFullName, byUsername }`), a nie plik. `app/forum-sync.instrument-overrides.example.json` to tylko szablon.
 - Przypisanie robi zarząd w zakładce „Instrumenty" (RPC `set_forum_member_instrument`, migracja 027). Wpis działa po następnym syncu (do ~20 min).
 - Awaryjnie: SQL na orbit (przykład w docs/ops/forum-instrument-mapping.md).
