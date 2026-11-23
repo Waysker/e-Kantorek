@@ -152,10 +152,10 @@ export function EventDetailScreen({
     label: string;
     focus?: AttendanceSummaryFocusStatus;
   }> = [
+    // Only "going" and "not going": the forum poll has no "maybe", and we don't
+    // know the full roster, so "no response" can't be counted.
     { key: "going", value: summary.going, label: tr("będzie", "going"), focus: "going" },
-    { key: "maybe", value: summary.maybe, label: tr("może", "maybe") },
-    { key: "not_going", value: summary.notGoing, label: tr("nie", "not going"), focus: "not_going" },
-    { key: "no_response", value: summary.noResponse, label: tr("brak", "no reply") },
+    { key: "not_going", value: summary.notGoing, label: tr("nie będzie", "not going"), focus: "not_going" },
   ];
   const setlistCount = event.setlist.sections.reduce(
     (count, section) => count + section.items.length,

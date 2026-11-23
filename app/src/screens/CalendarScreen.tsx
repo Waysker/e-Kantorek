@@ -339,7 +339,7 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
         </View>
       ))}
       <View style={styles.legend}>
-        {(["going", "not_going", "maybe", "no_response"] as AttendanceStatus[]).map((status) => {
+        {(["going", "not_going", "no_response"] as AttendanceStatus[]).map((status) => {
           const meta = statusMeta(status);
           return (
             <View key={status} style={styles.legendRow}>
