@@ -1,7 +1,8 @@
 -- Board/admin panel support for mapping forum members to instruments.
 --
--- forum_instrument_overrides has read-only RLS for clients, so edits go through
--- the security definer functions below, which check the caller's profile role.
+-- Edits go through the security definer functions below instead of direct table
+-- writes: they check the caller's profile role, validate the instrument against a
+-- fixed list and only accept members the snapshot currently shows as unmapped.
 
 -- Internal helper: members that the latest snapshot shows without an instrument.
 -- Not granted to any client role; only the functions below call it.

@@ -318,8 +318,9 @@ Temporary limitation:
 
 - the forum exposes attendance voters and member names cleanly
 - it does not expose instruments in the same way
-- instrument mapping is currently DB-managed via JSON payload rows (`attendance_sheet_cache` + `forum_instrument_overrides`)
-- PoC admin UI exists (web) for workbook upload, but still needs audited edit history and stronger governance
+- instrument mapping is DB-managed via JSON payload rows (`attendance_sheet_cache` + `forum_instrument_overrides`)
+- new unmapped members are detected by the sync, announced by ntfy and an in-app banner, and mapped by board/admin in the Instruments tab; see `../docs/ops/forum-instrument-mapping.md`
+- the panel still lacks editing of existing entries and an audit history
 
 ## Next Build Targets
 

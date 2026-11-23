@@ -23,6 +23,7 @@
 12. `docs/ops/secrets-runtime-matrix.md`
 13. `docs/ops/smoke-attendance-db-first-hybrid.md`
 14. `docs/contracts/attendance-sheet-contract.md`
+15. `docs/ops/forum-instrument-mapping.md`
 
 ## Supabase hosting
 

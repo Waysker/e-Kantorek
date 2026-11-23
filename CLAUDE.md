@@ -17,7 +17,12 @@
 
 ## Mapping instrumentów forum
 
-- Osoby bez instrumentu trafiają do grupy „Instrument not mapped yet".
-- Mapping to tabela `forum_instrument_overrides` (klucz `forum`, payload `{ byUid, byFullName, byUsername }`), a nie plik. Szablon: `app/forum-sync.instrument-overrides.example.json`.
-- Lista niezmapowanych: wyciągnij z `snapshot.json` na orbit (grupy `instrument == "Instrument not mapped yet"` w `confirmedMembers` i `maybeMembers`).
-- Instrumentu nie ma w profilach forum, więc podaje go użytkownik. Nowe wpisy dopisuj do `byUid`, bez nadpisywania istniejących.
+Pełny opis procesu: `docs/ops/forum-instrument-mapping.md`.
+
+- Osoby bez instrumentu trafiają do grupy „Instrument not mapped yet". Sync zapisuje je do `app/.cache/forum-sync/unmapped.json` i loguje ostrzeżenie.
+- Alerty: push ntfy (`notify.sh unmapped`, powtarzany co 24 h) oraz baner w aplikacji dla `board`/`admin`.
+- Mapping to tabela `forum_instrument_overrides` (klucz `forum`, payload `{ byUid, byFullName, byUsername }`), a nie plik. `app/forum-sync.instrument-overrides.example.json` to tylko szablon.
+- Przypisanie robi zarząd w zakładce „Instrumenty" (RPC `set_forum_member_instrument`, migracja 027). Wpis działa po następnym syncu (do ~20 min).
+- Awaryjnie: SQL na orbit (przykład w docs/ops/forum-instrument-mapping.md).
+- Instrumentu nie ma w profilach forum, więc podaje go człowiek.
+- `publish-instrument-overrides-to-supabase.mjs` z `FORUM_SYNC_FORCE_OVERRIDE_PUBLISH=1` scala dane (wpisy z panelu zostają) i robi kopię w `.cache/forum-sync/`. Pełne nadpisanie tylko z dodatkowym `FORUM_SYNC_OVERRIDE_REPLACE=1`.
