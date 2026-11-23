@@ -161,7 +161,7 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
             <View key={columnIndex} style={styles.nameColumn}>
               {column.map((member, index) => (
                 <View key={member.id} style={[styles.nameCell, index > 0 && styles.nameCellDivider]}>
-                  <Text style={styles.name} numberOfLines={1}>
+                  <Text style={styles.name} numberOfLines={2}>
                     {member.fullName}
                   </Text>
                 </View>
