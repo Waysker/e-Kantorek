@@ -320,7 +320,7 @@ Temporary limitation:
 - it does not expose instruments in the same way
 - instrument mapping is DB-managed via JSON payload rows (`attendance_sheet_cache` + `forum_instrument_overrides`)
 - new unmapped members are detected by the sync, announced by ntfy and an in-app banner, and mapped by board/admin in the Instruments tab; see `../docs/ops/forum-instrument-mapping.md`
-- the panel still lacks editing of existing entries and an audit history
+- the panel can assign and change entries with an audit history (migration 028); deleting entries still needs SQL
 
 ## Next Build Targets
 

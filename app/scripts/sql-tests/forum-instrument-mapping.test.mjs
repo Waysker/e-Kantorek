@@ -1,4 +1,4 @@
-// Runs migrations 001, 005 and 027 on an in-process Postgres (PGlite) with a
+// Runs migrations 001, 005, 027 and 028 on an in-process Postgres (PGlite) with a
 // minimal stand-in for Supabase's auth schema and checks the board-panel RPCs.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -91,6 +91,7 @@ before(async () => {
   await db.exec(migration("001_forum_snapshot_cache.sql"));
   await db.exec(migration("005_forum_instrument_overrides.sql"));
   await db.exec(migration("027_forum_instrument_mapping_rpc.sql"));
+  await db.exec(migration("028_forum_instrument_mapping_edit_audit.sql"));
   await db.exec(`insert into profiles values
     ('${USERS.board}', 'B', 'board'), ('${USERS.member}', 'M', 'member'), ('${USERS.admin}', 'A', 'admin')`);
   await db.query(
@@ -170,6 +171,93 @@ describe("set_forum_member_instrument", () => {
     await db.exec("delete from forum_instrument_overrides");
     await as(USERS.board, "authenticated", "select * from set_forum_member_instrument('forum-user-888','Flety')");
     assert.deepEqual((await overrides()).byUid, { 888: "Flety" });
+  });
+});
+
+describe("editing existing mappings and the audit trail", () => {
+  const BOARD = USERS.board;
+
+  it("lists mappings with member names, and none for unknown uids", async () => {
+    await db.exec(`update forum_instrument_overrides
+      set payload = jsonb_set(payload, '{byUid,232}', '"Gitary"') where overrides_key = 'forum'`);
+
+    const { rows } = await as(BOARD, "authenticated", "select * from list_forum_instrument_mappings()");
+    const byKey = Object.fromEntries(rows.map((row) => [`${row.bucket}:${row.entry_key}`, row]));
+
+    assert.equal(byKey["byUid:888"].instrument, "Flety");
+    assert.equal(byKey["byUid:888"].member_name, "Maja Osewska");
+    assert.equal(byKey["byUid:232"].member_name, null);
+  });
+
+  it("rejects non-board callers on every new function", async () => {
+    const calls = [
+      "select * from list_forum_instrument_mappings()",
+      "select * from change_forum_instrument_mapping('byUid','888','Oboje')",
+      "select * from list_forum_instrument_audit()",
+    ];
+    for (const sql of calls) {
+      assert.match(await errorOf(USERS.member, "authenticated", sql), /Only board or admin/);
+      assert.match(await errorOf(null, "authenticated", sql), /Unauthorized/);
+      assert.match(await errorOf(BOARD, "anon", sql), /permission denied/);
+    }
+  });
+
+  it("changes an existing mapping and records old and new value", async () => {
+    const { rows } = await as(BOARD, "authenticated", "select * from change_forum_instrument_mapping('byUid','888','Oboje')");
+    assert.deepEqual([rows[0].old_instrument, rows[0].new_instrument], ["Flety", "Oboje"]);
+    assert.equal((await overrides()).byUid["888"], "Oboje");
+
+    const audit = await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(10)");
+    assert.deepEqual(
+      [audit.rows[0].action, audit.rows[0].old_instrument, audit.rows[0].new_instrument],
+      ["change", "Flety", "Oboje"],
+    );
+    assert.equal(audit.rows[0].member_name, "Maja Osewska");
+    assert.equal(audit.rows[0].changed_by_name, "B");
+  });
+
+  it("records who made a change when an admin edits", async () => {
+    await as(USERS.admin, "authenticated", "select * from change_forum_instrument_mapping('byUid','232','Tuby')");
+    const audit = await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(10)");
+    assert.equal(audit.rows[0].changed_by_name, "A");
+    assert.equal(audit.rows[0].member_name, null);
+    assert.equal(audit.rows[0].entry_key, "232");
+  });
+
+  it("does not write an audit row when the value is unchanged", async () => {
+    const before = (await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(200)")).rows.length;
+    await as(BOARD, "authenticated", "select * from change_forum_instrument_mapping('byUid','888','Oboje')");
+    const after = (await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(200)")).rows.length;
+    assert.equal(after, before);
+  });
+
+  it("rejects unknown entries, buckets and instruments", async () => {
+    assert.match(await errorOf(BOARD, "authenticated", "select * from change_forum_instrument_mapping('byUid','404','Flety')"), /No byUid mapping/);
+    assert.match(await errorOf(BOARD, "authenticated", "select * from change_forum_instrument_mapping('bogus','888','Flety')"), /Invalid mapping bucket/);
+    assert.match(await errorOf(BOARD, "authenticated", "select * from change_forum_instrument_mapping('byUid','888','Kazoo')"), /Invalid instrument/);
+    assert.equal((await overrides()).byUid["888"], "Oboje");
+  });
+
+  it("audits assignments made through the unmapped list as well", async () => {
+    await as(BOARD, "authenticated", "select * from set_forum_member_instrument('forum-user-889','Puzony')");
+    const audit = await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(1)");
+    assert.deepEqual(
+      [audit.rows[0].action, audit.rows[0].old_instrument, audit.rows[0].new_instrument, audit.rows[0].member_name],
+      ["assign", null, "Puzony", "Karol Malik"],
+    );
+  });
+
+  it("clamps the audit limit and returns newest first", async () => {
+    const { rows } = await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(0)");
+    assert.equal(rows.length, 1);
+    const all = (await as(BOARD, "authenticated", "select * from list_forum_instrument_audit(200)")).rows;
+    const times = all.map((row) => new Date(row.changed_at).getTime());
+    assert.deepEqual(times, [...times].sort((a, b) => b - a));
+  });
+
+  it("keeps the audit table closed to direct access", async () => {
+    assert.match(await errorOf(BOARD, "authenticated", "select * from forum_instrument_mapping_audit"), /permission denied/);
+    assert.match(await errorOf(BOARD, "authenticated", "insert into forum_instrument_mapping_audit (action, bucket, entry_key, new_instrument) values ('assign','byUid','1','Flety')"), /permission denied/);
   });
 });
 
