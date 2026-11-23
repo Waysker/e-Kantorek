@@ -14,6 +14,8 @@ import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
 import { cleanSetlistLabel, isPlaceholderSetlist } from "../domain/setlist";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { Button } from "../ui/Button";
+import { textStyles } from "../theme/text";
 import { formatDateLabel, formatRelativeLabel, stripTitleDatePrefix } from "../utils/format";
 import type { AttendanceSummaryFocusStatus } from "../ui/AttendanceSummaryStrip";
 import { Icon } from "../ui/Icon";
@@ -250,28 +252,18 @@ export function EventDetailScreen({
                   <StatusPill status={event.attendanceStatus} large />
                 </View>
                 {forumUrl ? (
-                  <Pressable
-                    onPress={() => openForumThread(event.id)}
-                    accessibilityRole="link"
-                    style={[styles.forumButton, needsDeclaration && styles.forumButtonPrimary]}
-                  >
-                    <Text
-                      style={[
-                        styles.forumButtonLabel,
-                        needsDeclaration && styles.forumButtonLabelPrimary,
-                      ]}
-                    >
-                      {needsDeclaration
+                  <Button
+                    size="lg"
+                    variant={needsDeclaration ? "primary" : "secondary"}
+                    label={
+                      needsDeclaration
                         ? tr("Zadeklaruj na forum", "Declare on the forum")
-                        : tr("Zmień na forum", "Change on the forum")}
-                    </Text>
-                    <Icon
-                      name="external"
-                      size={16}
-                      color={needsDeclaration ? tokens.colors.surface : tokens.colors.ink}
-                      strokeWidth={2.2}
-                    />
-                  </Pressable>
+                        : tr("Zmień na forum", "Change on the forum")
+                    }
+                    trailingIcon="external"
+                    accessibilityRole="link"
+                    onPress={() => openForumThread(event.id)}
+                  />
                 ) : null}
                 <Text style={styles.hint}>
                   {tr(
@@ -545,38 +537,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: tokens.spacing.sm,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
+  kicker: textStyles.kicker,
   kickerAction: {
     color: tokens.colors.warningInk,
-  },
-  forumButton: {
-    minHeight: 48,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  forumButtonPrimary: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
-  },
-  forumButtonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  forumButtonLabelPrimary: {
-    color: tokens.colors.surface,
   },
   hint: {
     fontSize: tokens.typography.caption,

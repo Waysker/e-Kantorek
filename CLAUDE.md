@@ -26,3 +26,17 @@ Pełny opis procesu: `docs/ops/forum-instrument-mapping.md`.
 - Awaryjnie: SQL na orbit (przykład w docs/ops/forum-instrument-mapping.md).
 - Instrumentu nie ma w profilach forum, więc podaje go człowiek.
 - `publish-instrument-overrides-to-supabase.mjs` z `FORUM_SYNC_FORCE_OVERRIDE_PUBLISH=1` scala dane (wpisy z panelu zostają) i robi kopię w `.cache/forum-sync/`. Pełne nadpisanie tylko z dodatkowym `FORUM_SYNC_OVERRIDE_REPLACE=1`.
+
+## Design system („Partytura”)
+
+Pełny opis: `docs/design-system.md`. Przeczytaj przed dodaniem lub zmianą ekranu.
+
+- Źródło prawdy to kod: `app/src/theme/tokens.ts`, `app/src/theme/text.ts` (`textStyles`) i komponenty w `app/src/ui/` (`StatusPill`, `DeclarationPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `Icon`). Używaj ich zamiast kopiować style.
+- Kolor = znaczenie. Bursztyn (`warning*`) tylko dla „czeka na Twoją reakcję”. Status zawsze przez `StatusPill`/`statusMeta` (kolor + znak + kształt).
+- Deklaracje tylko przez ankietę na forum (`app/src/domain/forumLinks.ts`, „Zadeklaruj na forum ↗”); aplikacja ich nie zapisuje. Nie pokazuj liczników „może” ani „brak”.
+- Tytuły z forum bez daty (`stripTitleDatePrefix`). Listy osób sortuj po nazwisku, wielokolumnowe wypełniaj kolumnami z góry na dół.
+- Teksty po polsku z pełnymi znakami, bez żargonu technicznego dla członków.
+- Dostępność: obrys kontrolek `controlBorder` (nie `border`/`borderStrong`), fokus klawiatury rysuje się globalnie i nie wolno go wyłączać, cele dotyku ≥ 44 px.
+- Nawigacja: 4 zakładki (Start, Wydarzenia, Zarząd, Ja); narzędzia zarządu jako podzakładki „Zarząd”.
+- Ponaglenia ukryte flagą `ATTENDANCE_REMINDERS_ENABLED` w `app/App.tsx`.
+- Sprawdzaj zmiany na webie w obu szerokościach (≥960 i 375); ekran logowania bez wylogowania: `http://[::1]:<port>`.

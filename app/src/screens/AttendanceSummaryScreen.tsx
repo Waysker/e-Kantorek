@@ -6,7 +6,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from "react-native";
@@ -19,6 +18,12 @@ import {
 } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { Button } from "../ui/Button";
+import { TextField } from "../ui/TextField";
+import { textStyles } from "../theme/text";
+import { Chip } from "../ui/Chip";
+import { Notice } from "../ui/Notice";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { formatDateLabel } from "../utils/format";
 
 type AttendanceSummaryScreenProps = {
@@ -399,18 +404,6 @@ async function fetchAttendanceEntriesForEvents(eventIds: string[]): Promise<Atte
 export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
   const { width: viewportWidth } = useWindowDimensions();
   const isDesktopLayout = viewportWidth >= tokens.breakpoints.desktop;
-  const memberTableMaxWidth = useMemo(() => {
-    if (!isDesktopLayout) {
-      return null;
-    }
-    if (viewportWidth >= 1600) {
-      return 980;
-    }
-    if (viewportWidth >= 1280) {
-      return 860;
-    }
-    return 740;
-  }, [isDesktopLayout, viewportWidth]);
   const webDateInputProps = useMemo(() => {
     if (Platform.OS !== "web") {
       return {};
@@ -801,113 +794,68 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
       <View style={styles.card}>
         <View style={styles.chips}>
-          {presetOptions.map((option) => {
-            const isActive = activeScope === option.key;
-            return (
-              <Pressable
-                key={option.key}
-                onPress={() => applyPreset(option.key)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
-                style={[styles.chip, isActive && styles.chipActive]}
-              >
-                <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>{option.label}</Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
+          {presetOptions.map((option) => (
+            <Chip
+              key={option.key}
+              label={option.label}
+              selected={activeScope === option.key}
+              onPress={() => applyPreset(option.key)}
+            />
+          ))}
+          <Chip
+            label={`${tr("Własny zakres", "Custom range")} ${showCustomScope ? "▴" : "▾"}`}
+            selected={activeScope === "custom" || activeScope === "month"}
+            expanded={showCustomScope}
             onPress={() => setShowCustomScope((value) => !value)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showCustomScope }}
-            style={[
-              styles.chip,
-              (activeScope === "custom" || activeScope === "month") && styles.chipActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.chipLabel,
-                (activeScope === "custom" || activeScope === "month") && styles.chipLabelActive,
-              ]}
-            >
-              {tr("Własny zakres", "Custom range")} {showCustomScope ? "▴" : "▾"}
-            </Text>
-          </Pressable>
+          />
         </View>
 
         {showCustomScope ? (
           <View style={styles.customScope}>
             <View style={styles.inputRow}>
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>{tr("Miesiąc", "Month")}</Text>
-                <TextInput
-                  {...(webMonthInputProps as any)}
-                  value={singleMonthInput}
-                  onChangeText={setSingleMonthInput}
-                  placeholder="RRRR-MM"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-                  style={styles.input}
-                />
-              </View>
-              <Pressable style={styles.secondaryButton} onPress={applySingleMonthScope} accessibilityRole="button">
-                <Text style={styles.secondaryButtonLabel}>{tr("Pokaż miesiąc", "Show month")}</Text>
-              </Pressable>
+              <TextField
+                style={styles.inputBlock}
+                label={tr("Miesiąc", "Month")}
+              {...(webMonthInputProps as any)}
+              value={singleMonthInput}
+              onChangeText={setSingleMonthInput}
+              placeholder="RRRR-MM"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+              />
+              <Button variant="secondary" size="lg" label={tr("Pokaż miesiąc", "Show month")} onPress={applySingleMonthScope} />
             </View>
             <View style={styles.inputRow}>
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>{tr("Od", "From")}</Text>
-                <TextInput
-                  {...(webDateInputProps as any)}
-                  value={startDateInput}
-                  onChangeText={setStartDateInput}
-                  placeholder="RRRR-MM-DD"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-                  style={styles.input}
-                />
-              </View>
-              <View style={styles.inputBlock}>
-                <Text style={styles.inputLabel}>{tr("Do", "To")}</Text>
-                <TextInput
-                  {...(webDateInputProps as any)}
-                  value={endDateInput}
-                  onChangeText={setEndDateInput}
-                  placeholder="RRRR-MM-DD"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
-                  style={styles.input}
-                />
-              </View>
-              <Pressable style={styles.secondaryButton} onPress={applyCustomScope} accessibilityRole="button">
-                <Text style={styles.secondaryButtonLabel}>{tr("Przelicz", "Apply")}</Text>
-              </Pressable>
+              <TextField
+                style={styles.inputBlock}
+                label={tr("Od", "From")}
+              {...(webDateInputProps as any)}
+              value={startDateInput}
+              onChangeText={setStartDateInput}
+              placeholder="RRRR-MM-DD"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+              />
+              <TextField
+                style={styles.inputBlock}
+                label={tr("Do", "To")}
+              {...(webDateInputProps as any)}
+              value={endDateInput}
+              onChangeText={setEndDateInput}
+              placeholder="RRRR-MM-DD"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType={Platform.OS === "web" ? "default" : "numbers-and-punctuation"}
+              />
+              <Button variant="secondary" size="lg" label={tr("Przelicz", "Apply")} onPress={applyCustomScope} />
             </View>
           </View>
         ) : null}
       </View>
 
-      <View style={styles.segmented} accessibilityRole="tablist">
-        {sortOptions.map((option) => {
-          const isActive = sortMode === option.key;
-          return (
-            <Pressable
-              key={option.key}
-              onPress={() => setSortMode(option.key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              style={[styles.segment, isActive && styles.segmentActive]}
-            >
-              <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SegmentedControl options={sortOptions} value={sortMode} onChange={setSortMode} />
 
       {isLoading ? (
         <View style={styles.loadingRow}>
@@ -916,11 +864,11 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       ) : null}
 
       {!isLoading && errorMessage ? (
-        <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text>
+        <Notice tone="error">{errorMessage}</Notice>
       ) : null}
 
       {!isLoading && !errorMessage && consistencyNotice ? (
-        <Text style={[styles.notice, styles.noticeWarning]}>{consistencyNotice}</Text>
+        <Notice tone="warning">{consistencyNotice}</Notice>
       ) : null}
 
       {!isLoading && !errorMessage && displaySections.length === 0 ? (
@@ -969,20 +917,8 @@ const styles = StyleSheet.create({
   header: {
     gap: 2,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
-  },
+  kicker: textStyles.kicker,
+  title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
     color: tokens.colors.muted,
@@ -999,27 +935,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-  },
-  chip: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    justifyContent: "center",
-  },
-  chipActive: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
-  },
-  chipLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  chipLabelActive: {
-    color: tokens.colors.surface,
   },
   customScope: {
     gap: tokens.spacing.sm,
@@ -1038,86 +953,9 @@ const styles = StyleSheet.create({
     flexBasis: 140,
     gap: 4,
   },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: tokens.colors.muted,
-  },
-  input: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: tokens.colors.ink,
-    backgroundColor: tokens.colors.surface,
-  },
-  secondaryButton: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryButtonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  segmented: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  segmentActive: {
-    backgroundColor: tokens.colors.surface,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  segmentLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.muted,
-    textAlign: "center",
-  },
-  segmentLabelActive: {
-    color: tokens.colors.ink,
-  },
   loadingRow: {
     paddingVertical: tokens.spacing.lg,
     alignItems: "center",
-  },
-  notice: {
-    fontSize: 14,
-    lineHeight: 20,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-  },
-  noticeError: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-  },
-  noticeWarning: {
-    backgroundColor: tokens.colors.warningSurface,
-    color: tokens.colors.warningInk,
   },
   sections: {
     gap: tokens.spacing.sm,

@@ -924,7 +924,6 @@ export default function App() {
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
   const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
   const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
-  const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
   // Reminders ("Ponaglij") are hidden for now; the code stays so the feature
   // can be revived on a branch by flipping this flag.
   const ATTENDANCE_REMINDERS_ENABLED = false;

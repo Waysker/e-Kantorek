@@ -12,6 +12,7 @@ import type { PrimaryTab } from "../navigation/routes";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { DataFreshnessBanner } from "./DataFreshnessBanner";
+import { Badge } from "./Badge";
 import { Icon, type IconName } from "./Icon";
 
 type AppShellProps = {
@@ -53,9 +54,6 @@ function getTabIcon(tab: PrimaryTab): IconName {
   return "user";
 }
 
-function formatBadge(count: number) {
-  return count > 99 ? "99+" : String(count);
-}
 
 export function AppShell({
   tabs,
@@ -124,9 +122,7 @@ export function AppShell({
                     <Icon name={getTabIcon(tab)} size={20} color={color} />
                     <Text style={[styles.sidebarLinkLabel, { color }]}>{getTabLabel(tab)}</Text>
                     {badgeCount > 0 ? (
-                      <View style={[styles.navBadge, styles.navBadgeSidebar]}>
-                        <Text style={styles.navBadgeLabel}>{formatBadge(badgeCount)}</Text>
-                      </View>
+                      <Badge value={badgeCount} style={styles.navBadgeSidebar} />
                     ) : null}
                   </Pressable>
                 );
@@ -174,9 +170,7 @@ export function AppShell({
               <View>
                 <Icon name={getTabIcon(tab)} size={22} color={color} />
                 {badgeCount > 0 ? (
-                  <View style={[styles.navBadge, styles.navBadgeBottom]}>
-                    <Text style={styles.navBadgeLabel}>{formatBadge(badgeCount)}</Text>
-                  </View>
+                  <Badge value={badgeCount} style={styles.navBadgeBottom} />
                 ) : null}
               </View>
               <Text style={[styles.bottomNavLabel, { color }]}>{getTabLabel(tab)}</Text>
@@ -248,15 +242,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-  navBadge: {
-    minWidth: 20,
-    height: 20,
-    paddingHorizontal: 6,
-    borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.warningBorder,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   navBadgeSidebar: {
     marginLeft: "auto",
   },
@@ -267,12 +252,6 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     paddingHorizontal: 4,
-  },
-  navBadgeLabel: {
-    fontSize: 11,
-    lineHeight: 13,
-    color: tokens.colors.surface,
-    fontWeight: "700",
   },
   desktopMain: {
     flex: 1,

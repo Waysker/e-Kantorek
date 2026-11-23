@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -14,6 +13,13 @@ import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { CANONICAL_INSTRUMENT_OPTIONS, canonicalizeInstrumentLabel } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { EmptyState } from "../ui/EmptyState";
+import { Card, listRowDivider } from "../ui/Card";
+import { TextField } from "../ui/TextField";
+import { textStyles } from "../theme/text";
+import { Chip } from "../ui/Chip";
+import { Notice } from "../ui/Notice";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { formatRelativeLabel } from "../utils/format";
 
 type PanelTab = "assign" | "mapped" | "history";
@@ -305,27 +311,15 @@ export function InstrumentMappingScreen() {
       <View style={styles.optionsRow} accessibilityRole="radiogroup">
         {CANONICAL_INSTRUMENT_OPTIONS.map((option) => {
           const isSelected = selectedCanonical === option;
-          const isDisabled = isSaving || isSelected;
-
           return (
-            <Pressable
+            <Chip
               key={`${keyPrefix}-${option}`}
-              style={(state) => [
-                styles.option,
-                isSelected && styles.optionSelected,
-                isSaving && !isSelected && styles.optionDisabled,
-                ((state as { hovered?: boolean }).hovered && !isDisabled) && styles.optionHovered,
-              ]}
-              disabled={isDisabled}
+              role="radio"
+              label={option}
+              selected={isSelected}
+              disabled={isSaving}
               onPress={() => onSelect(option)}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: isSelected, disabled: isDisabled }}
-            >
-              <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
-                {isSelected ? "✓ " : ""}
-                {option}
-              </Text>
-            </Pressable>
+            />
           );
         })}
       </View>
@@ -347,17 +341,15 @@ export function InstrumentMappingScreen() {
     }
     if (members.length === 0) {
       return (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyTitle}>
-            {tr("✓ Wszyscy mają przypisany instrument.", "✓ Everyone has an instrument.")}
-          </Text>
-          <Text style={styles.muted}>
-            {tr(
-              "Nowe osoby z forum pojawią się tutaj po synchronizacji.",
-              "New forum members will show up here after the next sync.",
-            )}
-          </Text>
-        </View>
+        <EmptyState
+          tone="done"
+          title={tr("✓ Wszyscy mają przypisany instrument.", "✓ Everyone has an instrument.")}
+        >
+          {tr(
+            "Nowe osoby z forum pojawią się tutaj po synchronizacji.",
+            "New forum members will show up here after the next sync.",
+          )}
+        </EmptyState>
       );
     }
 
@@ -407,13 +399,11 @@ export function InstrumentMappingScreen() {
 
     return (
       <>
-        <TextInput
+        <TextField
           value={query}
           onChangeText={setQuery}
           placeholder={tr("Szukaj po nazwisku, UID lub instrumencie", "Search by name, UID or instrument")}
-          placeholderTextColor={tokens.colors.muted}
           accessibilityLabel={tr("Szukaj", "Search")}
-          style={styles.searchInput}
           autoCapitalize="none"
           autoCorrect={false}
         />
@@ -426,13 +416,13 @@ export function InstrumentMappingScreen() {
               )}
         </Text>
 
-        <View style={styles.list}>
+        <Card variant="list">
           {visibleMappings.map((row, index) => {
             const rowKey = `${row.bucket}:${row.entryKey}`;
             const isExpanded = expandedMappingKey === rowKey;
 
             return (
-              <View key={rowKey} style={[styles.listRow, index > 0 && styles.listRowDivider]}>
+              <View key={rowKey} style={[styles.listRow, index > 0 && listRowDivider]}>
                 <Pressable
                   onPress={() => setExpandedMappingKey(isExpanded ? null : rowKey)}
                   accessibilityRole="button"
@@ -465,7 +455,7 @@ export function InstrumentMappingScreen() {
               </View>
             );
           })}
-        </View>
+        </Card>
       </>
     );
   }
@@ -476,20 +466,18 @@ export function InstrumentMappingScreen() {
     }
     if (audit.length === 0) {
       return (
-        <View style={styles.emptyBox}>
-          <Text style={styles.muted}>
-            {tr("Brak zmian zapisanych w panelu.", "No changes recorded through the panel yet.")}
-          </Text>
-        </View>
+        <EmptyState>
+          {tr("Brak zmian zapisanych w panelu.", "No changes recorded through the panel yet.")}
+        </EmptyState>
       );
     }
 
     return (
-      <View style={styles.list}>
+      <Card variant="list">
         {audit.map((entry, index) => (
           <View
             key={`${entry.changedAt}-${entry.entryKey}-${index}`}
-            style={[styles.listRow, index > 0 && styles.listRowDivider]}
+            style={[styles.listRow, index > 0 && listRowDivider]}
           >
             <Text style={styles.name}>{entry.memberName ?? `UID ${entry.entryKey}`}</Text>
             <Text style={styles.change}>
@@ -507,7 +495,7 @@ export function InstrumentMappingScreen() {
             </Text>
           </View>
         ))}
-      </View>
+      </Card>
     );
   }
 
@@ -546,25 +534,10 @@ export function InstrumentMappingScreen() {
         </Text>
       </View>
 
-      <View style={styles.segmented} accessibilityRole="tablist">
-        {tabs.map((tab) => {
-          const isActive = tab.key === activeTab;
-          return (
-            <Pressable
-              key={tab.key}
-              onPress={() => openTab(tab.key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              style={[styles.segment, isActive && styles.segmentActive]}
-            >
-              <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>{tab.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SegmentedControl options={tabs} value={activeTab} onChange={openTab} />
 
-      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
-      {infoMessage ? <Text style={[styles.notice, styles.noticeSuccess]}>{infoMessage}</Text> : null}
+      {errorMessage ? <Notice tone="error">{errorMessage}</Notice> : null}
+      {infoMessage ? <Notice tone="success">{infoMessage}</Notice> : null}
 
       {activeTab === "assign" ? renderAssignTab() : null}
       {activeTab === "mapped" ? renderMappedTab() : null}
@@ -605,90 +578,18 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: tokens.spacing.xs,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
-  },
+  kicker: textStyles.kicker,
+  title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
     lineHeight: 20,
     color: tokens.colors.muted,
-  },
-  segmented: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 6,
-  },
-  segmentActive: {
-    backgroundColor: tokens.colors.surface,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  segmentLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.muted,
-    textAlign: "center",
-  },
-  segmentLabelActive: {
-    color: tokens.colors.ink,
-  },
-  notice: {
-    fontSize: 14,
-    lineHeight: 20,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-  },
-  noticeError: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-  },
-  noticeSuccess: {
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
   },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
     paddingVertical: tokens.spacing.md,
-  },
-  emptyBox: {
-    padding: tokens.spacing.lg,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
-    gap: 4,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: tokens.colors.successInk,
   },
   card: {
     backgroundColor: tokens.colors.surface,
@@ -755,58 +656,10 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 6,
   },
-  option: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    justifyContent: "center",
-  },
-  optionHovered: {
-    borderColor: tokens.colors.brand,
-  },
-  optionSelected: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
-  },
-  optionDisabled: {
-    opacity: 0.5,
-  },
-  optionLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  optionLabelSelected: {
-    color: tokens.colors.surface,
-  },
-  searchInput: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    color: tokens.colors.ink,
-    paddingHorizontal: 14,
-    borderRadius: tokens.radii.md,
-    fontSize: 15,
-  },
-  list: {
-    backgroundColor: tokens.colors.surface,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.lg,
-    overflow: "hidden",
-  },
   listRow: {
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 8,
-  },
-  listRowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
   },
   listRowMain: {
     flexDirection: "row",

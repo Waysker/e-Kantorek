@@ -1,8 +1,12 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { TextField } from "../ui/TextField";
+import { Notice } from "../ui/Notice";
+import { Button } from "../ui/Button";
+import { textStyles } from "../theme/text";
 import { AuthLayout } from "../ui/AuthLayout";
 
 type AuthScreenProps = {
@@ -74,8 +78,10 @@ export function AuthScreen({
             {tr("Kontem e-Kantorka, osobnym od konta na forum.", "With your e-Kantorek account, separate from the forum.")}
           </Text>
 
-          <Text style={styles.label}>{tr("E-mail", "Email")}</Text>
-          <TextInput
+          <TextField
+            style={styles.field}
+            label={tr("E-mail", "Email")}
+            error={showEmailError ? errors.email : null}
             value={email}
             onChangeText={(value) => {
               setEmail(value);
@@ -88,17 +94,13 @@ export function AuthScreen({
             autoCorrect={false}
             keyboardType="email-address"
             placeholder="ty@przyklad.pl"
-            placeholderTextColor={tokens.colors.muted}
-            accessibilityLabel={tr("E-mail", "Email")}
-            style={[styles.input, showEmailError ? styles.inputError : null]}
             editable={!isSubmitting}
           />
-          {showEmailError ? (
-            <Text style={styles.fieldErrorText}>{errors.email}</Text>
-          ) : null}
 
-          <Text style={styles.label}>{tr("Hasło", "Password")}</Text>
-          <TextInput
+          <TextField
+            style={styles.field}
+            label={tr("Hasło", "Password")}
+            error={showPasswordError ? errors.password : null}
             value={password}
             onChangeText={(value) => {
               setPassword(value);
@@ -109,30 +111,21 @@ export function AuthScreen({
             onBlur={() => setPasswordTouched(true)}
             secureTextEntry
             placeholder={tr("Twoje hasło", "Your password")}
-            placeholderTextColor={tokens.colors.muted}
-            accessibilityLabel={tr("Hasło", "Password")}
-            style={[styles.input, showPasswordError ? styles.inputError : null]}
             editable={!isSubmitting}
             onSubmitEditing={handleSubmit}
           />
-          {showPasswordError ? (
-            <Text style={styles.fieldErrorText}>{errors.password}</Text>
-          ) : null}
 
-          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-          {infoMessage ? <Text style={styles.infoText}>{infoMessage}</Text> : null}
+          {errorMessage ? <View style={styles.field}><Notice tone="error">{errorMessage}</Notice></View> : null}
+          {infoMessage ? <View style={styles.field}><Notice tone="success">{infoMessage}</Notice></View> : null}
 
-          <Pressable
+          <Button
+            size="lg"
+            style={styles.submit}
+            label={isSubmitting ? tr("Logowanie…", "Signing in…") : tr("Zaloguj się", "Sign in")}
             onPress={handleSubmit}
-            style={[styles.button, isDisabled && styles.buttonDisabled]}
             disabled={isDisabled}
-          >
-            <Text style={styles.buttonLabel}>
-              {isSubmitting
-                ? tr("Logowanie…", "Signing in…")
-                : tr("Zaloguj się", "Sign in")}
-            </Text>
-          </Pressable>
+            loading={isSubmitting}
+          />
 
           <Pressable
             onPress={onGoToRegister}
@@ -148,79 +141,18 @@ export function AuthScreen({
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
+  field: {
+    marginTop: tokens.spacing.md,
   },
+  submit: {
+    marginTop: tokens.spacing.lg,
+  },
+  title: textStyles.pageTitle,
   subtitle: {
     marginTop: 4,
     fontSize: 14,
     lineHeight: 20,
     color: tokens.colors.muted,
-  },
-  label: {
-    marginTop: tokens.spacing.md,
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  input: {
-    marginTop: 6,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: tokens.colors.ink,
-    backgroundColor: tokens.colors.surface,
-  },
-  inputError: {
-    borderColor: tokens.colors.dangerInk,
-  },
-  fieldErrorText: {
-    marginTop: 4,
-    color: tokens.colors.dangerInk,
-    fontSize: 13,
-  },
-  errorText: {
-    marginTop: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-    fontSize: 14,
-  },
-  infoText: {
-    marginTop: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
-    fontSize: 14,
-  },
-  button: {
-    marginTop: tokens.spacing.lg,
-    minHeight: 48,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonLabel: {
-    color: tokens.colors.surface,
-    fontSize: 16,
-    fontWeight: "600",
   },
   secondaryButton: {
     marginTop: tokens.spacing.sm,

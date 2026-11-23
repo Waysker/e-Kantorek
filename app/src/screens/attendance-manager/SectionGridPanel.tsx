@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-na
 
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
+import { textStyles } from "../../theme/text";
 
 export type SectionGridTile = {
   key: string;
@@ -98,13 +99,7 @@ const styles = StyleSheet.create({
   header: {
     gap: 2,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
+  kicker: textStyles.kicker,
   hint: {
     fontSize: 13,
     color: tokens.colors.muted,

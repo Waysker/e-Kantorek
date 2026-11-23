@@ -5,7 +5,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -15,6 +14,11 @@ import type { PrimaryRole } from "../domain/models";
 import { normalizePrimaryRole, PRIMARY_ROLE_SEQUENCE } from "../domain/roles";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { Card, listRowDivider } from "../ui/Card";
+import { TextField } from "../ui/TextField";
+import { textStyles } from "../theme/text";
+import { Chip } from "../ui/Chip";
+import { Notice } from "../ui/Notice";
 import { formatRelativeLabel } from "../utils/format";
 
 type RoleManagementScreenProps = {
@@ -289,38 +293,28 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
         </Text>
       </View>
 
-      <TextInput
+      <TextField
         value={query}
         onChangeText={setQuery}
         placeholder={tr("Szukaj po nazwisku, instrumencie lub roli", "Search by name, instrument or role")}
-        placeholderTextColor={tokens.colors.muted}
         accessibilityLabel={tr("Szukaj", "Search")}
-        style={styles.searchInput}
         autoCapitalize="none"
         autoCorrect={false}
       />
 
       <View style={styles.chips}>
-        {filterOptions.map((option) => {
-          const isActive = roleFilter === option;
-          return (
-            <Pressable
-              key={option}
-              onPress={() => setRoleFilter(option)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              style={[styles.chip, isActive && styles.chipActive]}
-            >
-              <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>
-                {formatRoleFilterLabel(option)} · {roleCounts[option]}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {filterOptions.map((option) => (
+          <Chip
+            key={option}
+            label={`${formatRoleFilterLabel(option)} · ${roleCounts[option]}`}
+            selected={roleFilter === option}
+            onPress={() => setRoleFilter(option)}
+          />
+        ))}
       </View>
 
-      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
-      {infoMessage ? <Text style={[styles.notice, styles.noticeSuccess]}>{infoMessage}</Text> : null}
+      {errorMessage ? <Notice tone="error">{errorMessage}</Notice> : null}
+      {infoMessage ? <Notice tone="success">{infoMessage}</Notice> : null}
 
       {isLoading ? (
         <View style={styles.loadingRow}>
@@ -330,7 +324,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
       ) : visibleProfiles.length === 0 ? (
         <Text style={styles.muted}>{tr("Nikogo nie znaleziono.", "Nobody found.")}</Text>
       ) : (
-        <View style={styles.list}>
+        <Card variant="list">
           {visibleProfiles.map((profile, index) => {
             const isSavingCurrent = savingProfileId === profile.id;
             const isSelf = profile.id === currentUserId;
@@ -338,7 +332,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
             return (
               <View
                 key={profile.id}
-                style={[styles.row, isWide && styles.rowWide, index > 0 && styles.rowDivider]}
+                style={[styles.row, isWide && styles.rowWide, index > 0 && listRowDivider]}
               >
                 <View style={styles.person}>
                   <Text style={styles.name}>
@@ -394,7 +388,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
               </View>
             );
           })}
-        </View>
+        </Card>
       )}
     </ScrollView>
   );
@@ -428,89 +422,23 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingBottom: tokens.spacing.xs,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
-  },
+  kicker: textStyles.kicker,
+  title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
     lineHeight: 20,
     color: tokens.colors.muted,
-  },
-  searchInput: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    color: tokens.colors.ink,
-    paddingHorizontal: 14,
-    borderRadius: tokens.radii.md,
-    fontSize: 15,
   },
   chips: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
   },
-  chip: {
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    justifyContent: "center",
-  },
-  chipActive: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
-  },
-  chipLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  chipLabelActive: {
-    color: tokens.colors.surface,
-  },
-  notice: {
-    fontSize: 14,
-    lineHeight: 20,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-  },
-  noticeError: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-  },
-  noticeSuccess: {
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
-  },
   loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
     paddingVertical: tokens.spacing.md,
-  },
-  list: {
-    backgroundColor: tokens.colors.surface,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.lg,
-    overflow: "hidden",
   },
   row: {
     paddingHorizontal: 14,
@@ -521,10 +449,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.md,
-  },
-  rowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
   },
   person: {
     flex: 1,
@@ -558,7 +482,7 @@ const styles = StyleSheet.create({
   segment: {
     flex: 1,
     minHeight: 36,
-    paddingHorizontal: 10,
+    paddingHorizontal: 4,
     borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
@@ -570,7 +494,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   segmentLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "600",
     color: tokens.colors.neutralInk,
   },

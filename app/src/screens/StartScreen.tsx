@@ -4,6 +4,10 @@ import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } fr
 import type { AttendanceStatus, EventListItem } from "../domain/models";
 import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { EventRow } from "../ui/EventRow";
+import { EmptyState } from "../ui/EmptyState";
+import { Card } from "../ui/Card";
+import { textStyles } from "../theme/text";
 import { stripTitleDatePrefix } from "../utils/format";
 import { DeclarationPrompt } from "../ui/DeclarationPrompt";
 import { Icon } from "../ui/Icon";
@@ -41,12 +45,6 @@ const HERO_DATE = new Intl.DateTimeFormat(appLocaleTag, {
 });
 const TIME = new Intl.DateTimeFormat(appLocaleTag, { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 const WEEKDAY_SHORT = new Intl.DateTimeFormat(appLocaleTag, { timeZone: "UTC", weekday: "short" });
-const ROW_DATE = new Intl.DateTimeFormat(appLocaleTag, {
-  timeZone: TZ,
-  weekday: "short",
-  day: "numeric",
-  month: "numeric",
-});
 
 function dateKey(value: string | Date) {
   return DATE_KEY.format(value instanceof Date ? value : new Date(value));
@@ -204,27 +202,17 @@ export function StartScreen({
             <Text style={styles.link}>{tr("Wszystkie ›", "All ›")}</Text>
           </Pressable>
         </View>
-        <View style={styles.list}>
+        <Card variant="list">
           {later.map((event, index) => (
-            <Pressable
+            <EventRow
               key={event.id}
+              event={event}
+              index={index}
+              dateStyle="inline"
               onPress={() => onOpenEvent(event.id)}
-              accessibilityRole="link"
-              style={[styles.row, index > 0 && styles.rowDivider]}
-            >
-              <View style={styles.rowBody}>
-                <Text style={styles.rowTitle} numberOfLines={1}>
-                  {stripTitleDatePrefix(event.title)}
-                </Text>
-                <Text style={styles.rowMeta} numberOfLines={1}>
-                  {ROW_DATE.format(new Date(event.startsAt))} · {TIME.format(new Date(event.startsAt))}
-                  {event.venue ? ` · ${event.venue}` : ""}
-                </Text>
-              </View>
-              <StatusPill status={event.attendanceStatus} />
-            </Pressable>
+            />
           ))}
-        </View>
+        </Card>
       </View>
     ) : null;
 
@@ -278,14 +266,12 @@ export function StartScreen({
       )}
 
       {upcoming.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyCopy}>
-            {tr(
-              "Brak nadchodzących wydarzeń. Nowe wątki z forum pojawią się tutaj automatycznie.",
-              "No upcoming events. New forum threads will appear here automatically.",
-            )}
-          </Text>
-        </View>
+        <EmptyState title={tr("Brak nadchodzących wydarzeń.", "No upcoming events.")}>
+          {tr(
+            "Nowe wątki z forum pojawią się tutaj automatycznie.",
+            "New forum threads will appear here automatically.",
+          )}
+        </EmptyState>
       ) : null}
     </ScrollView>
   );
@@ -327,20 +313,8 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
-  greeting: {
-    fontSize: tokens.typography.hero,
-    lineHeight: 36,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    color: tokens.colors.ink,
-  },
+  kicker: textStyles.kicker,
+  greeting: textStyles.screenTitle,
   bellButton: {
     width: 44,
     height: 44,
@@ -445,50 +419,5 @@ const styles = StyleSheet.create({
   dayTextToday: {
     color: tokens.colors.surface,
     fontWeight: "700",
-  },
-  list: {
-    backgroundColor: tokens.colors.surface,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.lg,
-    overflow: "hidden",
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minHeight: 56,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-  },
-  rowDivider: {
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
-  },
-  rowBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  rowTitle: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  rowMeta: {
-    fontSize: 13,
-    color: tokens.colors.muted,
-  },
-  emptyBox: {
-    padding: tokens.spacing.lg,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
-  },
-  emptyCopy: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: tokens.colors.muted,
   },
 });

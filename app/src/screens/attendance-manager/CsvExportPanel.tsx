@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../../auth/supabaseAuthClient";
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
+import { Button } from "../../ui/Button";
+import { TextField } from "../../ui/TextField";
+import { textStyles } from "../../theme/text";
 
 type CsvExportItem = {
   source_gid: string;
@@ -202,27 +205,22 @@ export function CsvExportPanel() {
         </View>
       </View>
       <View style={styles.controls}>
-        <TextInput
+        <TextField
+          style={styles.monthField}
           value={monthInput}
           onChangeText={(value) => setMonthInput(normalizeMonthInput(value))}
           autoCapitalize="none"
           autoCorrect={false}
           placeholder="2026-04"
-          placeholderTextColor={tokens.colors.muted}
           accessibilityLabel={tr("Miesiąc (RRRR-MM)", "Month (YYYY-MM)")}
-          style={styles.input}
         />
-        <Pressable
-          style={[styles.button, isExportingCsv && styles.buttonDisabled]}
-          disabled={isExportingCsv}
+        <Button
+          variant="secondary"
+          size="lg"
+          label={isExportingCsv ? tr("Eksportowanie…", "Exporting…") : tr("Eksportuj CSV", "Export CSV")}
+          loading={isExportingCsv}
           onPress={() => void handleCsvExport()}
-          accessibilityRole="button"
-        >
-          {isExportingCsv ? <ActivityIndicator color={tokens.colors.ink} size="small" /> : null}
-          <Text style={styles.buttonLabel}>
-            {isExportingCsv ? tr("Eksportowanie…", "Exporting…") : tr("Eksportuj CSV", "Export CSV")}
-          </Text>
-        </Pressable>
+        />
       </View>
       {csvExportMessage ? <Text style={styles.message}>{csvExportMessage}</Text> : null}
       {csvExportFiles.length > 0 ? (
@@ -258,13 +256,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
+  kicker: textStyles.kicker,
   title: {
     fontSize: 17,
     fontWeight: "700",
@@ -279,36 +271,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: tokens.spacing.xs,
   },
-  input: {
+  monthField: {
     flex: 1,
     minWidth: 0,
-    minHeight: 44,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: tokens.colors.ink,
-    backgroundColor: tokens.colors.surface,
-  },
-  button: {
-    minHeight: 44,
-    paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
   },
   message: {
     fontSize: 13,

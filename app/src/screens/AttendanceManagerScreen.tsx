@@ -23,6 +23,9 @@ import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { canonicalizeInstrumentLabel, normalizeInstrumentKey } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { Button } from "../ui/Button";
+import { textStyles } from "../theme/text";
+import { Notice } from "../ui/Notice";
 import { Icon } from "../ui/Icon";
 import { formatDateLabel } from "../utils/format";
 
@@ -1211,37 +1214,29 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               <Text style={styles.counterTotal}> / {sessionTotals.total}</Text>
             </View>
           ) : null}
-          <Pressable
+          <Button
+            variant="secondary"
+            label={tr("Wyczyść", "Clear")}
             disabled={pendingChangesCount === 0 || isBatchSaving}
             onPress={handleClearPendingChanges}
-            accessibilityRole="button"
-            style={[
-              styles.secondaryButton,
-              (pendingChangesCount === 0 || isBatchSaving) && styles.buttonDisabled,
-            ]}
-          >
-            <Text style={styles.secondaryButtonLabel}>{tr("Wyczyść", "Clear")}</Text>
-          </Pressable>
-          <Pressable
-            disabled={saveDisabled}
-            onPress={() => void handleSavePendingChanges()}
-            accessibilityRole="button"
-            style={[styles.primaryButton, saveDisabled && styles.buttonDisabled]}
-          >
-            {isBatchSaving ? <ActivityIndicator color={tokens.colors.surface} size="small" /> : null}
-            <Text style={styles.primaryButtonLabel}>
-              {isBatchSaving
+          />
+          <Button
+            label={
+              isBatchSaving
                 ? tr("Zapisywanie…", "Saving…")
                 : pendingChangesCount > 0
                   ? tr(`Zapisz (${pendingChangesCount})`, `Save (${pendingChangesCount})`)
-                  : tr("Zapisz", "Save")}
-            </Text>
-          </Pressable>
+                  : tr("Zapisz", "Save")
+            }
+            disabled={saveDisabled}
+            loading={isBatchSaving}
+            onPress={() => void handleSavePendingChanges()}
+          />
         </View>
       </View>
 
       {!canWrite ? (
-        <Text style={[styles.notice, styles.noticeError]}>
+        <Notice tone="error">
           {tr(
             ATTENDANCE_WRITE_UI_ENABLED
               ? "Zapis jest wyłączony: brak konfiguracji funkcji attendance_write_sheet_first dla tego buildu."
@@ -1250,20 +1245,20 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
               ? "Write is disabled: attendance_write_sheet_first is not configured for this build."
               : "Write is disabled by EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED in this build.",
           )}
-        </Text>
+        </Notice>
       ) : null}
-      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
-      {infoMessage ? <Text style={[styles.notice, styles.noticeInfo]}>{infoMessage}</Text> : null}
+      {errorMessage ? <Notice tone="error">{errorMessage}</Notice> : null}
+      {infoMessage ? <Notice tone="info">{infoMessage}</Notice> : null}
       {isBatchSaving ? (
-        <Text style={[styles.notice, styles.noticeInfo]}>
+        <Notice tone="info">
           {tr(
             `Zapisywanie ${pendingChangesCount} zmian: aktualizacja bazy i synchronizacja z arkuszem.`,
             `Saving ${pendingChangesCount} changes: updating the database and syncing the sheet.`,
           )}
-        </Text>
+        </Notice>
       ) : null}
       {!isBatchSaving && lastSaveFeedback ? (
-        <Text style={[styles.notice, styles.noticeSuccess]}>
+        <Notice tone="success">
           {lastSaveFeedback.wasAppliedDirectly
             ? tr(
                 `Zapisano ${lastSaveFeedback.count} wpisów o ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
@@ -1274,15 +1269,15 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                 `${lastSaveFeedback.count} changes queued at ${formatTimeLabel(lastSaveFeedback.timestampMs)}.`,
               )}
           {lastSaveFeedback.notes ? ` ${lastSaveFeedback.notes}` : ""}
-        </Text>
+        </Notice>
       ) : null}
       {pendingChangesCount > 0 && !isBatchSaving ? (
-        <Text style={[styles.notice, styles.noticeWarning]}>
+        <Notice tone="warning">
           {tr(
             `${pendingChangesCount} niezapisanych zmian. Kliknij „Zapisz”, gdy skończysz.`,
             `${pendingChangesCount} unsaved changes. Click "Save" when you're done.`,
           )}
-        </Text>
+        </Notice>
       ) : null}
       {!selectedSession?.isVirtual && rsvpHintMemberIds.size > 0 ? (
         <Text style={styles.hint}>
@@ -1355,20 +1350,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     gap: 2,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
-  },
+  kicker: textStyles.kicker,
+  title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
     color: tokens.colors.muted,
@@ -1396,63 +1379,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: tokens.colors.muted,
-  },
-  primaryButton: {
-    minHeight: 44,
-    paddingHorizontal: 20,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brand,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  primaryButtonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.surface,
-  },
-  secondaryButton: {
-    minHeight: 44,
-    paddingHorizontal: 16,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryButtonLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  buttonDisabled: {
-    opacity: 0.45,
-  },
-  notice: {
-    fontSize: 14,
-    lineHeight: 20,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-  },
-  noticeError: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-  },
-  noticeInfo: {
-    backgroundColor: tokens.colors.surfaceMuted,
-    color: tokens.colors.neutralInk,
-  },
-  noticeSuccess: {
-    backgroundColor: tokens.colors.successSurface,
-    color: tokens.colors.successInk,
-  },
-  noticeWarning: {
-    backgroundColor: tokens.colors.warningSurface,
-    color: tokens.colors.warningInk,
   },
   loadingRow: {
     flexDirection: "row",
@@ -1548,7 +1474,7 @@ const styles = StyleSheet.create({
     color: tokens.colors.ink,
   },
   dayNumberOutside: {
-    color: tokens.colors.borderStrong,
+    color: tokens.colors.controlBorder,
   },
   dayNumberStrong: {
     fontWeight: "700",
@@ -1589,7 +1515,7 @@ const styles = StyleSheet.create({
   },
   sessionRowVirtual: {
     borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
+    borderColor: tokens.colors.controlBorder,
   },
   sessionRowSelected: {
     backgroundColor: tokens.colors.brandTint,

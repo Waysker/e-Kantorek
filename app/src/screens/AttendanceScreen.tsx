@@ -12,6 +12,8 @@ import type { AttendanceStatus, EventDetail, SquadMember } from "../domain/model
 import { canonicalizeInstrumentLabel, UNKNOWN_INSTRUMENT_LABEL } from "../domain/instruments";
 import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { EmptyState } from "../ui/EmptyState";
+import { textStyles } from "../theme/text";
 import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
 import type { AttendanceSummaryFocusStatus } from "../ui/AttendanceSummaryStrip";
 import { Icon } from "../ui/Icon";
@@ -223,15 +225,13 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       </View>
 
       {activeSections.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyCopy}>
-            {activeStatus === "going"
-              ? tr("Nikt jeszcze nie potwierdził udziału.", "Nobody has confirmed yet.")
-              : activeStatus === "not_going"
-                ? tr("Nikt nie odmówił udziału.", "Nobody has declined.")
-                : tr("Brak osób na tej liście.", "Nobody on this list.")}
-          </Text>
-        </View>
+        <EmptyState>
+          {activeStatus === "going"
+            ? tr("Nikt jeszcze nie potwierdził udziału.", "Nobody has confirmed yet.")
+            : activeStatus === "not_going"
+              ? tr("Nikt nie odmówił udziału.", "Nobody has declined.")
+              : tr("Brak osób na tej liście.", "Nobody on this list.")}
+        </EmptyState>
       ) : (
         <View style={[styles.sections, isDesktop && styles.sectionsDesktop]}>
           {sectionColumns.map((column, columnIndex) => (
@@ -280,13 +280,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
+  kicker: textStyles.kicker,
   title: {
     fontSize: 24,
     lineHeight: 28,
@@ -387,17 +381,5 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     color: tokens.colors.ink,
-  },
-  emptyBox: {
-    padding: tokens.spacing.lg,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
-  },
-  emptyCopy: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: tokens.colors.muted,
   },
 });

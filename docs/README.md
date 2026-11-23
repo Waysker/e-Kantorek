@@ -25,6 +25,10 @@
 14. `docs/contracts/attendance-sheet-contract.md`
 15. `docs/ops/forum-instrument-mapping.md`
 
+## App design
+
+- `docs/design-system.md` — the "Partytura" design system: tokens, text styles, components, patterns (status, declarations, people lists, navigation) and copy rules. Read before adding or changing a screen.
+
 ## Supabase hosting
 
 - `docs/ops/cloudflare-tunnel-supabase-self-hosting.md` — current self-hosted database topology, Cloudflare Tunnel, GitHub secret names, data-copy status, and operating runbook. Read this before changing the Supabase endpoint or sync deployment.

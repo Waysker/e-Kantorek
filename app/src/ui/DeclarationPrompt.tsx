@@ -5,7 +5,7 @@ import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
 import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { stripTitleDatePrefix } from "../utils/format";
-import { Icon } from "./Icon";
+import { Button } from "./Button";
 
 const WHEN = new Intl.DateTimeFormat(appLocaleTag, {
   timeZone: "Europe/Warsaw",
@@ -61,22 +61,21 @@ export function DeclarationPrompt({ events, onOpenEvent }: DeclarationPromptProp
       </Pressable>
       <View style={styles.actions}>
         {hasForumLink ? (
-          <Pressable
-            onPress={() => openForumThread(next.id)}
+          <Button
+            size="lg"
+            style={styles.primaryAction}
+            label={tr("Zadeklaruj na forum", "Declare on the forum")}
+            trailingIcon="external"
             accessibilityRole="link"
-            style={styles.primaryButton}
-          >
-            <Text style={styles.primaryLabel}>{tr("Zadeklaruj na forum", "Declare on the forum")}</Text>
-            <Icon name="external" size={16} color={tokens.colors.surface} strokeWidth={2.2} />
-          </Pressable>
+            onPress={() => openForumThread(next.id)}
+          />
         ) : null}
-        <Pressable
+        <Button
+          size="lg"
+          variant="secondary"
+          label={tr("Szczegóły", "Details")}
           onPress={() => onOpenEvent(next.id)}
-          accessibilityRole="button"
-          style={styles.secondaryButton}
-        >
-          <Text style={styles.secondaryLabel}>{tr("Szczegóły", "Details")}</Text>
-        </Pressable>
+        />
       </View>
       <Text style={styles.hint}>
         {others > 0
@@ -123,36 +122,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: tokens.spacing.xs,
   },
-  primaryButton: {
+  primaryAction: {
     flex: 1,
-    minHeight: 46,
-    paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brand,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  primaryLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.surface,
-  },
-  secondaryButton: {
-    minHeight: 46,
-    paddingHorizontal: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  secondaryLabel: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: tokens.colors.ink,
   },
   hint: {
     fontSize: tokens.typography.caption,

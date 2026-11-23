@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { BoardSection } from "../navigation/routes";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { Badge } from "./Badge";
 
 type BoardSubNavProps = {
   sections: BoardSection[];
@@ -53,11 +54,7 @@ export function BoardSubNav({ sections, activeSection, badges, onSelect }: Board
                 {getSectionLabel(section)}
               </Text>
               {badge > 0 ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeLabel}>
-                    {tr(`${badge} do przypisania`, `${badge} to assign`)}
-                  </Text>
-                </View>
+                <Badge variant="soft" value={tr(`${badge} do przypisania`, `${badge} to assign`)} />
               ) : null}
             </Pressable>
           );
@@ -95,19 +92,5 @@ const styles = StyleSheet.create({
   },
   labelActive: {
     color: tokens.colors.ink,
-  },
-  badge: {
-    height: 22,
-    paddingHorizontal: 8,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1.5,
-    borderColor: tokens.colors.warningBorder,
-    backgroundColor: tokens.colors.warningSurface,
-    justifyContent: "center",
-  },
-  badgeLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: tokens.colors.warningInk,
   },
 });

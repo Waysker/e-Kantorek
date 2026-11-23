@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWi
 import type { AppNotification, UserProfile } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { textStyles } from "../theme/text";
+import { Notice } from "../ui/Notice";
 import { formatRelativeLabel } from "../utils/format";
 
 function formatRoleLabel(role: UserProfile["role"]) {
@@ -127,7 +129,9 @@ export function ProfileScreen({
         </View>
 
         {notificationsErrorMessage ? (
-          <Text style={[styles.notice, styles.noticeError]}>{notificationsErrorMessage}</Text>
+          <View style={styles.noticeWrap}>
+            <Notice tone="error">{notificationsErrorMessage}</Notice>
+          </View>
         ) : null}
 
         {isNotificationsLoading && latestNotifications.length === 0 ? (
@@ -276,30 +280,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: tokens.spacing.md,
   },
-  kicker: {
-    fontSize: tokens.typography.caption,
-    fontWeight: "600",
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-    color: tokens.colors.muted,
-  },
+  kicker: textStyles.kicker,
   link: {
     fontSize: 13,
     fontWeight: "600",
     color: tokens.colors.brand,
   },
-  notice: {
-    fontSize: 14,
-    lineHeight: 20,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+  noticeWrap: {
     marginBottom: 8,
-    overflow: "hidden",
-  },
-  noticeError: {
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
   },
   loadingRow: {
     flexDirection: "row",

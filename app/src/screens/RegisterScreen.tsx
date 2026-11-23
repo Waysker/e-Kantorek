@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { OraghInstrument } from "../auth/instruments";
 import { ORAGH_INSTRUMENT_OPTIONS } from "../auth/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
+import { TextField } from "../ui/TextField";
+import { Notice } from "../ui/Notice";
+import { Button } from "../ui/Button";
+import { textStyles } from "../theme/text";
+import { Chip } from "../ui/Chip";
 import { AuthLayout } from "../ui/AuthLayout";
 
 export type RegisterPayload = {
@@ -195,8 +200,10 @@ export function RegisterScreen({
               )}
             </Text>
 
-            <Text style={styles.label}>{tr("Imię", "First name")}</Text>
-            <TextInput
+            <TextField
+              style={styles.field}
+              label={tr("Imię", "First name")}
+              error={showFirstNameError ? errors.firstName : null}
               value={firstName}
               onChangeText={(value) => {
                 setFirstName(value);
@@ -205,16 +212,13 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("firstName")}
               placeholder={tr("Imię", "First name")}
-              placeholderTextColor={tokens.colors.muted}
-              style={[styles.input, showFirstNameError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
-            {showFirstNameError ? (
-              <Text style={styles.fieldErrorText}>{errors.firstName}</Text>
-            ) : null}
 
-            <Text style={styles.label}>{tr("Nazwisko", "Last name")}</Text>
-            <TextInput
+            <TextField
+              style={styles.field}
+              label={tr("Nazwisko", "Last name")}
+              error={showLastNameError ? errors.lastName : null}
               value={lastName}
               onChangeText={(value) => {
                 setLastName(value);
@@ -223,47 +227,33 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("lastName")}
               placeholder={tr("Nazwisko", "Last name")}
-              placeholderTextColor={tokens.colors.muted}
-              style={[styles.input, showLastNameError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
-            {showLastNameError ? (
-              <Text style={styles.fieldErrorText}>{errors.lastName}</Text>
-            ) : null}
 
             <Text style={styles.label}>
               {tr("Instrument główny", "Primary instrument")}
             </Text>
             <View style={styles.chips} accessibilityRole="radiogroup">
-              {ORAGH_INSTRUMENT_OPTIONS.map((option) => {
-                const isSelected = option === instrument;
-                return (
-                  <Pressable
-                    key={option}
-                    onPress={() => handleInstrumentSelect(option)}
-                    disabled={isSubmitting}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: isSelected }}
-                    style={[
-                      styles.chip,
-                      isSelected && styles.chipSelected,
-                      showInstrumentError ? styles.chipError : null,
-                    ]}
-                  >
-                    <Text style={[styles.chipLabel, isSelected && styles.chipLabelSelected]}>
-                      {isSelected ? "✓ " : ""}
-                      {option}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+              {ORAGH_INSTRUMENT_OPTIONS.map((option) => (
+                <Chip
+                  key={option}
+                  role="radio"
+                  label={option}
+                  selected={option === instrument}
+                  disabled={isSubmitting}
+                  invalid={Boolean(showInstrumentError)}
+                  onPress={() => handleInstrumentSelect(option)}
+                />
+              ))}
             </View>
             {showInstrumentError ? (
               <Text style={styles.fieldErrorText}>{errors.instrument}</Text>
             ) : null}
 
-            <Text style={styles.label}>{tr("E-mail", "Email")}</Text>
-            <TextInput
+            <TextField
+              style={styles.field}
+              label={tr("E-mail", "Email")}
+              error={showEmailError ? errors.email : null}
               value={email}
               onChangeText={(value) => {
                 setEmail(value);
@@ -275,16 +265,13 @@ export function RegisterScreen({
               autoCorrect={false}
               keyboardType="email-address"
               placeholder="ty@przyklad.pl"
-              placeholderTextColor={tokens.colors.muted}
-              style={[styles.input, showEmailError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
-            {showEmailError ? (
-              <Text style={styles.fieldErrorText}>{errors.email}</Text>
-            ) : null}
 
-            <Text style={styles.label}>{tr("Hasło", "Password")}</Text>
-            <TextInput
+            <TextField
+              style={styles.field}
+              label={tr("Hasło", "Password")}
+              error={showPasswordError ? errors.password : null}
               value={password}
               onChangeText={(value) => {
                 setPassword(value);
@@ -294,18 +281,13 @@ export function RegisterScreen({
               onBlur={() => setFieldTouched("password")}
               secureTextEntry
               placeholder={tr("Hasło", "Password")}
-              placeholderTextColor={tokens.colors.muted}
-              style={[styles.input, showPasswordError ? styles.inputError : null]}
               editable={!isSubmitting}
             />
-            {showPasswordError ? (
-              <Text style={styles.fieldErrorText}>{errors.password}</Text>
-            ) : null}
 
-            <Text style={styles.label}>
-              {tr("Potwierdź hasło", "Confirm password")}
-            </Text>
-            <TextInput
+            <TextField
+              style={styles.field}
+              label={tr("Potwierdź hasło", "Confirm password")}
+              error={showPasswordConfirmationError ? errors.passwordConfirmation : null}
               value={passwordConfirmation}
               onChangeText={(value) => {
                 setPasswordConfirmation(value);
@@ -315,31 +297,20 @@ export function RegisterScreen({
               onBlur={() => setFieldTouched("passwordConfirmation")}
               secureTextEntry
               placeholder={tr("Powtórz hasło", "Repeat password")}
-              placeholderTextColor={tokens.colors.muted}
-              style={[
-                styles.input,
-                showPasswordConfirmationError ? styles.inputError : null,
-              ]}
               editable={!isSubmitting}
               onSubmitEditing={handleSubmit}
             />
-            {showPasswordConfirmationError ? (
-              <Text style={styles.fieldErrorText}>{errors.passwordConfirmation}</Text>
-            ) : null}
 
-            {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+            {errorMessage ? <View style={styles.field}><Notice tone="error">{errorMessage}</Notice></View> : null}
 
-            <Pressable
+            <Button
+              size="lg"
+              style={styles.submit}
+              label={isSubmitting ? tr("Tworzenie konta…", "Creating account…") : tr("Załóż konto", "Create account")}
               onPress={handleSubmit}
-              style={[styles.button, isDisabled && styles.buttonDisabled]}
               disabled={isDisabled}
-            >
-              <Text style={styles.buttonLabel}>
-                {isSubmitting
-                  ? tr("Tworzenie konta…", "Creating account…")
-                  : tr("Załóż konto", "Create account")}
-              </Text>
-            </Pressable>
+              loading={isSubmitting}
+            />
 
             <Pressable
               onPress={onGoToSignIn}
@@ -355,18 +326,11 @@ export function RegisterScreen({
 }
 
 const styles = StyleSheet.create({
-  title: {
-    fontSize: 26,
-    lineHeight: 31,
-    fontWeight: "800",
-    letterSpacing: -0.4,
-    color: tokens.colors.ink,
+  field: {
+    marginTop: tokens.spacing.md,
   },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    color: tokens.colors.muted,
+  submit: {
+    marginTop: tokens.spacing.lg,
   },
   label: {
     marginTop: tokens.spacing.md,
@@ -374,80 +338,23 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: tokens.colors.ink,
   },
-  input: {
-    marginTop: 6,
-    minHeight: 48,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: tokens.colors.ink,
-    backgroundColor: tokens.colors.surface,
-  },
-  inputError: {
-    borderColor: tokens.colors.dangerInk,
-  },
   fieldErrorText: {
     marginTop: 4,
     color: tokens.colors.dangerInk,
     fontSize: 13,
+  },
+  title: textStyles.pageTitle,
+  subtitle: {
+    marginTop: 4,
+    fontSize: 14,
+    lineHeight: 20,
+    color: tokens.colors.muted,
   },
   chips: {
     marginTop: 8,
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-  },
-  chip: {
-    minHeight: 38,
-    paddingHorizontal: 12,
-    borderRadius: tokens.radii.round,
-    borderWidth: 1,
-    borderColor: tokens.colors.borderStrong,
-    backgroundColor: tokens.colors.surface,
-    justifyContent: "center",
-  },
-  chipSelected: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
-  },
-  chipError: {
-    borderColor: tokens.colors.dangerInk,
-  },
-  chipLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: tokens.colors.ink,
-  },
-  chipLabelSelected: {
-    color: tokens.colors.surface,
-  },
-  errorText: {
-    marginTop: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    overflow: "hidden",
-    backgroundColor: tokens.colors.dangerSurface,
-    color: tokens.colors.dangerInk,
-    fontSize: 14,
-  },
-  button: {
-    marginTop: tokens.spacing.lg,
-    minHeight: 48,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brand,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  buttonLabel: {
-    color: tokens.colors.surface,
-    fontSize: 16,
-    fontWeight: "600",
   },
   secondaryButton: {
     marginTop: tokens.spacing.sm,

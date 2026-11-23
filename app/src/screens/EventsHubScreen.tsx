@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { Icon, type IconName } from "../ui/Icon";
+import { textStyles } from "../theme/text";
+import { SegmentedControl } from "../ui/SegmentedControl";
+import type { IconName } from "../ui/Icon";
 
 export type EventsView = "events" | "calendar";
 
@@ -50,24 +52,11 @@ export function EventsHubScreen({
     <View style={styles.root}>
       <View style={styles.header}>
         <Text style={styles.title}>{tr("Wydarzenia", "Events")}</Text>
-        <View style={styles.segmented} accessibilityRole="tablist">
-          {VIEWS.map(({ key, icon }) => {
-            const isActive = key === view;
-            const color = isActive ? tokens.colors.ink : tokens.colors.muted;
-            return (
-              <Pressable
-                key={key}
-                onPress={() => onChangeView(key)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                style={[styles.segment, isActive && styles.segmentActive]}
-              >
-                <Icon name={icon} size={16} color={color} />
-                <Text style={[styles.segmentLabel, { color }]}>{viewLabel(key)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <SegmentedControl
+          options={VIEWS.map(({ key, icon }) => ({ key, icon, label: viewLabel(key) }))}
+          value={view}
+          onChange={onChangeView}
+        />
       </View>
       <View style={styles.body}>{view === "events" ? renderList() : renderCalendar()}</View>
     </View>
@@ -94,40 +83,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: tokens.colors.border,
   },
-  title: {
-    fontSize: tokens.typography.hero,
-    lineHeight: 36,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    color: tokens.colors.ink,
-  },
-  segmented: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
-  },
-  segment: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  segmentActive: {
-    backgroundColor: tokens.colors.surface,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  segmentLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  title: textStyles.screenTitle,
   body: {
     flex: 1,
   },
