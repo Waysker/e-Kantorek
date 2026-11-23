@@ -7,6 +7,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
@@ -14,7 +15,6 @@ import type { PrimaryRole } from "../domain/models";
 import { normalizePrimaryRole, PRIMARY_ROLE_SEQUENCE } from "../domain/roles";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { SurfaceCard } from "../ui/SurfaceCard";
 import { formatRelativeLabel } from "../utils/format";
 
 type RoleManagementScreenProps = {
@@ -44,6 +44,8 @@ type RawRoleUpdateRow = {
   updated_at?: string;
 };
 
+type RoleFilter = PrimaryRole | "all";
+
 function normalizeWhitespace(value: unknown): string {
   return String(value ?? "")
     .replace(/\s+/g, " ")
@@ -70,15 +72,65 @@ function formatRoleLabel(role: PrimaryRole): string {
   return tr("Członek", "Member");
 }
 
+// Short labels for the compact role switch.
+function formatRoleShortLabel(role: PrimaryRole): string {
+  if (role === "admin") {
+    return tr("Admin", "Admin");
+  }
+  return formatRoleLabel(role);
+}
+
+// "1 konto", "2 konta", "5 kont" (Polish plural rules).
+function polishAccounts(count: number) {
+  if (count === 1) {
+    return "konto";
+  }
+  const lastDigit = count % 10;
+  const lastTwo = count % 100;
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+    return "konta";
+  }
+  return "kont";
+}
+
+function formatRoleFilterLabel(role: RoleFilter): string {
+  if (role === "all") {
+    return tr("Wszyscy", "Everyone");
+  }
+  if (role === "admin") {
+    return tr("Administratorzy", "Admins");
+  }
+  if (role === "board") {
+    return tr("Zarząd", "Board");
+  }
+  if (role === "section") {
+    return tr("Sekcyjni", "Section leaders");
+  }
+  return tr("Członkowie", "Members");
+}
+
+function surnameKey(fullName: string) {
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? fullName;
+}
+
+// Sorted by surname, like the other people lists in the app.
 function compareProfiles(left: ProfileRoleRow, right: ProfileRoleRow): number {
-  return left.full_name.localeCompare(right.full_name, "pl", { sensitivity: "base" });
+  return (
+    surnameKey(left.full_name).localeCompare(surnameKey(right.full_name), "pl", { sensitivity: "base" }) ||
+    left.full_name.localeCompare(right.full_name, "pl", { sensitivity: "base" })
+  );
 }
 
 export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementScreenProps) {
+  const { width } = useWindowDimensions();
+  const isWide = width >= 760;
+  const isDesktop = width >= tokens.breakpoints.desktop;
   const [profiles, setProfiles] = useState<ProfileRoleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfileId, setSavingProfileId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
@@ -86,7 +138,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
     if (!supabaseAuthClient) {
       setIsLoading(false);
       setErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
       return;
     }
@@ -107,7 +159,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
       .map((row: RawProfileRoleRow) => ({
         id: normalizeWhitespace(row.id),
         full_name: normalizeWhitespace(row.full_name) || tr("Nieznany użytkownik", "Unknown user"),
-        instrument: normalizeWhitespace(row.instrument) || tr("Brak", "Missing"),
+        instrument: normalizeWhitespace(row.instrument),
         role: normalizePrimaryRole(row.role),
         updated_at: normalizeWhitespace(row.updated_at),
       }))
@@ -125,7 +177,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
   async function handleRoleChange(profileId: string, nextRole: PrimaryRole) {
     if (!supabaseAuthClient) {
       setErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
       return;
     }
@@ -150,6 +202,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
       : null;
     const resolvedRole = normalizePrimaryRole(updatedRow?.role ?? nextRole);
     const resolvedUpdatedAt = normalizeWhitespace(updatedRow?.updated_at);
+    const changedProfile = profiles.find((profile) => profile.id === profileId);
 
     setProfiles((current) =>
       current
@@ -167,148 +220,181 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
     );
 
     setSavingProfileId(null);
-    setInfoMessage(tr("Rola została zaktualizowana.", "Role updated."));
+    setInfoMessage(
+      changedProfile
+        ? tr(
+            `${changedProfile.full_name}: rola zmieniona na „${formatRoleLabel(resolvedRole)}”.`,
+            `${changedProfile.full_name}: role changed to "${formatRoleLabel(resolvedRole)}".`,
+          )
+        : tr("Rola została zaktualizowana.", "Role updated."),
+    );
   }
+
+  const roleCounts = useMemo(() => {
+    const counts: Record<RoleFilter, number> = {
+      all: profiles.length,
+      admin: 0,
+      board: 0,
+      section: 0,
+      member: 0,
+    };
+    for (const profile of profiles) {
+      counts[profile.role] += 1;
+    }
+    return counts;
+  }, [profiles]);
 
   const normalizedQuery = normalizeSearchText(query);
   const visibleProfiles = useMemo(
     () =>
       profiles.filter((profile) => {
+        if (roleFilter !== "all" && profile.role !== roleFilter) {
+          return false;
+        }
         if (!normalizedQuery) {
           return true;
         }
-
-        const roleLabel = formatRoleLabel(profile.role);
         const haystack = normalizeSearchText(
-          `${profile.full_name} ${profile.instrument} ${profile.role} ${roleLabel}`,
+          `${profile.full_name} ${profile.instrument} ${profile.role} ${formatRoleLabel(profile.role)}`,
         );
         return haystack.includes(normalizedQuery);
       }),
-    [normalizedQuery, profiles],
+    [normalizedQuery, profiles, roleFilter],
   );
+
+  const filterOptions: RoleFilter[] = ["all", ...[...PRIMARY_ROLE_SEQUENCE].reverse()];
 
   return (
     <ScrollView
       style={styles.screenScroll}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
       showsVerticalScrollIndicator={false}
     >
       {onBack ? (
-        <Pressable onPress={onBack} style={styles.backLink}>
-          <Text style={styles.backLinkLabel}>
-            {tr("← Wróć", "← Back")}
-          </Text>
+        <Pressable onPress={onBack} style={styles.backLink} accessibilityRole="button">
+          <Text style={styles.backLinkLabel}>{tr("‹ Wróć", "‹ Back")}</Text>
         </Pressable>
       ) : null}
 
-      <SurfaceCard variant="default">
-        <Text style={styles.cardEyebrow}>{tr("Admin", "Admin")}</Text>
-        <Text style={styles.screenTitle}>{tr("Zarządzanie rolami", "Role management")}</Text>
-        <Text style={styles.cardBody}>
+      <View style={styles.header}>
+        <Text style={styles.kicker}>{tr("Role i uprawnienia", "Roles and permissions")}</Text>
+        <Text style={styles.title}>
+          {tr(`${profiles.length} ${polishAccounts(profiles.length)}`, `${profiles.length} accounts`)}
+        </Text>
+        <Text style={styles.muted}>
           {tr(
-            "Panel do nadawania ról member/section/board/admin. Zmiany zapisują się od razu.",
-            "Panel for assigning member/section/board/admin roles. Changes are saved immediately.",
+            "Sekcyjni widzą podsumowanie obecności, zarząd wpisuje obecność i przypisuje instrumenty, administratorzy nadają role. Zmiany zapisują się od razu.",
+            "Section leaders see the attendance summary, the board enters attendance and assigns instruments, admins manage roles. Changes save immediately.",
           )}
         </Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Liczba użytkowników", "Users count")}: {profiles.length}
-        </Text>
-      </SurfaceCard>
+      </View>
 
-      <SurfaceCard variant="muted">
-        <Text style={styles.cardEyebrow}>{tr("Filtr", "Filter")}</Text>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder={tr("Szukaj po nazwisku, instrumencie lub roli", "Search by name, instrument or role")}
-          style={styles.searchInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </SurfaceCard>
+      <TextInput
+        value={query}
+        onChangeText={setQuery}
+        placeholder={tr("Szukaj po nazwisku, instrumencie lub roli", "Search by name, instrument or role")}
+        placeholderTextColor={tokens.colors.muted}
+        accessibilityLabel={tr("Szukaj", "Search")}
+        style={styles.searchInput}
+        autoCapitalize="none"
+        autoCorrect={false}
+      />
 
-      {errorMessage ? (
-        <SurfaceCard variant="outline">
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </SurfaceCard>
-      ) : null}
+      <View style={styles.chips}>
+        {filterOptions.map((option) => {
+          const isActive = roleFilter === option;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => setRoleFilter(option)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.chip, isActive && styles.chipActive]}
+            >
+              <Text style={[styles.chipLabel, isActive && styles.chipLabelActive]}>
+                {formatRoleFilterLabel(option)} · {roleCounts[option]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
-      {infoMessage ? (
-        <SurfaceCard variant="brandTint">
-          <Text style={styles.infoText}>{infoMessage}</Text>
-        </SurfaceCard>
-      ) : null}
+      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
+      {infoMessage ? <Text style={[styles.notice, styles.noticeSuccess]}>{infoMessage}</Text> : null}
 
       {isLoading ? (
-        <SurfaceCard variant="default">
-          <View style={styles.loadingWrap}>
-            <ActivityIndicator color={tokens.colors.brand} />
-            <Text style={styles.loadingText}>{tr("Wczytuję profile...", "Loading profiles...")}</Text>
-          </View>
-        </SurfaceCard>
+        <View style={styles.loadingRow}>
+          <ActivityIndicator color={tokens.colors.brand} />
+          <Text style={styles.muted}>{tr("Wczytuję konta…", "Loading accounts…")}</Text>
+        </View>
+      ) : visibleProfiles.length === 0 ? (
+        <Text style={styles.muted}>{tr("Nikogo nie znaleziono.", "Nobody found.")}</Text>
       ) : (
-        visibleProfiles.map((profile) => {
-          const isSavingCurrent = savingProfileId === profile.id;
-          const isSelf = profile.id === currentUserId;
+        <View style={styles.list}>
+          {visibleProfiles.map((profile, index) => {
+            const isSavingCurrent = savingProfileId === profile.id;
+            const isSelf = profile.id === currentUserId;
 
-          return (
-            <SurfaceCard key={profile.id} variant="default">
-              <Text style={styles.profileName}>{profile.full_name}</Text>
-              <Text style={styles.profileMeta}>
-                {tr("Instrument", "Instrument")}: {profile.instrument}
-              </Text>
-              <Text style={styles.profileMeta}>
-                {tr("Aktualna rola", "Current role")}: {formatRoleLabel(profile.role)}
-              </Text>
-              {profile.updated_at ? (
-                <Text style={styles.profileMeta}>
-                  {tr("Ostatnia zmiana", "Last role change")}: {formatRelativeLabel(profile.updated_at)}
-                </Text>
-              ) : null}
-              <View style={styles.roleActionsRow}>
-                {PRIMARY_ROLE_SEQUENCE.map((roleOption) => {
-                  const isSelected = profile.role === roleOption;
-                  const isSelfDemotion = isSelf && roleOption !== "admin";
-                  const isDisabled =
-                    Boolean(savingProfileId) || isSelected || isSelfDemotion;
+            return (
+              <View
+                key={profile.id}
+                style={[styles.row, isWide && styles.rowWide, index > 0 && styles.rowDivider]}
+              >
+                <View style={styles.person}>
+                  <Text style={styles.name}>
+                    {profile.full_name}
+                    {isSelf ? <Text style={styles.selfTag}>{tr("  (Ty)", "  (you)")}</Text> : null}
+                  </Text>
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {profile.instrument || tr("Bez instrumentu", "No instrument")}
+                    {profile.updated_at
+                      ? ` · ${tr("zmiana", "changed")} ${formatRelativeLabel(profile.updated_at)}`
+                      : ""}
+                  </Text>
+                  {isSelf ? (
+                    <Text style={styles.meta}>
+                      {tr("Własnej roli administratora nie zmienisz tutaj.", "You can't change your own admin role here.")}
+                    </Text>
+                  ) : null}
+                </View>
 
-                  return (
-                    <Pressable
-                      key={`${profile.id}-${roleOption}`}
-                      style={[
-                        styles.roleButton,
-                        isSelected && styles.roleButtonSelected,
-                        isDisabled && styles.roleButtonDisabled,
-                      ]}
-                      disabled={isDisabled}
-                      onPress={() => handleRoleChange(profile.id, roleOption)}
-                    >
-                      <Text
+                <View style={[styles.segmented, isWide && styles.segmentedWide]} accessibilityRole="radiogroup">
+                  {PRIMARY_ROLE_SEQUENCE.map((roleOption) => {
+                    const isSelected = profile.role === roleOption;
+                    const isSelfDemotion = isSelf && roleOption !== "admin";
+                    const isDisabled = Boolean(savingProfileId) || isSelected || isSelfDemotion;
+
+                    return (
+                      <Pressable
+                        key={`${profile.id}-${roleOption}`}
                         style={[
-                          styles.roleButtonLabel,
-                          isSelected && styles.roleButtonLabelSelected,
+                          styles.segment,
+                          isSelected && styles.segmentSelected,
+                          isDisabled && !isSelected && styles.segmentDisabled,
                         ]}
+                        disabled={isDisabled}
+                        onPress={() => handleRoleChange(profile.id, roleOption)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: isSelected, disabled: isDisabled }}
                       >
-                        {formatRoleLabel(roleOption)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                        {isSavingCurrent && isSelected ? (
+                          <ActivityIndicator size="small" color={tokens.colors.surface} />
+                        ) : (
+                          <Text
+                            style={[styles.segmentLabel, isSelected && styles.segmentLabelSelected]}
+                            numberOfLines={1}
+                          >
+                            {formatRoleShortLabel(roleOption)}
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
-              {isSelf ? (
-                <Text style={styles.selfGuardNote}>
-                  {tr(
-                    "Nie możesz obniżyć własnej roli admin z tego panelu.",
-                    "You cannot demote your own admin role from this panel.",
-                  )}
-                </Text>
-              ) : null}
-              {isSavingCurrent ? (
-                <Text style={styles.savingLabel}>{tr("Zapisywanie...", "Saving...")}</Text>
-              ) : null}
-            </SurfaceCard>
-          );
-        })
+            );
+          })}
+        </View>
       )}
     </ScrollView>
   );
@@ -318,125 +404,177 @@ const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
+  content: {
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
+  },
+  contentDesktop: {
+    width: "100%",
+    maxWidth: 1080,
+    alignSelf: "center",
+    paddingHorizontal: tokens.spacing.xl,
+    paddingTop: tokens.spacing.lg,
   },
   backLink: {
-    marginBottom: tokens.spacing.xs,
+    alignSelf: "flex-start",
+    minHeight: 32,
+    justifyContent: "center",
   },
   backLinkLabel: {
     color: tokens.colors.brand,
-    fontWeight: "700",
+    fontWeight: "600",
   },
-  cardEyebrow: {
+  header: {
+    gap: 4,
+    paddingBottom: tokens.spacing.xs,
+  },
+  kicker: {
     fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
     textTransform: "uppercase",
-    letterSpacing: 1,
     color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    fontWeight: "700",
   },
-  screenTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.body,
-    lineHeight: 23,
+  title: {
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
     color: tokens.colors.ink,
   },
-  cardSecondary: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
+  muted: {
+    fontSize: 14,
+    lineHeight: 20,
     color: tokens.colors.muted,
   },
   searchInput: {
+    minHeight: 44,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: tokens.colors.borderStrong,
     backgroundColor: tokens.colors.surface,
     color: tokens.colors.ink,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    paddingHorizontal: 14,
     borderRadius: tokens.radii.md,
-    fontSize: tokens.typography.body,
+    fontSize: 15,
   },
-  loadingWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: tokens.spacing.sm,
-  },
-  loadingText: {
-    color: tokens.colors.muted,
-    fontSize: tokens.typography.body,
-  },
-  profileName: {
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  profileMeta: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
-    lineHeight: 18,
-  },
-  roleActionsRow: {
-    marginTop: tokens.spacing.md,
+  chips: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: tokens.spacing.xs,
+    gap: 6,
   },
-  roleButton: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
+  chip: {
+    minHeight: 36,
+    paddingHorizontal: 12,
     borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
-    backgroundColor: tokens.colors.surfaceMuted,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
   },
-  roleButtonSelected: {
+  chipActive: {
     backgroundColor: tokens.colors.brand,
     borderColor: tokens.colors.brand,
   },
-  roleButtonDisabled: {
-    opacity: 0.55,
-  },
-  roleButtonLabel: {
+  chipLabel: {
+    fontSize: 14,
+    fontWeight: "600",
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.3,
   },
-  roleButtonLabelSelected: {
+  chipLabelActive: {
     color: tokens.colors.surface,
   },
-  selfGuardNote: {
-    marginTop: tokens.spacing.sm,
-    color: tokens.colors.muted,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
+  notice: {
+    fontSize: 14,
+    lineHeight: 20,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
   },
-  savingLabel: {
-    marginTop: tokens.spacing.sm,
-    color: tokens.colors.brand,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  errorText: {
+  noticeError: {
+    backgroundColor: tokens.colors.dangerSurface,
     color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    fontWeight: "700",
   },
-  infoText: {
+  noticeSuccess: {
+    backgroundColor: tokens.colors.successSurface,
     color: tokens.colors.successInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    fontWeight: "700",
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.md,
+  },
+  list: {
+    backgroundColor: tokens.colors.surface,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    overflow: "hidden",
+  },
+  row: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  rowWide: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.md,
+  },
+  rowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
+  },
+  person: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  selfTag: {
+    fontSize: 13,
+    fontWeight: "500",
+    color: tokens.colors.muted,
+  },
+  meta: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  segmented: {
+    flexDirection: "row",
+    gap: 3,
+    padding: 3,
+    borderRadius: tokens.radii.md,
+    backgroundColor: tokens.colors.surfaceMuted,
+  },
+  segmentedWide: {
+    width: 380,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  segmentSelected: {
+    backgroundColor: tokens.colors.brand,
+  },
+  segmentDisabled: {
+    opacity: 0.45,
+  },
+  segmentLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: tokens.colors.neutralInk,
+  },
+  segmentLabelSelected: {
+    color: tokens.colors.surface,
   },
 });

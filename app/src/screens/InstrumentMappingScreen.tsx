@@ -7,13 +7,13 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { CANONICAL_INSTRUMENT_OPTIONS, canonicalizeInstrumentLabel } from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { SurfaceCard } from "../ui/SurfaceCard";
 import { formatRelativeLabel } from "../utils/format";
 
 type PanelTab = "assign" | "mapped" | "history";
@@ -55,6 +55,18 @@ function mappingDisplayName(row: MappingRow): string {
   return row.bucket === "byUid" ? `UID ${row.entryKey}` : row.entryKey;
 }
 
+// Sorted by surname (last word of the display name), like the other people lists.
+function compareMappingsBySurname(left: MappingRow, right: MappingRow): number {
+  const surname = (row: MappingRow) => {
+    const parts = mappingDisplayName(row).trim().split(/\s+/);
+    return parts[parts.length - 1] ?? "";
+  };
+  return (
+    surname(left).localeCompare(surname(right), "pl") ||
+    mappingDisplayName(left).localeCompare(mappingDisplayName(right), "pl")
+  );
+}
+
 function normalizeSearchText(value: string): string {
   return value
     .normalize("NFD")
@@ -63,6 +75,8 @@ function normalizeSearchText(value: string): string {
 }
 
 export function InstrumentMappingScreen() {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= tokens.breakpoints.desktop;
   const [activeTab, setActiveTab] = useState<PanelTab>("assign");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
@@ -82,7 +96,7 @@ export function InstrumentMappingScreen() {
   function requireClient() {
     if (!supabaseAuthClient) {
       setErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
       return null;
     }
@@ -267,7 +281,7 @@ export function InstrumentMappingScreen() {
   const normalizedQuery = normalizeSearchText(query.trim());
   const visibleMappings = useMemo(
     () =>
-      (mappings ?? []).filter((row) => {
+      [...(mappings ?? [])].sort(compareMappingsBySurname).filter((row) => {
         if (!normalizedQuery) {
           return true;
         }
@@ -288,7 +302,7 @@ export function InstrumentMappingScreen() {
       : null;
 
     return (
-      <View style={styles.optionsRow}>
+      <View style={styles.optionsRow} accessibilityRole="radiogroup">
         {CANONICAL_INSTRUMENT_OPTIONS.map((option) => {
           const isSelected = selectedCanonical === option;
           const isDisabled = isSaving || isSelected;
@@ -296,15 +310,19 @@ export function InstrumentMappingScreen() {
           return (
             <Pressable
               key={`${keyPrefix}-${option}`}
-              style={[
-                styles.optionButton,
-                isSelected && styles.optionButtonSelected,
-                isDisabled && styles.optionButtonDisabled,
+              style={(state) => [
+                styles.option,
+                isSelected && styles.optionSelected,
+                isSaving && !isSelected && styles.optionDisabled,
+                ((state as { hovered?: boolean }).hovered && !isDisabled) && styles.optionHovered,
               ]}
               disabled={isDisabled}
               onPress={() => onSelect(option)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected, disabled: isDisabled }}
             >
               <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                {isSelected ? "✓ " : ""}
                 {option}
               </Text>
             </Pressable>
@@ -316,178 +334,237 @@ export function InstrumentMappingScreen() {
 
   function renderLoading(label: string) {
     return (
-      <SurfaceCard variant="default">
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={tokens.colors.brand} />
-          <Text style={styles.loadingText}>{label}</Text>
-        </View>
-      </SurfaceCard>
+      <View style={styles.loadingRow}>
+        <ActivityIndicator color={tokens.colors.brand} />
+        <Text style={styles.muted}>{label}</Text>
+      </View>
     );
   }
 
   function renderAssignTab() {
     if (isLoadingMembers) {
-      return renderLoading(tr("Wczytuję listę...", "Loading list..."));
+      return renderLoading(tr("Wczytuję listę…", "Loading list…"));
     }
     if (members.length === 0) {
       return (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardBody}>
-            {tr("Wszyscy mają przypisany instrument.", "Everyone has an instrument assigned.")}
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyTitle}>
+            {tr("✓ Wszyscy mają przypisany instrument.", "✓ Everyone has an instrument.")}
           </Text>
-        </SurfaceCard>
+          <Text style={styles.muted}>
+            {tr(
+              "Nowe osoby z forum pojawią się tutaj po synchronizacji.",
+              "New forum members will show up here after the next sync.",
+            )}
+          </Text>
+        </View>
       );
     }
 
     return members.map((member) => (
-      <SurfaceCard key={member.memberId} variant="default">
-        <Text style={styles.memberName}>{member.fullName}</Text>
-        {member.forumUid ? (
-          <Text style={styles.memberMeta}>UID forum: {member.forumUid}</Text>
-        ) : null}
+      <View
+        key={member.memberId}
+        style={[styles.card, member.pendingInstrument ? styles.cardDone : styles.cardAction]}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.cardHeaderText}>
+            <Text style={styles.name}>{member.fullName}</Text>
+            {member.forumUid ? (
+              <Text style={styles.meta}>{tr("UID na forum", "Forum UID")}: {member.forumUid}</Text>
+            ) : null}
+          </View>
+          {member.pendingInstrument ? (
+            <View style={[styles.pill, styles.pillDone]}>
+              <Text style={[styles.pillLabel, styles.pillLabelDone]}>✓ {member.pendingInstrument}</Text>
+            </View>
+          ) : (
+            <View style={[styles.pill, styles.pillAction]}>
+              <Text style={[styles.pillLabel, styles.pillLabelAction]}>
+                {tr("! Bez instrumentu", "! No instrument")}
+              </Text>
+            </View>
+          )}
+        </View>
         {member.pendingInstrument ? (
-          <Text style={styles.pendingText}>
-            {tr("Zapisano, czeka na synchronizację", "Saved, waiting for sync")}:{" "}
-            {member.pendingInstrument}
+          <Text style={styles.meta}>
+            {tr(
+              "Zapisano. W składach pojawi się po synchronizacji forum (do ~20 min). Możesz jeszcze zmienić wybór.",
+              "Saved. It shows in line-ups after the next forum sync (up to ~20 min). You can still change it.",
+            )}
           </Text>
         ) : null}
         {renderInstrumentOptions(member.memberId, member.pendingInstrument, (instrument) =>
           handleAssign(member, instrument),
         )}
-      </SurfaceCard>
+      </View>
     ));
   }
 
   function renderMappedTab() {
     if (isLoadingMappings || mappings === null) {
-      return renderLoading(tr("Wczytuję mapping...", "Loading mapping..."));
+      return renderLoading(tr("Wczytuję przypisania…", "Loading assignments…"));
     }
 
     return (
       <>
-        <SurfaceCard variant="muted">
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={tr("Szukaj po nazwisku, UID lub instrumencie", "Search by name, UID or instrument")}
-            style={styles.searchInput}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          <Text style={styles.cardSecondary}>
-            {tr("Wpisów", "Entries")}: {visibleMappings.length} / {mappings.length}
-          </Text>
-        </SurfaceCard>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder={tr("Szukaj po nazwisku, UID lub instrumencie", "Search by name, UID or instrument")}
+          placeholderTextColor={tokens.colors.muted}
+          accessibilityLabel={tr("Szukaj", "Search")}
+          style={styles.searchInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <Text style={styles.meta}>
+          {visibleMappings.length === mappings.length
+            ? tr(`${mappings.length} przypisań`, `${mappings.length} assignments`)
+            : tr(
+                `${visibleMappings.length} z ${mappings.length} przypisań`,
+                `${visibleMappings.length} of ${mappings.length} assignments`,
+              )}
+        </Text>
 
-        {visibleMappings.map((row) => {
-          const rowKey = `${row.bucket}:${row.entryKey}`;
-          const isExpanded = expandedMappingKey === rowKey;
+        <View style={styles.list}>
+          {visibleMappings.map((row, index) => {
+            const rowKey = `${row.bucket}:${row.entryKey}`;
+            const isExpanded = expandedMappingKey === rowKey;
 
-          return (
-            <SurfaceCard key={rowKey} variant="default">
-              <Pressable onPress={() => setExpandedMappingKey(isExpanded ? null : rowKey)}>
-                <Text style={styles.memberName}>{mappingDisplayName(row)}</Text>
-                <Text style={styles.memberMeta}>
-                  {row.instrument} · {row.bucket === "byUid" ? `UID ${row.entryKey}` : row.bucket}
-                </Text>
-                <Text style={styles.expandHint}>
-                  {isExpanded ? tr("Zwiń", "Collapse") : tr("Zmień instrument", "Change instrument")}
-                </Text>
-              </Pressable>
-              {isExpanded
-                ? renderInstrumentOptions(rowKey, row.instrument, (instrument) =>
-                    handleChange(row, instrument),
-                  )
-                : null}
-            </SurfaceCard>
-          );
-        })}
+            return (
+              <View key={rowKey} style={[styles.listRow, index > 0 && styles.listRowDivider]}>
+                <Pressable
+                  onPress={() => setExpandedMappingKey(isExpanded ? null : rowKey)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: isExpanded }}
+                  accessibilityHint={tr("Zmień instrument", "Change instrument")}
+                  style={styles.listRowMain}
+                >
+                  <View style={styles.cardHeaderText}>
+                    <Text style={styles.name}>{mappingDisplayName(row)}</Text>
+                    <Text style={styles.meta}>
+                      {row.bucket === "byUid"
+                        ? `UID ${row.entryKey}`
+                        : row.bucket === "byFullName"
+                          ? tr("po imieniu i nazwisku", "by full name")
+                          : tr("po nazwie użytkownika", "by username")}
+                    </Text>
+                  </View>
+                  <View style={styles.pill}>
+                    <Text style={styles.pillLabel}>{row.instrument}</Text>
+                  </View>
+                  <Text style={styles.changeLink}>
+                    {isExpanded ? tr("Zwiń", "Close") : tr("Zmień", "Change")}
+                  </Text>
+                </Pressable>
+                {isExpanded
+                  ? renderInstrumentOptions(rowKey, row.instrument, (instrument) =>
+                      handleChange(row, instrument),
+                    )
+                  : null}
+              </View>
+            );
+          })}
+        </View>
       </>
     );
   }
 
   function renderHistoryTab() {
     if (isLoadingAudit || audit === null) {
-      return renderLoading(tr("Wczytuję historię...", "Loading history..."));
+      return renderLoading(tr("Wczytuję historię…", "Loading history…"));
     }
     if (audit.length === 0) {
       return (
-        <SurfaceCard variant="default">
-          <Text style={styles.cardBody}>
+        <View style={styles.emptyBox}>
+          <Text style={styles.muted}>
             {tr("Brak zmian zapisanych w panelu.", "No changes recorded through the panel yet.")}
           </Text>
-        </SurfaceCard>
+        </View>
       );
     }
 
-    return audit.map((entry, index) => (
-      <SurfaceCard key={`${entry.changedAt}-${entry.entryKey}-${index}`} variant="default">
-        <Text style={styles.memberName}>
-          {entry.memberName ?? `UID ${entry.entryKey}`}
-        </Text>
-        <Text style={styles.memberMeta}>
-          {entry.oldInstrument ?? "—"} → {entry.newInstrument}
-        </Text>
-        <Text style={styles.memberMeta}>
-          {entry.changedByName ?? tr("nieznany użytkownik", "unknown user")}
-          {entry.changedAt ? ` · ${formatRelativeLabel(entry.changedAt)}` : ""}
-        </Text>
-      </SurfaceCard>
-    ));
+    return (
+      <View style={styles.list}>
+        {audit.map((entry, index) => (
+          <View
+            key={`${entry.changedAt}-${entry.entryKey}-${index}`}
+            style={[styles.listRow, index > 0 && styles.listRowDivider]}
+          >
+            <Text style={styles.name}>{entry.memberName ?? `UID ${entry.entryKey}`}</Text>
+            <Text style={styles.change}>
+              {entry.oldInstrument ? (
+                <Text style={styles.changeOld}>{entry.oldInstrument}</Text>
+              ) : (
+                <Text style={styles.meta}>{tr("bez instrumentu", "no instrument")}</Text>
+              )}
+              <Text style={styles.meta}>{"  →  "}</Text>
+              <Text style={styles.changeNew}>{entry.newInstrument}</Text>
+            </Text>
+            <Text style={styles.meta}>
+              {entry.changedByName ?? tr("nieznany użytkownik", "unknown user")}
+              {entry.changedAt ? ` · ${formatRelativeLabel(entry.changedAt)}` : ""}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
   }
 
   const tabs: { key: PanelTab; label: string }[] = [
-    { key: "assign", label: tr("Do przypisania", "To assign") },
-    { key: "mapped", label: tr("Zmapowani", "Mapped") },
+    {
+      key: "assign",
+      label: waitingCount > 0 ? tr(`Do przypisania · ${waitingCount}`, `To assign · ${waitingCount}`) : tr("Do przypisania", "To assign"),
+    },
+    { key: "mapped", label: tr("Przypisani", "Assigned") },
     { key: "history", label: tr("Historia", "History") },
   ];
 
   return (
     <ScrollView
       style={styles.screenScroll}
-      contentContainerStyle={styles.screenContent}
+      contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
       showsVerticalScrollIndicator={false}
     >
-      <SurfaceCard variant="default">
-        <Text style={styles.cardEyebrow}>{tr("Zarząd", "Board")}</Text>
-        <Text style={styles.screenTitle}>{tr("Instrumenty z forum", "Forum instruments")}</Text>
-        <Text style={styles.cardBody}>
+      <View style={styles.header}>
+        <Text style={styles.kicker}>{tr("Instrumenty z forum", "Forum instruments")}</Text>
+        <Text style={styles.title}>
+          {isLoadingMembers
+            ? tr("Instrumenty", "Instruments")
+            : waitingCount > 0
+              ? tr(
+                  `${waitingCount} ${polishPeopleWithout(waitingCount)} instrumentu`,
+                  `${waitingCount} without an instrument`,
+                )
+              : tr("Wszyscy mają instrument", "Everyone has an instrument")}
+        </Text>
+        <Text style={styles.muted}>
           {tr(
-            "Przypisuj instrumenty osobom z forum i poprawiaj istniejące wpisy. Każda zmiana trafia do historii.",
-            "Assign instruments to forum members and fix existing entries. Every change is recorded in the history.",
+            "Forum nie zna instrumentów, więc przypisuje je zarząd. Zmiana trafia do składów po najbliższej synchronizacji (do ~20 min) i do historii.",
+            "The forum doesn't know instruments, so the board assigns them. Changes reach line-ups after the next sync (up to ~20 min) and are logged in the history.",
           )}
         </Text>
-        <Text style={styles.cardSecondary}>
-          {tr("Do przypisania", "To assign")}: {waitingCount}
-        </Text>
-      </SurfaceCard>
+      </View>
 
-      <View style={styles.tabRow}>
+      <View style={styles.segmented} accessibilityRole="tablist">
         {tabs.map((tab) => {
           const isActive = tab.key === activeTab;
           return (
             <Pressable
               key={tab.key}
               onPress={() => openTab(tab.key)}
-              style={[styles.tabButton, isActive && styles.tabButtonActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.segment, isActive && styles.segmentActive]}
             >
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>{tab.label}</Text>
+              <Text style={[styles.segmentLabel, isActive && styles.segmentLabelActive]}>{tab.label}</Text>
             </Pressable>
           );
         })}
       </View>
 
-      {errorMessage ? (
-        <SurfaceCard variant="outline">
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </SurfaceCard>
-      ) : null}
-
-      {infoMessage ? (
-        <SurfaceCard variant="brandTint">
-          <Text style={styles.infoText}>{infoMessage}</Text>
-        </SurfaceCard>
-      ) : null}
+      {errorMessage ? <Text style={[styles.notice, styles.noticeError]}>{errorMessage}</Text> : null}
+      {infoMessage ? <Text style={[styles.notice, styles.noticeSuccess]}>{infoMessage}</Text> : null}
 
       {activeTab === "assign" ? renderAssignTab() : null}
       {activeTab === "mapped" ? renderMappedTab() : null}
@@ -496,148 +573,264 @@ export function InstrumentMappingScreen() {
   );
 }
 
+// "1 osoba bez", "3 osoby bez", "5 osób bez" (Polish plural rules).
+function polishPeopleWithout(count: number) {
+  if (count === 1) {
+    return "osoba bez";
+  }
+  const lastDigit = count % 10;
+  const lastTwo = count % 100;
+  if (lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+    return "osoby bez";
+  }
+  return "osób bez";
+}
+
 const styles = StyleSheet.create({
   screenScroll: {
     flex: 1,
   },
-  screenContent: {
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
+  content: {
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
-  cardEyebrow: {
+  contentDesktop: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: tokens.spacing.xl,
+    paddingTop: tokens.spacing.lg,
+  },
+  header: {
+    gap: 4,
+    paddingBottom: tokens.spacing.xs,
+  },
+  kicker: {
     fontSize: tokens.typography.caption,
+    fontWeight: "600",
+    letterSpacing: 0.7,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    color: tokens.colors.muted,
-    marginBottom: tokens.spacing.xs,
-    fontWeight: "700",
-  },
-  screenTitle: {
-    fontSize: tokens.typography.title,
-    lineHeight: 28,
-    color: tokens.colors.ink,
-    fontWeight: "700",
-  },
-  cardBody: {
-    marginTop: tokens.spacing.sm,
-    fontSize: tokens.typography.body,
-    lineHeight: 23,
-    color: tokens.colors.ink,
-  },
-  cardSecondary: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
     color: tokens.colors.muted,
   },
-  tabRow: {
+  title: {
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+    color: tokens.colors.ink,
+  },
+  muted: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: tokens.colors.muted,
+  },
+  segmented: {
     flexDirection: "row",
-    gap: tokens.spacing.xs,
-  },
-  tabButton: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: tokens.spacing.sm,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.round,
+    gap: 4,
+    padding: 4,
+    borderRadius: tokens.radii.md,
     backgroundColor: tokens.colors.surfaceMuted,
   },
-  tabButtonActive: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
   },
-  tabLabel: {
-    color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-  },
-  tabLabelActive: {
-    color: tokens.colors.surface,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
+  segmentActive: {
     backgroundColor: tokens.colors.surface,
-    color: tokens.colors.ink,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
-    borderRadius: tokens.radii.md,
-    fontSize: tokens.typography.body,
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
   },
-  loadingWrap: {
+  segmentLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.muted,
+    textAlign: "center",
+  },
+  segmentLabelActive: {
+    color: tokens.colors.ink,
+  },
+  notice: {
+    fontSize: 14,
+    lineHeight: 20,
+    borderRadius: tokens.radii.md,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    overflow: "hidden",
+  },
+  noticeError: {
+    backgroundColor: tokens.colors.dangerSurface,
+    color: tokens.colors.dangerInk,
+  },
+  noticeSuccess: {
+    backgroundColor: tokens.colors.successSurface,
+    color: tokens.colors.successInk,
+  },
+  loadingRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: tokens.spacing.sm,
+    paddingVertical: tokens.spacing.md,
   },
-  loadingText: {
-    color: tokens.colors.muted,
-    fontSize: tokens.typography.body,
+  emptyBox: {
+    padding: tokens.spacing.lg,
+    borderRadius: tokens.radii.lg,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: tokens.colors.borderStrong,
+    gap: 4,
   },
-  memberName: {
-    fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
+  emptyTitle: {
+    fontSize: 16,
     fontWeight: "700",
-  },
-  memberMeta: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
-    lineHeight: 18,
-  },
-  expandHint: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
-    color: tokens.colors.brand,
-    fontWeight: "700",
-  },
-  pendingText: {
-    marginTop: tokens.spacing.xs,
-    fontSize: tokens.typography.caption,
     color: tokens.colors.successInk,
-    fontWeight: "700",
-    lineHeight: 18,
   },
-  optionsRow: {
-    marginTop: tokens.spacing.md,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.spacing.xs,
-  },
-  optionButton: {
+  card: {
+    backgroundColor: tokens.colors.surface,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.round,
-    paddingHorizontal: tokens.spacing.sm,
-    paddingVertical: 6,
-    backgroundColor: tokens.colors.surfaceMuted,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
-  optionButtonSelected: {
+  cardAction: {
+    borderColor: tokens.colors.warningBorder,
+    borderWidth: 1.5,
+  },
+  cardDone: {
+    borderColor: tokens.colors.successSurface,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: tokens.spacing.sm,
+  },
+  cardHeaderText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  name: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: tokens.colors.ink,
+  },
+  meta: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  pill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: tokens.radii.round,
+    backgroundColor: tokens.colors.surfaceMuted,
+    borderWidth: 1.5,
+    borderColor: "transparent",
+  },
+  pillLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: tokens.colors.neutralInk,
+  },
+  pillAction: {
+    backgroundColor: tokens.colors.warningSurface,
+    borderColor: tokens.colors.warningBorder,
+  },
+  pillLabelAction: {
+    color: tokens.colors.warningInk,
+  },
+  pillDone: {
+    backgroundColor: tokens.colors.successSurface,
+  },
+  pillLabelDone: {
+    color: tokens.colors.successInk,
+  },
+  optionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  option: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: tokens.radii.round,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    justifyContent: "center",
+  },
+  optionHovered: {
+    borderColor: tokens.colors.brand,
+  },
+  optionSelected: {
     backgroundColor: tokens.colors.brand,
     borderColor: tokens.colors.brand,
   },
-  optionButtonDisabled: {
-    opacity: 0.55,
+  optionDisabled: {
+    opacity: 0.5,
   },
   optionLabel: {
+    fontSize: 14,
+    fontWeight: "600",
     color: tokens.colors.ink,
-    fontSize: tokens.typography.caption,
-    fontWeight: "700",
-    letterSpacing: 0.3,
   },
   optionLabelSelected: {
     color: tokens.colors.surface,
   },
-  errorText: {
-    color: tokens.colors.dangerInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
-    fontWeight: "700",
+  searchInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: tokens.colors.borderStrong,
+    backgroundColor: tokens.colors.surface,
+    color: tokens.colors.ink,
+    paddingHorizontal: 14,
+    borderRadius: tokens.radii.md,
+    fontSize: 15,
   },
-  infoText: {
-    color: tokens.colors.successInk,
-    fontSize: tokens.typography.caption,
-    lineHeight: 18,
+  list: {
+    backgroundColor: tokens.colors.surface,
+    borderWidth: 1,
+    borderColor: tokens.colors.border,
+    borderRadius: tokens.radii.lg,
+    overflow: "hidden",
+  },
+  listRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  listRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: tokens.colors.surfaceMuted,
+  },
+  listRowMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: tokens.spacing.sm,
+  },
+  changeLink: {
+    minWidth: 44,
+    textAlign: "right",
+    fontSize: 14,
+    fontWeight: "600",
+    color: tokens.colors.brand,
+  },
+  change: {
+    fontSize: 14,
+  },
+  changeOld: {
+    fontSize: 14,
+    color: tokens.colors.muted,
+    textDecorationLine: "line-through",
+  },
+  changeNew: {
+    fontSize: 14,
     fontWeight: "700",
+    color: tokens.colors.successInk,
   },
 });
