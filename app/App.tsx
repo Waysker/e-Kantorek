@@ -39,6 +39,11 @@ import { SquadScreen } from "./src/screens/SquadScreen";
 import { tr } from "./src/i18n";
 import { tokens } from "./src/theme/tokens";
 import { AppShell } from "./src/ui/AppShell";
+import { UnmappedMembersBanner } from "./src/ui/UnmappedMembersBanner";
+import {
+  canSeeUnmappedMembersAlertByRole,
+  findUnmappedSquadMembers,
+} from "./src/domain/unmappedMembers";
 
 const repositories = createPrototypeRepositories();
 
@@ -914,6 +919,12 @@ export default function App() {
   const canAccessAttendanceWorkspace = canWriteAttendance || canViewAttendanceSummary;
   const canSendAttendanceReminders = canViewAttendanceSummary;
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
+  const canSeeUnmappedMembersAlert = canSeeUnmappedMembersAlertByRole(
+    effectiveCurrentUser.role,
+  );
+  const unmappedMembers = canSeeUnmappedMembersAlert
+    ? findUnmappedSquadMembers(eventDetailsById)
+    : [];
   const navigationTabs: PrimaryTab[] = [
     "events",
     "calendar",
@@ -1226,6 +1237,11 @@ export default function App() {
         dataSourceLabel={dataSourceLabel}
         dataSourceGeneratedAt={dataSourceGeneratedAt}
         expectedSyncIntervalHours={2}
+        alertBanner={
+          canSeeUnmappedMembersAlert ? (
+            <UnmappedMembersBanner members={unmappedMembers} />
+          ) : undefined
+        }
         onNavigate={openTab}
       >
         <StatusBar style={route.name === "setlist" ? "light" : "dark"} />

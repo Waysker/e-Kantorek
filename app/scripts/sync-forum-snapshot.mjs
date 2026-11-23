@@ -1254,6 +1254,23 @@ export const forumSnapshot: {
 `;
 }
 
+function collectUnmappedMembers(mappedEvents) {
+  const byId = new Map();
+  for (const event of mappedEvents) {
+    for (const group of event.detail?.squad?.groups ?? []) {
+      if (group.instrument !== UNKNOWN_INSTRUMENT_LABEL) {
+        continue;
+      }
+      for (const member of [...(group.confirmedMembers ?? []), ...(group.maybeMembers ?? [])]) {
+        if (!byId.has(member.id)) {
+          byId.set(member.id, { id: member.id, fullName: member.fullName });
+        }
+      }
+    }
+  }
+  return [...byId.values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
 async function main() {
   await loadEnv();
   const config = await readConfig();
@@ -1348,6 +1365,20 @@ async function main() {
     await fs.writeFile(SNAPSHOT_PATH, createSnapshotFile(snapshot), "utf8");
   }
   await saveCacheFile("snapshot.json", JSON.stringify(snapshot, null, 2));
+  const unmappedMembers = collectUnmappedMembers(mappedEvents);
+  await saveCacheFile(
+    "unmapped.json",
+    JSON.stringify({ generatedAt: snapshot.metadata.generatedAt, members: unmappedMembers }, null, 2),
+  );
+  if (unmappedMembers.length > 0) {
+    console.warn(
+      `WARNING: ${unmappedMembers.length} forum member(s) have no instrument mapping: ${unmappedMembers
+        .map((member) => `${member.id} (${member.fullName})`)
+        .join(", ")}`,
+    );
+  } else {
+    console.log("All forum members in squads have an instrument mapping.");
+  }
   const manifestPath = path.join(CACHE_DIR, "manifest.json");
   await fs.writeFile(
     manifestPath,

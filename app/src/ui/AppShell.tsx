@@ -21,6 +21,7 @@ type AppShellProps = {
   dataSourceLabel: string;
   dataSourceGeneratedAt: string | null;
   expectedSyncIntervalHours?: number;
+  alertBanner?: ReactNode;
   onNavigate: (tab: PrimaryTab) => void;
   children: ReactNode;
 };
@@ -49,6 +50,7 @@ export function AppShell({
   dataSourceLabel,
   dataSourceGeneratedAt,
   expectedSyncIntervalHours,
+  alertBanner,
   onNavigate,
   children,
 }: AppShellProps) {
@@ -64,6 +66,7 @@ export function AppShell({
           dataSourceGeneratedAt={dataSourceGeneratedAt}
           expectedSyncIntervalHours={expectedSyncIntervalHours}
         />
+        {alertBanner}
         <View style={styles.immersiveContent}>{children}</View>
       </View>
     );
@@ -118,6 +121,7 @@ export function AppShell({
               dataSourceGeneratedAt={dataSourceGeneratedAt}
               expectedSyncIntervalHours={expectedSyncIntervalHours}
             />
+            {alertBanner}
             <View style={styles.desktopContent}>{children}</View>
           </View>
         </View>
@@ -133,6 +137,7 @@ export function AppShell({
           dataSourceGeneratedAt={dataSourceGeneratedAt}
           expectedSyncIntervalHours={expectedSyncIntervalHours}
         />
+        {alertBanner}
         <View style={styles.mobileContent}>{children}</View>
       </View>
       <View

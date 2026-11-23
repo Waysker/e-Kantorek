@@ -59,3 +59,19 @@ sudo systemctl start ekantorek-forum-sync.service          # success -> "recover
 Alerts fire after 2 consecutive failures, repeat every 6 more, and a single
 "recovered" message follows. It cannot detect orbit itself being down; the app
 banner covers that for users (it turns red when data is older than 2 h).
+
+## Unmapped members alert
+
+After each successful sync the service runs `notify.sh unmapped`. The sync writes
+`app/.cache/forum-sync/unmapped.json` (members with no instrument mapping); a push
+goes out when a new member appears and repeats every 24h while any remain
+(`UNMAPPED_REPEAT_HOURS`). Board/admin users also see a banner in the app.
+Fix: add the UID to `byUid` in `forum_instrument_overrides` (key `forum`).
+
+After pulling this change on orbit, reinstall the notifier and unit:
+
+```bash
+sudo install -m 755 -o root -g root /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/notify.sh /usr/local/lib/ekantorek/notify.sh
+sudo cp /home/waysker/e-Kantorek-sync/deploy/orbit/forum-sync/ekantorek-forum-sync.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```

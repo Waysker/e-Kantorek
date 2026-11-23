@@ -21,3 +21,5 @@ ExecStart=/usr/bin/docker run --rm --name ekantorek-forum-sync \
 # Resets the failure counter and sends a "recovered" message after an outage.
 # The leading "-" keeps a notifier problem from marking a good sync as failed.
 ExecStartPost=-/usr/local/lib/ekantorek/notify.sh ok
+# Alerts (ntfy) when forum members show up without an instrument mapping.
+ExecStartPost=-/usr/local/lib/ekantorek/notify.sh unmapped
