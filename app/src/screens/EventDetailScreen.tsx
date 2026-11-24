@@ -267,8 +267,8 @@ export function EventDetailScreen({
                 ) : null}
                 <Text style={styles.hint}>
                   {tr(
-                    "Deklaracja to ankieta w wątku. Zmiana pojawi się tutaj po synchronizacji (do ~20 min).",
-                    "Declarations are a poll in the thread. Changes show up here after the next sync (up to ~20 min).",
+                    "Status zmieni się tutaj po synchronizacji (do ~20 min).",
+                    "Your status updates here after the next sync (up to ~20 min).",
                   )}
                 </Text>
               </View>

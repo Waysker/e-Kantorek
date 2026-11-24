@@ -240,8 +240,8 @@ export function InstrumentMappingScreen() {
     setAudit(null);
     setInfoMessage(
       tr(
-        `Zapisano: ${member.fullName} → ${instrument}. Zmiana pojawi się w składach po najbliższej synchronizacji forum (do ok. 20 min).`,
-        `Saved: ${member.fullName} → ${instrument}. It will show in squads after the next forum sync (within ~20 min).`,
+        `Zapisano: ${member.fullName} → ${instrument}.`,
+        `Saved: ${member.fullName} → ${instrument}.`,
       ),
     );
   }
@@ -524,13 +524,7 @@ export function InstrumentMappingScreen() {
                   `${waitingCount} ${polishPeopleWithout(waitingCount)} instrumentu`,
                   `${waitingCount} without an instrument`,
                 )
-              : tr("Wszyscy mają instrument", "Everyone has an instrument")}
-        </Text>
-        <Text style={styles.muted}>
-          {tr(
-            "Forum nie zna instrumentów, więc przypisuje je zarząd. Zmiana trafia do składów po najbliższej synchronizacji (do ~20 min) i do historii.",
-            "The forum doesn't know instruments, so the board assigns them. Changes reach line-ups after the next sync (up to ~20 min) and are logged in the history.",
-          )}
+              : tr("Instrumenty", "Instruments")}
         </Text>
       </View>
 
