@@ -89,8 +89,8 @@ export function CsvExportPanel() {
     if (!supabaseAuthClient || !ATTENDANCE_CSV_EXPORT_FUNCTION_URL) {
       setCsvExportMessage(
         tr(
-          "Eksport CSV nie jest skonfigurowany. Sprawdź EXPO_PUBLIC_SUPABASE_URL i deployment funkcji attendance_csv_export.",
-          "CSV export is not configured. Check EXPO_PUBLIC_SUPABASE_URL and attendance_csv_export deployment.",
+          "Eksport CSV nie jest skonfigurowany w tej wersji aplikacji.",
+          "CSV export is not configured in this build.",
         ),
       );
       return;

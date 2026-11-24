@@ -41,7 +41,7 @@ export function useAttendanceBootData({
 
     async function loadBootData() {
       if (!client) {
-        setErrorMessage(tr("Brak konfiguracji Supabase.", "Supabase is not configured."));
+        setErrorMessage(tr("Obecność nie jest skonfigurowana w tej wersji aplikacji.", "Attendance is not configured in this build."));
         setIsBootLoading(false);
         return;
       }
