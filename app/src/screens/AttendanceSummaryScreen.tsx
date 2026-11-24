@@ -523,7 +523,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
     async function loadSummary() {
       if (!supabaseAuthClient) {
-        setErrorMessage(tr("Brak konfiguracji Supabase.", "Supabase is not configured."));
+        setErrorMessage(tr("Obecność nie jest skonfigurowana w tej wersji aplikacji.", "Attendance is not configured in this build."));
         setSections([]);
         setTotalEvents(0);
         setIsLoading(false);
@@ -606,22 +606,22 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         if (hasSyncMetadataError) {
           setConsistencyNotice(
             tr(
-              "Nie wiemy, kiedy ostatnio zsynchronizowano arkusz obecności. Pokazuję bieżące dane z bazy.",
-              "Could not load latest ref -> DB sync metadata. Showing current DB data.",
+              "Nie wiemy, kiedy ostatnio zsynchronizowano arkusz obecności. Pokazuję bieżące dane.",
+              "Last attendance sheet sync time unknown. Showing current data.",
             ),
           );
         } else if (!latestSyncFinishedAt) {
           setConsistencyNotice(
             tr(
-              "Arkusz obecności nie był jeszcze synchronizowany z bazą. Pokazuję bieżące dane z bazy; mogą różnić się od arkusza.",
-              "No completed ref -> DB sync found. Showing current DB data, which may differ from the ref sheet.",
+              "Arkusz obecności nie był jeszcze synchronizowany. Pokazuję bieżące dane; mogą różnić się od arkusza.",
+              "The attendance sheet hasn't been synced yet. Showing current data, which may differ from the sheet.",
             ),
           );
         } else if (changedAfterSyncCount > 0) {
           setConsistencyNotice(
             tr(
-              `${changedAfterSyncCount} zmian obecności wpisano po ostatniej synchronizacji z arkuszem. Pokazuję aktualny stan bazy; arkusz może się chwilowo różnić.`,
-              `Detected ${changedAfterSyncCount} attendance changes after the last ref -> DB sync. Showing current DB state, which may temporarily differ from ref.`,
+              `${changedAfterSyncCount} zmian obecności wpisano po ostatniej synchronizacji z arkuszem. Pokazuję aktualny stan; arkusz może się chwilowo różnić.`,
+              `${changedAfterSyncCount} attendance changes were entered after the last sheet sync. Showing the current state; the sheet may differ for a while.`,
             ),
           );
         }

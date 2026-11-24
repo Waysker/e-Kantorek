@@ -468,6 +468,9 @@ export default function App() {
 
   useEffect(() => {
     if (!isSupabaseAuthConfigured || !supabaseAuthClient) {
+      // Developers: set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      // (app/.env locally, GitHub Secrets for the Pages build); see app/README.md.
+      console.warn("Auth not configured: EXPO_PUBLIC_SUPABASE_URL / EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY missing.");
       setAuthState({ status: "config_error" });
       return;
     }
@@ -624,8 +627,8 @@ export default function App() {
             error instanceof Error
               ? error.message
               : tr(
-                  "Nie udało się wczytać danych prototypu.",
-                  "The prototype data could not be loaded.",
+                  "Nie udało się wczytać wydarzeń.",
+                  "Events could not be loaded.",
                 ),
         });
       }
@@ -695,7 +698,7 @@ export default function App() {
   async function handleSignIn(email: string, password: string) {
     if (!supabaseAuthClient) {
       setAuthErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
       return;
     }
@@ -725,7 +728,7 @@ export default function App() {
   }) {
     if (!supabaseAuthClient) {
       setAuthErrorMessage(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
       return;
     }
@@ -824,11 +827,11 @@ export default function App() {
 
   if (authState.status === "config_error") {
     return renderCenteredState({
-      eyebrow: tr("Brak konfiguracji logowania", "Auth configuration missing"),
-      title: tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+      eyebrow: tr("Logowanie niedostępne", "Sign-in unavailable"),
+      title: tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       copy: tr(
-        "Ustaw EXPO_PUBLIC_SUPABASE_URL i EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY lokalnie w app/.env albo jako GitHub Secrets dla buildu Pages.",
-        "Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY in app/.env (local) or as GitHub Secrets for the Pages build.",
+        "Daj znać zarządowi, że aplikacja nie działa.",
+        "Let the board know the app isn't working.",
       ),
     });
   }
@@ -878,8 +881,8 @@ export default function App() {
 
   if (state.status === "error") {
     return renderCenteredState({
-      eyebrow: tr("Błąd prototypu", "Prototype error"),
-      title: tr("Nie udało się uruchomić aplikacji.", "The app could not bootstrap."),
+      eyebrow: tr("Błąd", "Error"),
+      title: tr("Nie udało się uruchomić aplikacji.", "The app could not start."),
       copy: state.message,
     });
   }
@@ -967,7 +970,7 @@ export default function App() {
   ): Promise<ReminderDispatchResult> {
     if (!supabaseAuthClient) {
       throw new Error(
-        tr("Supabase Auth nie jest skonfigurowany.", "Supabase auth is not configured."),
+        tr("Logowanie nie jest skonfigurowane w tej wersji aplikacji.", "Sign-in is not configured in this build."),
       );
     }
 

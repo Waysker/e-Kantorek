@@ -858,8 +858,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     if (!supabaseAuthClient || !ATTENDANCE_WRITE_FUNCTION_URL) {
       setErrorMessage(
         tr(
-          "Funkcja zapisu nie jest skonfigurowana. Sprawdź EXPO_PUBLIC_SUPABASE_URL i deployment funkcji.",
-          "Write function is not configured. Check EXPO_PUBLIC_SUPABASE_URL and function deployment.",
+          "Zapisywanie obecności nie jest skonfigurowane w tej wersji aplikacji.",
+          "Saving attendance is not configured in this build.",
         ),
       );
       return;
@@ -963,14 +963,14 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       const isAppliedDirectly = normalizeSearchText(payload?.status ?? "") === "applied";
       const placeholderHint = payload?.event_resolution === "created_placeholder"
         ? tr(
-          "Utworzono sesję roboczą i kolumna zostanie przygotowana przy zapisie.",
-          " Working session was created and column will be prepared on write.",
+          "Dodano nową sesję; kolumna w arkuszu powstanie przy zapisie.",
+          "Added a new session; its sheet column will be created on save.",
         )
         : "";
       const exportHint = payload?.export_trigger?.triggered && payload?.export_trigger?.ok === false
         ? tr(
-          "Zapisano w DB, ale eksport do arkusza roboczego nie powiódł się.",
-          " Saved to DB, but export to working sheet failed.",
+          "Zapisano, ale nie udało się przenieść zmian do arkusza obecności.",
+          "Saved, but the changes could not be copied to the attendance sheet.",
         )
         : "";
       const notes = [placeholderHint, exportHint].filter((value) => value.length > 0).join(" ");
@@ -1235,15 +1235,12 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         </View>
       </View>
 
+      {/* Off when EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED is unset or attendance_write_sheet_first is not configured. */}
       {!canWrite ? (
         <Notice tone="error">
           {tr(
-            ATTENDANCE_WRITE_UI_ENABLED
-              ? "Zapis jest wyłączony: brak konfiguracji funkcji attendance_write_sheet_first dla tego buildu."
-              : "Zapis jest wyłączony flagą EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED w tym buildzie.",
-            ATTENDANCE_WRITE_UI_ENABLED
-              ? "Write is disabled: attendance_write_sheet_first is not configured for this build."
-              : "Write is disabled by EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED in this build.",
+            "Zapisywanie obecności jest wyłączone w tej wersji aplikacji.",
+            "Saving attendance is turned off in this build.",
           )}
         </Notice>
       ) : null}
