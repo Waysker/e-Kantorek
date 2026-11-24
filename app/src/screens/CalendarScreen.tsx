@@ -462,12 +462,12 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
   if (isDesktop) {
     return (
       <View style={styles.desktopRoot}>
-        <View style={styles.sidebar}>
+        <ScrollView style={styles.sidebar} contentContainerStyle={styles.sidebarContent}>
           {miniMonth}
           <Pressable onPress={goToToday} style={styles.todayButton} accessibilityRole="button">
             <Text style={styles.todayLabel}>{tr("Dzisiaj", "Today")}</Text>
           </Pressable>
-        </View>
+        </ScrollView>
         {agenda}
       </View>
     );
@@ -486,125 +486,129 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
 
   return (
     <View style={styles.mobileRoot} {...swipeResponder.panHandlers}>
-      <View style={styles.weekHeader}>
-        <View style={styles.monthHeader}>
-          <Text style={styles.weekTitle}>{weekLabel}</Text>
-          <View style={styles.monthNav}>
-            <Pressable onPress={goToToday} style={styles.textButton} accessibilityRole="button">
-              <Text style={styles.textButtonLabel}>{tr("Dzisiaj", "Today")}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => shiftWeek(-1)}
-              style={styles.navButton}
-              accessibilityRole="button"
-              accessibilityLabel={tr("Poprzedni tydzień", "Previous week")}
-            >
-              <Text style={styles.navGlyph}>{"‹"}</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => shiftWeek(1)}
-              style={styles.navButton}
-              accessibilityRole="button"
-              accessibilityLabel={tr("Następny tydzień", "Next week")}
-            >
-              <Text style={styles.navGlyph}>{"›"}</Text>
-            </Pressable>
-          </View>
-        </View>
-        <View style={styles.weekRow}>
-          {weekDays.map((key, index) => {
-            const dayEvents = eventsByDay.get(key) ?? [];
-            const meta = dayEvents.length > 0 ? statusMeta(dominantStatus(dayEvents)) : null;
-            const isToday = key === todayKey;
-            return (
-              <View key={key} style={styles.cellSlot}>
-                <Text style={styles.weekday}>{WEEKDAYS[index]}</Text>
-                <View
-                  style={[
-                    styles.cell,
-                    styles.weekCell,
-                    meta && { backgroundColor: meta.bg },
-                    meta?.needsAction && styles.cellDashed,
-                  ]}
-                >
-                  <View style={[styles.dayBubble, isToday && styles.dayBubbleToday]}>
-                    <Text
-                      style={[
-                        styles.dayNumber,
-                        meta && { color: meta.fg, fontWeight: "700" },
-                        isToday && styles.dayNumberToday,
-                      ]}
-                    >
-                      {Number(key.slice(8, 10))}
-                    </Text>
-                  </View>
-                  {meta ? <Text style={[styles.cellGlyph, { color: meta.fg }]}>{meta.glyph}</Text> : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-        <Pressable
-          onPress={() => setShowMonthOnMobile((value) => !value)}
-          style={styles.monthToggle}
-          accessibilityRole="button"
-        >
-          <Text style={styles.textButtonLabel}>
-            {tr("Miesiąc", "Month")} {showMonthOnMobile ? "▴" : "▾"}
-          </Text>
-        </Pressable>
-        {showMonthOnMobile ? miniMonth : null}
-      </View>
-
+      {/* The week strip stays pinned while the month is folded. Unfolded, the
+          month can be taller than a short phone screen, so it scrolls with the list. */}
       <ScrollView
         ref={scrollRef}
         style={styles.agendaScroll}
-        contentContainerStyle={styles.agendaContent}
+        stickyHeaderIndices={showMonthOnMobile ? undefined : [0]}
         showsVerticalScrollIndicator={false}
       >
-        {actionBanner}
-        {weekDays.map((key) => {
-          const dayEvents = eventsByDay.get(key) ?? [];
-          const isToday = key === todayKey;
-          const isPast = key < todayKey;
-          if (dayEvents.length === 0 && !isToday) {
-            return null;
-          }
-          const date = new Date(keyToUtc(key));
-          return (
-            <View key={key} style={styles.daySection}>
-              <Text
-                style={[
-                  styles.sectionHeader,
-                  isToday && styles.sectionHeaderAccent,
-                  isPast && styles.sectionHeaderPast,
-                ]}
+        <View style={styles.weekHeader}>
+          <View style={styles.monthHeader}>
+            <Text style={styles.weekTitle}>{weekLabel}</Text>
+            <View style={styles.monthNav}>
+              <Pressable onPress={goToToday} style={styles.textButton} accessibilityRole="button">
+                <Text style={styles.textButtonLabel}>{tr("Dzisiaj", "Today")}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => shiftWeek(-1)}
+                style={styles.navButton}
+                accessibilityRole="button"
+                accessibilityLabel={tr("Poprzedni tydzień", "Previous week")}
               >
-                {`${WEEKDAY_SHORT.format(date)} ${date.getUTCDate()}`}
-                {isToday ? ` · ${tr("dzisiaj", "today")}` : isPast ? ` · ${tr("minione", "past")}` : ""}
-              </Text>
-              {dayEvents.length === 0 ? (
-                <Text style={styles.emptyCopy}>
-                  {tr("Brak wydarzeń.", "No events.")}
-                  {nextUpcoming
-                    ? ` ${tr("Następne", "Next")}: ${SHORT_DAY_MONTH.format(
-                        new Date(keyToUtc(dateKey(nextUpcoming.startsAt))),
-                      )}, ${WARSAW_TIME.format(new Date(nextUpcoming.startsAt))}`
-                    : ""}
-                </Text>
-              ) : (
-                dayEvents.map((event) => renderEventRow(event, key, isPast))
-              )}
+                <Text style={styles.navGlyph}>{"‹"}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => shiftWeek(1)}
+                style={styles.navButton}
+                accessibilityRole="button"
+                accessibilityLabel={tr("Następny tydzień", "Next week")}
+              >
+                <Text style={styles.navGlyph}>{"›"}</Text>
+              </Pressable>
             </View>
-          );
-        })}
-        {!weekHasEvents && !weekDays.includes(todayKey) ? (
-          <View style={styles.emptyBox}>
-            <Text style={styles.emptyCopy}>
-              {tr("Brak wydarzeń w tym tygodniu.", "No events this week.")}
-            </Text>
           </View>
-        ) : null}
+          <View style={styles.weekRow}>
+            {weekDays.map((key, index) => {
+              const dayEvents = eventsByDay.get(key) ?? [];
+              const meta = dayEvents.length > 0 ? statusMeta(dominantStatus(dayEvents)) : null;
+              const isToday = key === todayKey;
+              return (
+                <View key={key} style={styles.cellSlot}>
+                  <Text style={styles.weekday}>{WEEKDAYS[index]}</Text>
+                  <View
+                    style={[
+                      styles.cell,
+                      styles.weekCell,
+                      meta && { backgroundColor: meta.bg },
+                      meta?.needsAction && styles.cellDashed,
+                    ]}
+                  >
+                    <View style={[styles.dayBubble, isToday && styles.dayBubbleToday]}>
+                      <Text
+                        style={[
+                          styles.dayNumber,
+                          meta && { color: meta.fg, fontWeight: "700" },
+                          isToday && styles.dayNumberToday,
+                        ]}
+                      >
+                        {Number(key.slice(8, 10))}
+                      </Text>
+                    </View>
+                    {meta ? <Text style={[styles.cellGlyph, { color: meta.fg }]}>{meta.glyph}</Text> : null}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+          <Pressable
+            onPress={() => setShowMonthOnMobile((value) => !value)}
+            style={styles.monthToggle}
+            accessibilityRole="button"
+          >
+            <Text style={styles.textButtonLabel}>
+              {tr("Miesiąc", "Month")} {showMonthOnMobile ? "▴" : "▾"}
+            </Text>
+          </Pressable>
+          {showMonthOnMobile ? miniMonth : null}
+        </View>
+
+        <View style={styles.agendaContent}>
+          {actionBanner}
+          {weekDays.map((key) => {
+            const dayEvents = eventsByDay.get(key) ?? [];
+            const isToday = key === todayKey;
+            const isPast = key < todayKey;
+            if (dayEvents.length === 0 && !isToday) {
+              return null;
+            }
+            const date = new Date(keyToUtc(key));
+            return (
+              <View key={key} style={styles.daySection}>
+                <Text
+                  style={[
+                    styles.sectionHeader,
+                    isToday && styles.sectionHeaderAccent,
+                    isPast && styles.sectionHeaderPast,
+                  ]}
+                >
+                  {`${WEEKDAY_SHORT.format(date)} ${date.getUTCDate()}`}
+                  {isToday ? ` · ${tr("dzisiaj", "today")}` : isPast ? ` · ${tr("minione", "past")}` : ""}
+                </Text>
+                {dayEvents.length === 0 ? (
+                  <Text style={styles.emptyCopy}>
+                    {tr("Brak wydarzeń.", "No events.")}
+                    {nextUpcoming
+                      ? ` ${tr("Następne", "Next")}: ${SHORT_DAY_MONTH.format(
+                          new Date(keyToUtc(dateKey(nextUpcoming.startsAt))),
+                        )}, ${WARSAW_TIME.format(new Date(nextUpcoming.startsAt))}`
+                      : ""}
+                  </Text>
+                ) : (
+                  dayEvents.map((event) => renderEventRow(event, key, isPast))
+                )}
+              </View>
+            );
+          })}
+          {!weekHasEvents && !weekDays.includes(todayKey) ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyCopy}>
+                {tr("Brak wydarzeń w tym tygodniu.", "No events this week.")}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
     </View>
   );
@@ -615,11 +619,14 @@ const styles = StyleSheet.create({
   mobileRoot: { flex: 1 },
   sidebar: {
     width: 340,
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
+    flexGrow: 0,
     backgroundColor: tokens.colors.surface,
     borderRightWidth: 1,
     borderRightColor: tokens.colors.border,
+  },
+  sidebarContent: {
+    padding: tokens.spacing.lg,
+    gap: tokens.spacing.md,
   },
   miniMonth: {
     gap: 2,
