@@ -38,7 +38,7 @@ export function SectionGridPanel({ rows, onSelectSection }: SectionGridPanelProp
       <View style={styles.header}>
         <Text style={styles.kicker}>{tr("Sekcje", "Sections")}</Text>
         <Text style={styles.hint}>
-          {tr("Układ jak na próbie. Wybierz sekcję, aby odklikać obecność.", "Laid out like rehearsal seating. Pick a section to mark attendance.")}
+          {tr("Układ jak na próbie.", "Laid out like rehearsal seating.")}
         </Text>
       </View>
 

@@ -1274,8 +1274,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       {pendingChangesCount > 0 && !isBatchSaving ? (
         <Notice tone="warning">
           {tr(
-            `${pendingChangesCount} niezapisanych zmian. Kliknij „Zapisz”, gdy skończysz.`,
-            `${pendingChangesCount} unsaved changes. Click "Save" when you're done.`,
+            `${pendingChangesCount} niezapisanych zmian.`,
+            `${pendingChangesCount} unsaved changes.`,
           )}
         </Notice>
       ) : null}
