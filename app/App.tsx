@@ -6,6 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import type { OraghInstrument } from "./src/auth/instruments";
 import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabaseAuthClient";
+import { authErrorMessage } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
   AppNotification,
@@ -485,7 +486,7 @@ export default function App() {
         }
 
         if (error) {
-          setAuthErrorMessage(error.message);
+          setAuthErrorMessage(authErrorMessage(error, "session"));
           setAuthState({ status: "signed_out" });
           return;
         }
@@ -503,11 +504,7 @@ export default function App() {
           return;
         }
 
-        setAuthErrorMessage(
-          error instanceof Error
-            ? error.message
-            : tr("Nie udało się uruchomić logowania.", "Could not initialize auth."),
-        );
+        setAuthErrorMessage(authErrorMessage(error, "session"));
         setAuthState({ status: "signed_out" });
       });
 
@@ -713,7 +710,7 @@ export default function App() {
     });
 
     if (error) {
-      setAuthErrorMessage(error.message);
+      setAuthErrorMessage(authErrorMessage(error, "sign_in"));
     }
 
     setIsAuthSubmitting(false);
@@ -753,7 +750,7 @@ export default function App() {
     });
 
     if (error) {
-      setAuthErrorMessage(error.message);
+      setAuthErrorMessage(authErrorMessage(error, "sign_up"));
       setIsAuthSubmitting(false);
       return;
     }
@@ -779,7 +776,7 @@ export default function App() {
     const { error } = await supabaseAuthClient.auth.signOut();
 
     if (error) {
-      setAuthErrorMessage(error.message);
+      setAuthErrorMessage(authErrorMessage(error, "sign_out"));
       return;
     }
 
