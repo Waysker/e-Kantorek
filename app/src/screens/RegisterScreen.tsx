@@ -193,12 +193,6 @@ export function RegisterScreen({
   return (
     <AuthLayout>
             <Text style={styles.title}>{tr("Załóż konto", "Create account")}</Text>
-            <Text style={styles.subtitle}>
-              {tr(
-                "Konto w e-Kantorku jest osobne od konta na forum.",
-                "Your e-Kantorek account is separate from the forum.",
-              )}
-            </Text>
 
             <TextField
               style={styles.field}
@@ -211,7 +205,6 @@ export function RegisterScreen({
                 closeInstrumentMenu();
               }}
               onBlur={() => setFieldTouched("firstName")}
-              placeholder={tr("Imię", "First name")}
               editable={!isSubmitting}
             />
 
@@ -226,7 +219,6 @@ export function RegisterScreen({
                 closeInstrumentMenu();
               }}
               onBlur={() => setFieldTouched("lastName")}
-              placeholder={tr("Nazwisko", "Last name")}
               editable={!isSubmitting}
             />
 
@@ -280,7 +272,6 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("password")}
               secureTextEntry
-              placeholder={tr("Hasło", "Password")}
               editable={!isSubmitting}
             />
 
@@ -296,7 +287,6 @@ export function RegisterScreen({
               }}
               onBlur={() => setFieldTouched("passwordConfirmation")}
               secureTextEntry
-              placeholder={tr("Powtórz hasło", "Repeat password")}
               editable={!isSubmitting}
               onSubmitEditing={handleSubmit}
             />
@@ -344,12 +334,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   title: textStyles.pageTitle,
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    color: tokens.colors.muted,
-  },
   chips: {
     marginTop: 8,
     flexDirection: "row",
