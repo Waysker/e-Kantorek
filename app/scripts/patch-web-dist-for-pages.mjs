@@ -9,7 +9,18 @@ const buildId =
   process.env.APP_BUILD_ID?.trim() ||
   execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 
+// Expo's template says lang="en". Browsers then offer to translate the Polish
+// UI, and a translated page crashes React on the next re-render (e.g. picking
+// an instrument chip on sign-up). Declare the real language and opt out of
+// machine translation; the app has its own locale (EXPO_PUBLIC_APP_LOCALE).
+const appLang = process.env.EXPO_PUBLIC_APP_LOCALE?.trim().toLowerCase() === "en" ? "en" : "pl";
+if (!/<html lang="[^"]*">/.test(indexHtml)) {
+  throw new Error('Could not find <html lang="…"> in the Expo web export.');
+}
+
 let patched = indexHtml
+  .replace(/<html lang="[^"]*">/, `<html lang="${appLang}" translate="no">`)
+  .replace("</title>", '</title>\n    <meta name="google" content="notranslate" />')
   .replaceAll('href="/', 'href="./')
   .replaceAll('src="/', 'src="./');
 
