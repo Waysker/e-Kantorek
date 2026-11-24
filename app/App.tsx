@@ -6,7 +6,7 @@ import type { Session } from "@supabase/supabase-js";
 
 import type { OraghInstrument } from "./src/auth/instruments";
 import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabaseAuthClient";
-import { authErrorMessage } from "./src/auth/authErrorMessage";
+import { describeAuthError } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
   AppNotification,
@@ -486,7 +486,7 @@ export default function App() {
         }
 
         if (error) {
-          setAuthErrorMessage(authErrorMessage(error, "session"));
+          setAuthErrorMessage(describeAuthError(error, "session"));
           setAuthState({ status: "signed_out" });
           return;
         }
@@ -504,7 +504,7 @@ export default function App() {
           return;
         }
 
-        setAuthErrorMessage(authErrorMessage(error, "session"));
+        setAuthErrorMessage(describeAuthError(error, "session"));
         setAuthState({ status: "signed_out" });
       });
 
@@ -710,7 +710,7 @@ export default function App() {
     });
 
     if (error) {
-      setAuthErrorMessage(authErrorMessage(error, "sign_in"));
+      setAuthErrorMessage(describeAuthError(error, "sign_in"));
     }
 
     setIsAuthSubmitting(false);
@@ -750,7 +750,7 @@ export default function App() {
     });
 
     if (error) {
-      setAuthErrorMessage(authErrorMessage(error, "sign_up"));
+      setAuthErrorMessage(describeAuthError(error, "sign_up"));
       setIsAuthSubmitting(false);
       return;
     }
@@ -776,7 +776,7 @@ export default function App() {
     const { error } = await supabaseAuthClient.auth.signOut();
 
     if (error) {
-      setAuthErrorMessage(authErrorMessage(error, "sign_out"));
+      setAuthErrorMessage(describeAuthError(error, "sign_out"));
       return;
     }
 

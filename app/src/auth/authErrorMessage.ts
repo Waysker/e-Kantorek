@@ -12,7 +12,7 @@ type AuthErrorLike = {
 // Turns a Supabase Auth error into a short Polish message for members.
 // Matches on `code` (newer GoTrue) and falls back to the English message
 // (older self-hosted GoTrue). The raw error goes to the console.
-export function authErrorMessage(error: unknown, action: AuthAction): string {
+export function describeAuthError(error: unknown, action: AuthAction): string {
   const details = (typeof error === "object" && error !== null ? error : {}) as AuthErrorLike;
   const code = typeof details.code === "string" ? details.code : "";
   const status = typeof details.status === "number" ? details.status : null;
