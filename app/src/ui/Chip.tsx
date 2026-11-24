@@ -52,8 +52,9 @@ export function Chip({
       ]}
     >
       <Text style={[styles.label, isAction && styles.labelAction, selected && styles.labelSelected]}>
-        {selected && role === "radio" ? "✓ " : ""}
-        {label}
+        {/* One text node: browser translators replace text nodes, and React
+            crashes if it has to insert a sibling next to a replaced one. */}
+        {selected && role === "radio" ? `✓ ${label}` : label}
       </Text>
     </Pressable>
   );
