@@ -74,9 +74,6 @@ export function AuthScreen({
   return (
     <AuthLayout>
           <Text style={styles.title}>{tr("Zaloguj się", "Sign in")}</Text>
-          <Text style={styles.subtitle}>
-            {tr("Kontem e-Kantorka, osobnym od konta na forum.", "With your e-Kantorek account, separate from the forum.")}
-          </Text>
 
           <TextField
             style={styles.field}
@@ -110,7 +107,6 @@ export function AuthScreen({
             }}
             onBlur={() => setPasswordTouched(true)}
             secureTextEntry
-            placeholder={tr("Twoje hasło", "Your password")}
             editable={!isSubmitting}
             onSubmitEditing={handleSubmit}
           />
@@ -148,12 +144,6 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.lg,
   },
   title: textStyles.pageTitle,
-  subtitle: {
-    marginTop: 4,
-    fontSize: 14,
-    lineHeight: 20,
-    color: tokens.colors.muted,
-  },
   secondaryButton: {
     marginTop: tokens.spacing.sm,
     minHeight: 44,
