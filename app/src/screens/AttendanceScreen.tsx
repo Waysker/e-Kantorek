@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -8,26 +8,41 @@ import {
   useWindowDimensions,
 } from "react-native";
 
-import type { AttendanceStatus, EventDetail, SquadMember } from "../domain/models";
-import { canonicalizeInstrumentLabel, UNKNOWN_INSTRUMENT_LABEL } from "../domain/instruments";
+import type { EventDetail, SquadMember } from "../domain/models";
+import {
+  canonicalizeInstrumentLabel,
+  REHEARSAL_SECTION_ROWS,
+  UNKNOWN_INSTRUMENT_LABEL,
+} from "../domain/instruments";
 import { appLocaleTag, tr } from "../i18n";
 import { tokens } from "../theme/tokens";
-import { EmptyState } from "../ui/EmptyState";
 import { textStyles } from "../theme/text";
 import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
-import type { AttendanceSummaryFocusStatus } from "../ui/AttendanceSummaryStrip";
+import { Card, listRowDivider } from "../ui/Card";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
-import { statusMeta } from "../ui/StatusPill";
+import { SectionTile } from "../ui/SectionTile";
+import { StatusPill, statusMeta } from "../ui/StatusPill";
 
 type AttendanceScreenProps = {
   event: EventDetail;
   onBack: () => void;
-  focusStatus?: AttendanceSummaryFocusStatus;
+  /** The signed-in member's instrument: their section starts selected. */
+  userInstrument?: string;
 };
 
-type RosterSection = { instrument: string; members: SquadMember[] };
+type LineupPerson = SquadMember & { status: "going" | "not_going" };
+
+type LineupSection = {
+  instrument: string;
+  label: string;
+  people: LineupPerson[];
+  going: number;
+  notGoing: number;
+};
 
 const UNASSIGNED_LABELS = new Set([UNKNOWN_INSTRUMENT_LABEL, "Unassigned"]);
+const SEATING_ORDER: string[] = REHEARSAL_SECTION_ROWS.flat();
 
 function instrumentLabel(instrument: string) {
   return UNASSIGNED_LABELS.has(instrument)
@@ -48,132 +63,147 @@ function compareBySurname(left: SquadMember, right: SquadMember) {
   );
 }
 
-function sortSections(sections: RosterSection[]) {
-  return sections
-    .filter((section) => section.members.length > 0)
-    .map((section) => ({
-      ...section,
-      members: [...section.members].sort(compareBySurname),
-    }))
-    .sort((left, right) => {
-      const leftUnassigned = UNASSIGNED_LABELS.has(left.instrument);
-      const rightUnassigned = UNASSIGNED_LABELS.has(right.instrument);
-      if (leftUnassigned !== rightUnassigned) {
-        return leftUnassigned ? 1 : -1;
-      }
-      return left.instrument.localeCompare(right.instrument, appLocaleTag);
-    });
+// Rehearsal seating first, other sections after them, "no instrument" last.
+function compareSections(left: LineupSection, right: LineupSection) {
+  const rank = (section: LineupSection) => {
+    if (UNASSIGNED_LABELS.has(section.instrument)) return Number.MAX_SAFE_INTEGER;
+    const seat = SEATING_ORDER.indexOf(section.instrument);
+    return seat === -1 ? SEATING_ORDER.length : seat;
+  };
+  return (
+    rank(left) - rank(right) || left.instrument.localeCompare(right.instrument, appLocaleTag)
+  );
 }
 
-// "Going" and "maybe" come from the squad (already grouped by instrument);
-// "not going" and "no response" come from the poll groups.
-function buildSections(event: EventDetail): Record<AttendanceStatus, RosterSection[]> {
-  const fromSquad = (pick: "confirmedMembers" | "maybeMembers") =>
-    sortSections(
-      event.squad.groups.map((group) => ({ instrument: group.instrument, members: group[pick] })),
-    );
-
-  const fromPoll = (status: AttendanceStatus) => {
-    const byInstrument = new Map<string, SquadMember[]>();
-    for (const group of event.attendanceGroups) {
-      if (group.status !== status) {
-        continue;
-      }
-      for (const participant of group.participants) {
-        const instrument = canonicalizeInstrumentLabel(
-          participant.primaryInstrument,
-          UNKNOWN_INSTRUMENT_LABEL,
-        );
-        const members = byInstrument.get(instrument) ?? [];
-        members.push({ id: participant.id, fullName: participant.fullName });
-        byInstrument.set(instrument, members);
-      }
+// "Going" comes from the squad (grouped by instrument), "not going" from the
+// poll groups. No "maybe" or "no response": the roster is unknown.
+function buildSections(event: EventDetail): LineupSection[] {
+  const byInstrument = new Map<string, Map<string, LineupPerson>>();
+  const add = (instrumentValue: string | undefined, person: LineupPerson) => {
+    const instrument = canonicalizeInstrumentLabel(instrumentValue, UNKNOWN_INSTRUMENT_LABEL);
+    const people = byInstrument.get(instrument) ?? new Map<string, LineupPerson>();
+    if (!people.has(person.id)) {
+      people.set(person.id, person);
     }
-    return sortSections(
-      Array.from(byInstrument, ([instrument, members]) => ({ instrument, members })),
-    );
+    byInstrument.set(instrument, people);
   };
 
-  return {
-    going: fromSquad("confirmedMembers"),
-    maybe: fromSquad("maybeMembers"),
-    not_going: fromPoll("not_going"),
-    no_response: fromPoll("no_response"),
-  };
-}
-
-function splitIntoColumns<T>(items: T[], columns: number): T[][] {
-  const perColumn = Math.ceil(items.length / columns);
-  return Array.from({ length: columns }, (_, index) =>
-    items.slice(index * perColumn, (index + 1) * perColumn),
-  ).filter((column) => column.length > 0);
-}
-
-function countMembers(sections: RosterSection[]) {
-  return sections.reduce((total, section) => total + section.members.length, 0);
-}
-
-export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScreenProps) {
-  const { width } = useWindowDimensions();
-  const isDesktop = width >= tokens.breakpoints.desktop;
-  const isWide = width >= 360;
-  const [activeStatus, setActiveStatus] = useState<AttendanceStatus>(focusStatus ?? "going");
-
-  useEffect(() => {
-    if (focusStatus) {
-      setActiveStatus(focusStatus);
+  for (const group of event.squad.groups) {
+    for (const member of group.confirmedMembers) {
+      add(group.instrument, { ...member, status: "going" });
     }
-  }, [focusStatus]);
-
-  const sectionsByStatus = useMemo(() => buildSections(event), [event]);
-  const tabs = (["going", "maybe", "not_going", "no_response"] as const)
-    .map((status) => ({ status, count: countMembers(sectionsByStatus[status]) }))
-    // Always offer "going" and "not going"; the other two only when someone is in them.
-    .filter((tab) => tab.status === "going" || tab.status === "not_going" || tab.count > 0);
-
-  const activeSections = sectionsByStatus[activeStatus];
-  const activeMeta = statusMeta(activeStatus);
-  const nameColumns = isDesktop ? 2 : isWide ? 2 : 1;
-
-  // Desktop: two independent columns balanced by member count, so cards of
-  // different heights don't leave gaps.
-  const sectionColumns: RosterSection[][] = isDesktop ? [[], []] : [[]];
-  const columnLoad = sectionColumns.map(() => 0);
-  for (const section of activeSections) {
-    const target = columnLoad[0] <= (columnLoad[1] ?? Infinity) ? 0 : 1;
-    sectionColumns[target].push(section);
-    columnLoad[target] += section.members.length / nameColumns + 2;
+  }
+  for (const group of event.attendanceGroups) {
+    if (group.status !== "not_going") continue;
+    for (const participant of group.participants) {
+      add(participant.primaryInstrument, {
+        id: participant.id,
+        fullName: participant.fullName,
+        status: "not_going",
+      });
+    }
   }
 
-  function renderSection(section: RosterSection) {
+  return Array.from(byInstrument, ([instrument, peopleById]) => {
+    const people = Array.from(peopleById.values()).sort(compareBySurname);
+    const going = people.filter((person) => person.status === "going").length;
+    return {
+      instrument,
+      label: instrumentLabel(instrument),
+      people,
+      going,
+      notGoing: people.length - going,
+    };
+  })
+    .filter((section) => section.people.length > 0)
+    .sort(compareSections);
+}
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    rows.push(items.slice(index, index + size));
+  }
+  return rows;
+}
+
+function declarationsLabel(count: number) {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const pl =
+    count === 1
+      ? "zgłoszenie"
+      : last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)
+        ? "zgłoszenia"
+        : "zgłoszeń";
+  return `${count} ${tr(pl, count === 1 ? "response" : "responses")}`;
+}
+
+export function AttendanceScreen({ event, onBack, userInstrument }: AttendanceScreenProps) {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= tokens.breakpoints.desktop;
+
+  const sections = useMemo(() => buildSections(event), [event]);
+  const mineKey = userInstrument
+    ? canonicalizeInstrumentLabel(userInstrument, UNKNOWN_INSTRUMENT_LABEL)
+    : null;
+  const [selectedKey, setSelectedKey] = useState<string | null>(() =>
+    mineKey && sections.some((section) => section.instrument === mineKey) ? mineKey : null,
+  );
+  const selected = sections.find((section) => section.instrument === selectedKey) ?? null;
+
+  const totalGoing = sections.reduce((sum, section) => sum + section.going, 0);
+  const totalNotGoing = sections.reduce((sum, section) => sum + section.notGoing, 0);
+  const goingMeta = statusMeta("going");
+  const notGoingMeta = statusMeta("not_going");
+
+  const columns = isDesktop ? 3 : 2;
+  const rows = chunk(sections, columns);
+
+  function toggle(instrument: string) {
+    setSelectedKey((current) => (current === instrument ? null : instrument));
+  }
+
+  function renderRow(row: LineupSection[], rowIndex: number) {
     return (
-      <View key={section.instrument} style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{instrumentLabel(section.instrument)}</Text>
-          <View style={[styles.countBadge, { backgroundColor: activeMeta.bg }]}>
-            <Text style={[styles.countLabel, { color: activeMeta.fg }]}>
-              {section.members.length}
-            </Text>
-          </View>
-        </View>
-        {/* Filled column by column (top to bottom, then the next column), so the
-            alphabetical order reads down like a printed list. */}
-        <View style={styles.names}>
-          {splitIntoColumns(section.members, nameColumns).map((column, columnIndex) => (
-            <View key={columnIndex} style={styles.nameColumn}>
-              {column.map((member, index) => (
-                <View key={member.id} style={[styles.nameCell, index > 0 && styles.nameCellDivider]}>
-                  <Text style={styles.name} numberOfLines={2}>
-                    {member.fullName}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
+      <View key={rowIndex} style={styles.row}>
+        {row.map((section) => (
+          <SectionTile
+            key={section.instrument}
+            label={section.label}
+            going={section.going}
+            notGoing={section.notGoing}
+            mine={section.instrument === mineKey}
+            selected={section.instrument === selectedKey}
+            large={isDesktop}
+            onPress={() => toggle(section.instrument)}
+          />
+        ))}
+        {Array.from({ length: columns - row.length }, (_, index) => (
+          <View key={`spacer-${index}`} style={styles.spacer} />
+        ))}
       </View>
     );
   }
+
+  function renderPeople(section: LineupSection) {
+    return (
+      <Card variant="list">
+        <View style={styles.peopleHeader}>
+          <Text style={textStyles.sectionTitle}>{section.label}</Text>
+          <Text style={styles.peopleMeta}>{declarationsLabel(section.people.length)}</Text>
+        </View>
+        {section.people.map((person) => (
+          <View key={person.id} style={[styles.personRow, listRowDivider]}>
+            <Text style={styles.personName}>{person.fullName}</Text>
+            <StatusPill status={person.status} />
+          </View>
+        ))}
+      </Card>
+    );
+  }
+
+  const meta = [formatDateLabel(event.startsAt), event.venue].filter(Boolean).join(" · ");
 
   return (
     <ScrollView
@@ -181,62 +211,66 @@ export function AttendanceScreen({ event, onBack, focusStatus }: AttendanceScree
       contentContainerStyle={[styles.content, isDesktop && styles.contentDesktop]}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <Pressable
-          onPress={onBack}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel={tr("Wróć do wydarzenia", "Back to event")}
-        >
-          <Icon name="chevronLeft" size={20} color={tokens.colors.ink} strokeWidth={2.2} />
-        </Pressable>
-        <View style={styles.headerText}>
-          <Text style={styles.kicker}>
-            {tr("Skład", "Line-up")} · {formatDateLabel(event.startsAt)}
-          </Text>
-          <Text style={styles.title} numberOfLines={2}>
-            {stripTitleDatePrefix(event.title)}
-          </Text>
+      <View style={[styles.hero, isDesktop && styles.heroDesktop]}>
+        <View style={styles.heroTop}>
+          <Pressable
+            onPress={onBack}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel={tr("Wróć do wydarzenia", "Back to event")}
+          >
+            <Icon name="chevronLeft" size={20} color={tokens.colors.surface} strokeWidth={2.2} />
+          </Pressable>
+          <Text style={styles.heroKicker}>{tr("Skład", "Line-up")}</Text>
+        </View>
+        <View style={[styles.heroBody, isDesktop && styles.heroBodyDesktop]}>
+          <View style={styles.heroText}>
+            <Text style={[styles.heroTitle, isDesktop && styles.heroTitleDesktop]}>
+              {stripTitleDatePrefix(event.title)}
+            </Text>
+            <Text style={styles.heroMeta}>{meta}</Text>
+          </View>
+          <View style={styles.totals}>
+            <View style={[styles.total, { backgroundColor: goingMeta.bg }]}>
+              <Text style={[styles.totalLabel, { color: goingMeta.fg }]}>
+                ✓ {totalGoing} {tr("będzie", "going")}
+              </Text>
+            </View>
+            <View style={[styles.total, { backgroundColor: notGoingMeta.bg }]}>
+              <Text style={[styles.totalLabel, { color: notGoingMeta.fg }]}>
+                ✕ {totalNotGoing} {tr("nie będzie", "not going")}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
-      <View style={styles.tabs} accessibilityRole="tablist">
-        {tabs.map(({ status, count }) => {
-          const meta = statusMeta(status);
-          const isActive = status === activeStatus;
-          return (
-            <Pressable
-              key={status}
-              onPress={() => setActiveStatus(status)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              style={[
-                styles.tab,
-                isActive && { backgroundColor: meta.bg, borderColor: meta.accent },
-              ]}
-            >
-              <Text style={[styles.tabCount, isActive && { color: meta.fg }]}>{count}</Text>
-              <Text style={[styles.tabLabel, isActive && { color: meta.fg }]} numberOfLines={1}>
-                {meta.glyph} {meta.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {activeSections.length === 0 ? (
-        <EmptyState>
-          {activeStatus === "going"
-            ? tr("Nikt jeszcze nie potwierdził udziału.", "Nobody has confirmed yet.")
-            : activeStatus === "not_going"
-              ? tr("Nikt nie odmówił udziału.", "Nobody has declined.")
-              : tr("Brak osób na tej liście.", "Nobody on this list.")}
-        </EmptyState>
+      {sections.length === 0 ? (
+        <EmptyState>{tr("Nikt jeszcze się nie zadeklarował.", "Nobody has declared yet.")}</EmptyState>
+      ) : isDesktop ? (
+        <View style={styles.desktopColumns}>
+          <View style={styles.gridColumn}>
+            <Text style={textStyles.kicker}>{tr("Sekcje", "Sections")}</Text>
+            <View style={styles.grid}>{rows.map(renderRow)}</View>
+          </View>
+          <View style={styles.aside}>
+            <Text style={textStyles.kicker}>{tr("Szczegóły", "Details")}</Text>
+            {selected ? (
+              renderPeople(selected)
+            ) : (
+              <View style={styles.asideEmpty}>
+                <Text style={styles.asideEmptyLabel}>{tr("Wybierz sekcję", "Pick a section")}</Text>
+              </View>
+            )}
+          </View>
+        </View>
       ) : (
-        <View style={[styles.sections, isDesktop && styles.sectionsDesktop]}>
-          {sectionColumns.map((column, columnIndex) => (
-            <View key={columnIndex} style={styles.sectionColumn}>
-              {column.map((section) => renderSection(section))}
+        <View style={styles.grid}>
+          <Text style={textStyles.kicker}>{tr("Sekcje", "Sections")}</Text>
+          {rows.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.grid}>
+              {renderRow(row, rowIndex)}
+              {selected && row.includes(selected) ? renderPeople(selected) : null}
             </View>
           ))}
         </View>
@@ -251,134 +285,152 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: tokens.spacing.md,
-    paddingTop: tokens.spacing.md,
     gap: tokens.spacing.md,
   },
   contentDesktop: {
     width: "100%",
     maxWidth: 1080,
     alignSelf: "center",
-    paddingHorizontal: tokens.spacing.xl,
-    paddingTop: tokens.spacing.xl,
+    padding: tokens.spacing.xl,
+    gap: tokens.spacing.lg,
   },
-  header: {
+  hero: {
+    backgroundColor: tokens.colors.brandDeep,
+    borderRadius: tokens.radii.xl,
+    padding: tokens.spacing.md,
+    gap: 12,
+  },
+  heroDesktop: {
+    paddingHorizontal: 28,
+    paddingVertical: tokens.spacing.lg,
+  },
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: tokens.spacing.sm,
   },
   backButton: {
     width: 44,
     height: 44,
     borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: tokens.colors.brandDeepRaised,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerText: {
-    flex: 1,
-    gap: 2,
-  },
-  kicker: textStyles.kicker,
-  title: {
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    color: tokens.colors.ink,
-  },
-  tabs: {
-    flexDirection: "row",
-    gap: tokens.spacing.xs,
-  },
-  tab: {
-    flex: 1,
-    minHeight: 60,
-    paddingVertical: 8,
-    paddingHorizontal: 6,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1.5,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
-  },
-  tabCount: {
-    fontSize: 22,
-    lineHeight: 26,
-    fontWeight: "800",
-    color: tokens.colors.ink,
-  },
-  tabLabel: {
-    fontSize: 12,
+  heroKicker: {
+    color: tokens.colors.brandDeepAccent,
+    fontSize: tokens.typography.caption,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    letterSpacing: 0.7,
+    textTransform: "uppercase",
   },
-  sections: {
+  heroBody: {
+    gap: 12,
+  },
+  heroBodyDesktop: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: tokens.spacing.md,
+  },
+  heroText: {
+    gap: 4,
+    flexShrink: 1,
+  },
+  heroTitle: {
+    color: tokens.colors.surface,
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "800",
+    letterSpacing: -0.4,
+  },
+  heroTitleDesktop: {
+    fontSize: 44,
+    lineHeight: 48,
+    letterSpacing: -0.5,
+  },
+  heroMeta: {
+    color: tokens.colors.brandDeepMuted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  totals: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  total: {
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: tokens.radii.round,
+    justifyContent: "center",
+  },
+  totalLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  grid: {
     gap: tokens.spacing.sm,
   },
-  sectionsDesktop: {
+  row: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: tokens.spacing.sm,
+  },
+  spacer: {
+    flex: 1,
+  },
+  desktopColumns: {
     flexDirection: "row",
     alignItems: "flex-start",
+    gap: tokens.spacing.lg,
   },
-  sectionColumn: {
-    flex: 1,
+  gridColumn: {
+    flex: 2,
     minWidth: 0,
     gap: tokens.spacing.sm,
   },
-  section: {
-    backgroundColor: tokens.colors.surface,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    borderRadius: tokens.radii.lg,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 6,
+  aside: {
+    flex: 1,
+    minWidth: 300,
+    gap: tokens.spacing.sm,
   },
-  sectionHeader: {
+  asideEmpty: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: tokens.colors.borderStrong,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.lg,
+  },
+  asideEmptyLabel: {
+    fontSize: 14,
+    color: tokens.colors.muted,
+  },
+  peopleHeader: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: tokens.spacing.sm,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: tokens.spacing.sm,
+  },
+  peopleMeta: {
+    fontSize: 13,
+    color: tokens.colors.muted,
+  },
+  personRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: tokens.spacing.sm,
-    paddingBottom: 8,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  sectionTitle: {
+  personName: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: "700",
-    color: tokens.colors.ink,
-  },
-  countBadge: {
-    minWidth: 28,
-    height: 24,
-    paddingHorizontal: 8,
-    borderRadius: tokens.radii.round,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  names: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  nameColumn: {
-    flex: 1,
-    minWidth: 0,
-  },
-  nameCell: {
-    paddingVertical: 8,
-    paddingRight: 8,
-  },
-  nameCellDivider: {
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
-  },
-  name: {
     fontSize: 15,
     color: tokens.colors.ink,
   },

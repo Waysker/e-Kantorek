@@ -20,7 +20,11 @@ import type {
   SnapshotEventDetail,
 } from "./attendance-manager/types";
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
-import { canonicalizeInstrumentLabel, normalizeInstrumentKey } from "../domain/instruments";
+import {
+  canonicalizeInstrumentLabel,
+  normalizeInstrumentKey,
+  REHEARSAL_SECTION_ROWS,
+} from "../domain/instruments";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { Button } from "../ui/Button";
@@ -95,11 +99,6 @@ const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
 const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
 const REHEARSAL_KEYWORDS = ["proba", "próba", "rehearsal", "wtorek", "czwartek", "tuesday", "thursday"];
 const ATTENDANCE_RATIO_EPSILON = 0.001;
-const REHEARSAL_SECTION_ROWS = [
-  ["Flety", "Oboje", "Klarnety"],
-  ["Gitary", "Eufonia", "Fagoty", "Saksofony", "Waltornie"],
-  ["Perkusja", "Tuby", "Puzony", "Trąbki"],
-] as const;
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();

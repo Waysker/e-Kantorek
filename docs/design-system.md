@@ -32,7 +32,7 @@ explicit decision changes the look of the app.
 | `control-sm/md/lg`, shadow `raised`, breakpoint `desktop` | `tokens.controlHeight.*`, `tokens.shadow.raised`, `tokens.breakpoints.desktop` |
 | Text styles (`screen-title`, `kicker`, …) | `app/src/theme/text.ts` → `textStyles.<camelCase>` |
 | Font (Inter) and the global keyboard focus ring | `app/src/theme/webFonts.ts` |
-| Components (cards in the system) | `app/src/ui/<Name>.tsx`: `StatusPill`, `DeclarationPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState` |
+| Components (cards in the system) | `app/src/ui/<Name>.tsx`: `StatusPill`, `DeclarationPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `StatusMark`, `Tag`, `SectionTile` |
 | App chrome (not carded) | `app/src/ui/`: `Icon`, `AppShell`, `BoardSubNav`, `AuthLayout`, `DataFreshnessBanner`, `UnmappedMembersBanner` |
 | Pattern helpers | `app/src/domain/forumLinks.ts` (forum poll links), `stripTitleDatePrefix` in `app/src/utils/format.ts`, `app/src/domain/setlist.ts` |
 
