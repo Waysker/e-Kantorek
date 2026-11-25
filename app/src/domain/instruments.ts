@@ -14,6 +14,14 @@ const CANONICAL_INSTRUMENT_OPTIONS = [
   "Tuby",
 ] as const;
 
+// Sections as they sit at rehearsal, front row first. Used by the attendance
+// grid and the line-up ("Skład").
+const REHEARSAL_SECTION_ROWS = [
+  ["Flety", "Oboje", "Klarnety"],
+  ["Gitary", "Eufonia", "Fagoty", "Saksofony", "Waltornie"],
+  ["Perkusja", "Tuby", "Puzony", "Trąbki"],
+] as const;
+
 const CANONICAL_INSTRUMENT_LABEL_BY_KEY: Record<string, string> = {
   flet: "Flety",
   flety: "Flety",
@@ -69,4 +77,4 @@ export function canonicalizeInstrumentLabel(
   return CANONICAL_INSTRUMENT_LABEL_BY_KEY[normalizeInstrumentKey(normalized)] ?? normalized;
 }
 
-export { CANONICAL_INSTRUMENT_OPTIONS, UNKNOWN_INSTRUMENT_LABEL };
+export { CANONICAL_INSTRUMENT_OPTIONS, REHEARSAL_SECTION_ROWS, UNKNOWN_INSTRUMENT_LABEL };

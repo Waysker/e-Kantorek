@@ -1177,7 +1177,7 @@ export default function App() {
           <AttendanceScreen
             event={selectedEvent}
             onBack={() => goBack({ name: "events" })}
-            focusStatus={route.focusStatus}
+            userInstrument={effectiveCurrentUser.primaryInstrument}
           />
         );
       case "setlist":
@@ -1210,6 +1210,7 @@ export default function App() {
           <SquadScreen
             event={selectedEvent}
             onBack={() => goBack({ name: "events" })}
+            userInstrument={effectiveCurrentUser.primaryInstrument}
           />
         );
       case "profile":
