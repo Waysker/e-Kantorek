@@ -58,6 +58,18 @@ W `docker-compose.orbit-quick.yml`, usługa `functions`, sekrety z `.env`:
 Wpisy KeePassXC: `orbit/ekantorek-apps-script-webhook` (token + adres),
 `orbit/ekantorek-db-to-sheet-export` (token eksportu).
 
+## Test
+
+Na orbit (token czytany z `.env`, nie jest wypisywany):
+
+```bash
+bash /home/waysker/attendance-export-test.sh 2026-12-01        # na sucho
+bash /home/waysker/attendance-export-test.sh 2026-12-01 write  # wpisuje wartości z aplikacji
+```
+
+Skrypt: `deploy/orbit/attendance-export-test.sh`. Uruchamiaj go plikiem, nie
+wklejaj `curl` z cudzysłowami w `ssh '…'` z PowerShella 5.1 (gubi cudzysłowy).
+
 ## Wiadomo
 
 - Zapisy z aplikacji na wydarzenie, którego nie ma w oryginale (np. wirtualny

@@ -297,8 +297,12 @@ function buildCanonicalHeader(eventDate, eventTitle, sourceHeader) {
     ? new RegExp("\\b" + escapeRegex(normalizedEventDate) + "\\b", "g")
     : null;
 
+  // Strip every date token from the original header ("Próba 2026-01-12",
+  // "Gwarek 03.12"): the canonical date goes on its own line below.
+  var anyDateToken = /(^|[^0-9])(\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}|\d{1,2}\.\d{1,2}(\.\d{2,4})?)(?![0-9])/g;
   var titleWithoutDate = String(base || "")
     .replace(dateRegex || /$^/, " ")
+    .replace(anyDateToken, "$1 ")
     .replace(/\s+/g, " ")
     .trim();
   var fallbackTitleWithoutDate = String(fallbackTitle || "")

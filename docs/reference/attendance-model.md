@@ -131,8 +131,12 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    czyta jeszcze `attendance_entries` i pisze na prawdziwych danych, więc
    zaśmieciłby zbiór „aplikacja”: do przerobienia na osobne wydarzenie testowe
    przed ponownym włączeniem.
-4. Założyć nową kopię: arkusz, Apps Script webhook (`docs/ops/sheet-sync-setup.md`,
-   sekcja 3a), sekrety `ATTENDANCE_EXPORT_TARGET_SHEET_ID` i webhooka.
+4. ~~Założyć nową kopię~~ (2026-11-27). Kopia `1YKJYSVbeanDlp1ZSryo71ohnwYAGiukI2txsjWZ4urM`
+   (3 zakładki z `gid` oryginału, tylko kolumny A–D), webhook
+   `deploy/google-apps-script/attendance-copy-webhook.gs`, zmienne i tokeny na orbit
+   według `docs/ops/attendance-copy-sheet.md` (kopia compose `.bak-step4`).
+   Test na sucho dla 2026-12-01: kolumna E w „Grudzień 26”, 99 osób, 0 braków
+   wierszy. Test ręczny: `deploy/orbit/attendance-export-test.sh`.
 5. ~~Backend: zapis tylko dla `board`/`admin`~~ (w repo). Zapis zbiorczy nie
    wymaga już, żeby osoba z zarządu była w arkuszu (`actor_member_id` może być puste).
 6. Kalendarz wpisywania: wydarzenia z forum zamiast z kolumn oryginału (dziś
