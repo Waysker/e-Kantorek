@@ -1048,6 +1048,7 @@ function buildPreflight(
   rows: string[][],
   options?: {
     globalDominantYear?: number | null;
+    globalPreferSwapForAmbiguous?: boolean;
     sourceMonthHint?: number | null;
     eventDateOverridesByColumn?: Map<string, EventDateOverride>;
   },
@@ -1089,9 +1090,19 @@ function buildPreflight(
     });
   }
 
-  const dateStylePreference = detectPreferSwapForAmbiguousDateTokens(
+  const localDateStylePreference = detectPreferSwapForAmbiguousDateTokens(
     rawEventColumnCandidates.map((candidate) => candidate.header),
   );
+  // A tab with only ambiguous YYYY-xx-xx tokens (e.g. early in a month) has no
+  // evidence of its own; fall back to the style used across the whole workbook.
+  const hasLocalStyleEvidence = localDateStylePreference.swapOnlyCount > 0 ||
+    localDateStylePreference.directOnlyCount > 0 ||
+    localDateStylePreference.reason !== "none";
+  const useGlobalStyle = !hasLocalStyleEvidence && options?.globalPreferSwapForAmbiguous === true &&
+    localDateStylePreference.ambiguousCount > 0;
+  const dateStylePreference = useGlobalStyle
+    ? { ...localDateStylePreference, preferSwapForAmbiguous: true, reason: "global_workbook_style" as const }
+    : localDateStylePreference;
 
   if (dateStylePreference.preferSwapForAmbiguous) {
     issues.push({
@@ -1127,10 +1138,23 @@ function buildPreflight(
       .filter((item) => item.parsed.status === "ok")
       .map((item) => (item.parsed as Extract<ParsedEventDate, { status: "ok" }>).year),
   );
+  // Month evidence for resolving ambiguous tokens: unambiguous full dates plus
+  // year-less DD.MM headers (e.g. "Gwarek 03.12"). Ambiguous YYYY-xx-xx tokens do
+  // not vote, otherwise a tab whose only full date is ambiguous ("Próba 2026-01-12"
+  // next to "03.12") resolves itself to the wrong month.
   const dominantMonth = modeNumber(
-    rawEventColumns
-      .filter((item) => item.parsed.status === "ok")
-      .map((item) => Number((item.parsed as Extract<ParsedEventDate, { status: "ok" }>).isoDate.slice(5, 7))),
+    rawEventColumns.flatMap((item) => {
+      if (item.parsed.status === "ok") {
+        if (item.parsed.ambiguousYearFirstToken) {
+          return [];
+        }
+        return [Number(item.parsed.isoDate.slice(5, 7))];
+      }
+      if (item.parsed.status === "needs_year") {
+        return [item.parsed.month];
+      }
+      return [];
+    }),
   );
 
   const events: EventColumn[] = [];
@@ -1534,7 +1558,22 @@ async function insertIssues(
     return;
   }
 
-  const payload = issues.slice(0, 2000).map((issue) => ({
+  // Keep every error, but only one representative warning per code and run.
+  // The full warning counts remain in sync_runs.summary so recurring parser
+  // warnings do not create thousands of nearly identical rows.
+  const errorIssues: SyncIssue[] = [];
+  const warningSamples: SyncIssue[] = [];
+  const warningCodes = new Set<string>();
+  for (const issue of issues) {
+    if (issue.severity === "error") {
+      errorIssues.push(issue);
+    } else if (!warningCodes.has(issue.code)) {
+      warningCodes.add(issue.code);
+      warningSamples.push(issue);
+    }
+  }
+
+  const payload = [...errorIssues, ...warningSamples].slice(0, 2000).map((issue) => ({
     run_id: runId,
     severity: issue.severity,
     code: issue.code,
@@ -2335,6 +2374,11 @@ Deno.serve(async (request) => {
     }
 
     const globalDominantYear = modeNumber(explicitYearsAcrossSources);
+    const globalPreferSwapForAmbiguous = detectPreferSwapForAmbiguousDateTokens(
+      fetchedSourceRows
+        .filter(({ rows }) => looksLikeAttendanceLayout(rows))
+        .flatMap(({ rows }) => (rows[0] ?? []).slice(4)),
+    ).preferSwapForAmbiguous;
 
     for (const { source, csvUrl, rows } of fetchedSourceRows) {
       if (!looksLikeAttendanceLayout(rows)) {
@@ -2357,6 +2401,7 @@ Deno.serve(async (request) => {
       processedAttendanceSources += 1;
       const preflight = buildPreflight(rows, {
         globalDominantYear,
+        globalPreferSwapForAmbiguous,
         sourceMonthHint: parseMonthHintFromLabel(source.label),
         eventDateOverridesByColumn: EVENT_DATE_OVERRIDES_BY_SOURCE.get(source.sourceRef),
       });
@@ -2453,6 +2498,12 @@ Deno.serve(async (request) => {
 
     const errorsCount = mergedPreflight.issues.filter((issue) => issue.severity === "error").length;
     const warningsCount = mergedPreflight.issues.filter((issue) => issue.severity === "warning").length;
+    const warningCountsByCode = mergedPreflight.issues.reduce<Record<string, number>>((counts, issue) => {
+      if (issue.severity === "warning") {
+        counts[issue.code] = (counts[issue.code] ?? 0) + 1;
+      }
+      return counts;
+    }, {});
 
     let finalStatus: "failed" | "dry_run" | "success" = "dry_run";
 
@@ -2467,6 +2518,7 @@ Deno.serve(async (request) => {
       attendance_sources_processed: processedAttendanceSources,
       sources_skipped_non_attendance_layout: skippedNonAttendanceSources,
       global_dominant_year: globalDominantYear,
+      global_prefer_swap_for_ambiguous: globalPreferSwapForAmbiguous,
       source_refs: effectiveSources.map((source) => source.sourceRef),
       source_labels: effectiveSources.map((source) => source.label ?? source.sourceRef),
       dry_run_effective: dryRun,
@@ -2476,6 +2528,7 @@ Deno.serve(async (request) => {
       attendance_cells_empty: mergedPreflight.stats.attendanceCellsEmpty,
       errors_count: errorsCount,
       warnings_count: warningsCount,
+      warning_counts_by_code: warningCountsByCode,
       members_upsert_candidates: mergedPreflight.members.length,
       events_upsert_candidates: mergedPreflight.events.length,
       attendance_upsert_candidates: mergedPreflight.attendanceEntries.length,
@@ -2573,26 +2626,9 @@ Deno.serve(async (request) => {
         memberIdentityAlignment.remappedMemberPairs,
       );
 
-      await supabaseAdmin.from("change_journal").insert({
-        entity_type: "sync_run",
-        entity_id: runId,
-        action: "sheet_to_supabase_upsert",
-        actor: "sheet_to_supabase_sync",
-        payload: {
-          members_upserted: mergedPreflight.members.length,
-          events_upserted: finalValidEvents.length,
-          sheet_member_rows_upserted: mergedSheetMemberRowsMap.size,
-          attendance_entries_upserted: finalValidAttendanceEntries.length,
-          attendance_entries_pruned: prunedAttendanceEntries,
-          events_remapped_to_existing_source_cell: alignedBySourceCells.remappedEventIdsCount,
-          members_remapped_to_existing_row_identity: memberIdentityAlignment.remappedMemberIdsCount,
-          stale_sheet_member_rows_pruned_after_member_remap: prunedStaleSheetMemberRows,
-          remapped_members_deactivated: deactivatedRemappedMembers,
-          source_ref: sourceRef,
-          source_refs: effectiveSources.map((source) => source.sourceRef),
-        },
-      });
-
+      // `sync_runs` already stores this run's counts and outcome. Do not append
+      // one duplicate operational record to the long-lived change journal on
+      // every poll; that journal is reserved for user/data change auditing.
       finalStatus = "success";
       summary.members_upserted = mergedPreflight.members.length;
       summary.events_upserted = finalValidEvents.length;

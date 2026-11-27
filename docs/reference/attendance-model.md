@@ -68,8 +68,9 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
   kopią). Do decyzji zarządu.
 - Oryginał jest czytelny dla każdego z linkiem (eksport CSV działa bez logowania).
   Jeśli to niezamierzone, sync potrzebuje innego dostępu.
-- Dokumentacja wymienia inne identyfikatory arkuszy (`1pEq8Yd9…`,
-  `1CGIEDf…`). Trzeba sprawdzić, co jest ustawione w sekretach funkcji na orbit.
+- Każdy sezon ma nowy plik arkusza (dane w bazie są z `1CGIEDf…`, sezon
+  2025/26; oryginał bieżącego sezonu to `19iIZB…`). Zmiana sezonu wymaga zmiany
+  `ATTENDANCE_SHEET_ID`. Do ustalenia, czy tak ma zostać.
 
 ## Zmiany do zrobienia (kolejność)
 
@@ -78,8 +79,38 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    Workflowy health-check i smoke oraz skrypty `smoke-attendance-db-first.mjs`
    i `export-attendance-csv.mjs` nadal liczą adres z `SUPABASE_PROJECT_REF`
    (chmura) — do poprawy razem z krokiem 2.
-2. Orbit: sprawdzić zadania `pg_cron`, świeżość `sync_runs` i sekrety funkcji
-   (adresy, ID arkuszy). Przygotować SQL do uruchomienia przez właściciela.
+2. Orbit (sprawdzone 2026-11-27):
+   - `pg_cron` i `pg_net` działają; jest tylko zadanie `sheet_to_supabase_sync_15m`
+     (adres na orbit, poprawny) i retencja `sync_runs` (30 dni).
+   - **Sync nigdy nie zadziałał na orbit**: każde wywołanie zwraca `400
+     missing_sheet_source`, bo kontener `supabase-edge-functions` nie dostaje
+     `ATTENDANCE_SHEET_ID`. `sync_runs` jest puste; ostatni udany sync był
+     2026-09-29, jeszcze w chmurze, z arkusza poprzedniego sezonu (`1CGIEDf…`).
+     Najnowsze wydarzenie z obecnością w bazie: 2026-06-28.
+   - Kontener funkcji ma tylko zmienne `SHEET_SYNC_*` i standardowe klucze. Brakuje
+     m.in. `ATTENDANCE_SHEET_ID`, `ATTENDANCE_WRITE_SOURCE_MODE` (bez niej zapis
+     działa w trybie `sheet_first`), `ATTENDANCE_EXPORT_TARGET_SHEET_ID`,
+     webhooka Apps Script, `DB_TO_SHEET_EXPORT_*`, `ATTENDANCE_WRITE_FUNCTION_AUTH_TOKEN`.
+   - Kod funkcji na orbit (`volumes/functions`, 2026-10-08) różni się od repo
+     w `sheet_to_supabase_sync` (mniej wpisów `sync_issues`, brak wpisu do
+     `change_journal`) i `smoke_attendance_db_first` (adres `/functions/v1/`).
+     Przeniesione do repo 2026-11-27.
+   - 2026-11-27: do usługi `functions` w `docker-compose.orbit-quick.yml` na orbit
+     dodano `ATTENDANCE_SHEET_ID` (oryginał), `ATTENDANCE_SHEET_AUTO_DISCOVER_SOURCES=true`
+     i `SHEET_SYNC_DRY_RUN_ONLY=true` (kopia: `.bak-attendance`). Pierwszy przebieg
+     na sucho (18:45 UTC): 3 zakładki, 90 osób, 25 wydarzeń, 734 wpisy, 0 błędów,
+     26 ostrzeżeń (tylko wnioskowanie dat z nagłówków).
+   - 2026-11-27 19:00 UTC: `SHEET_SYNC_DRY_RUN_ONLY=false`, pierwszy prawdziwy
+     przebieg: 734 wpisy, 25 wydarzeń, 90 osób, 0 usuniętych, 0 błędów. Kopia
+     danych sprzed zmiany: `/home/waysker/attendance-backup-2026-11-27.sql` na orbit.
+   - Błąd parsera: w zakładce grudniowej „Próba 2026-01-12” (RRRR-DD-MM, 1 grudnia)
+     trafiła na 2026-01-12, bo zakładka nie ma żadnej jednoznacznej daty RRRR-…
+     (są tylko „03.12”, „04.12”). Parser powinien brać miesiąc z dat DD.MM w tej
+     samej zakładce. Poprawione w repo: miesiąc liczony z dat jednoznacznych i DD.MM,
+     a zakładka bez żadnej wskazówki bierze styl RRRR-DD-MM z całego arkusza.
+     Po wdrożeniu trzeba usunąć wydarzenie `evt-2026-01-12-proba` (0 wpisów).
+   - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`
+     (pokazują się w panelu wpisywania).
 3. Rozdzielić zbiory „referencja” i „aplikacja” (migracja + sync + zapis + eksport).
 4. Założyć nową kopię: arkusz, Apps Script webhook (`docs/ops/sheet-sync-setup.md`,
    sekcja 3a), sekrety `ATTENDANCE_EXPORT_TARGET_SHEET_ID` i webhooka.
