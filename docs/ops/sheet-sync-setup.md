@@ -98,7 +98,7 @@ Immutable reference sheet workaround:
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
+  "<SUPABASE_URL>/functions/v1/sheet_to_supabase_sync" \
   -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"trigger":"manual","dryRun":false}'
@@ -109,7 +109,7 @@ Optional manual override for many tabs:
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
+  "<SUPABASE_URL>/functions/v1/sheet_to_supabase_sync" \
   -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -126,7 +126,7 @@ Canary mode (subset of sources, useful for large workbook rollout):
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
+  "<SUPABASE_URL>/functions/v1/sheet_to_supabase_sync" \
   -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -193,7 +193,7 @@ Manual trigger:
 
 ```bash
 curl -sS -X POST \
-  "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
+  "<SUPABASE_URL>/functions/v1/smoke_attendance_db_first" \
   -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"requireExportTriggerOk":false,"checkSyncContract":true}'
@@ -222,7 +222,7 @@ Run in SQL editor:
 
 ```sql
 select public.schedule_sheet_to_supabase_sync(
-  function_url := 'https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync',
+  function_url := '<SUPABASE_URL>/functions/v1/sheet_to_supabase_sync',
   bearer_token := '<SHEET_SYNC_FUNCTION_AUTH_TOKEN>',
   cron_expression := '*/5 * * * *',
   job_name := 'sheet_to_supabase_sync_5m'
@@ -813,7 +813,7 @@ Run one manual sync write-mode call:
 
 ```bash
 curl -sS -X POST \
-  "https://<project-ref>.functions.supabase.co/sheet_to_supabase_sync" \
+  "<SUPABASE_URL>/functions/v1/sheet_to_supabase_sync" \
   -H "Authorization: Bearer <SHEET_SYNC_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"trigger":"manual","dryRun":false}'
@@ -830,7 +830,7 @@ Run in SQL editor:
 
 ```sql
 select public.schedule_attendance_write_sheet_first_worker(
-  function_url := 'https://<project-ref>.functions.supabase.co/attendance_write_sheet_first',
+  function_url := '<SUPABASE_URL>/functions/v1/attendance_write_sheet_first',
   bearer_token := '<ATTENDANCE_WRITE_FUNCTION_AUTH_TOKEN>',
   cron_expression := '*/1 * * * *',
   job_name := 'attendance_write_sheet_first_worker_1m'
@@ -849,7 +849,7 @@ Process mode:
 
 ```bash
 curl -sS -X POST \
-  "https://<project-ref>.functions.supabase.co/attendance_write_sheet_first" \
+  "<SUPABASE_URL>/functions/v1/attendance_write_sheet_first" \
   -H "Authorization: Bearer <ATTENDANCE_WRITE_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"mode":"process","trigger":"manual","maxItems":10}'
@@ -862,7 +862,7 @@ Enqueue mode (`section`/`board`/`admin` user access token, not worker token):
 
 ```bash
 curl -sS -X POST \
-  "https://<project-ref>.functions.supabase.co/attendance_write_sheet_first" \
+  "<SUPABASE_URL>/functions/v1/attendance_write_sheet_first" \
   -H "Authorization: Bearer <USER_SUPABASE_ACCESS_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"eventId":"<event_id>","memberId":"<member_id>","attendanceRatio":1,"source":"manager_panel"}'
@@ -904,7 +904,7 @@ Set on `attendance_write_sheet_first`:
 
 - `ATTENDANCE_WRITE_SOURCE_MODE=db_first`
 - optional `ATTENDANCE_WRITE_TRIGGER_DB_EXPORT=true`
-- optional `DB_TO_SHEET_EXPORT_URL=https://<project-ref>.functions.supabase.co/supabase_to_sheet_export`
+- optional `DB_TO_SHEET_EXPORT_URL=<SUPABASE_URL>/functions/v1/supabase_to_sheet_export`
 - optional `DB_TO_SHEET_EXPORT_TOKEN=<shared-token>`
 
 In `db_first` mode:
@@ -933,7 +933,7 @@ Manual export for one event date:
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/supabase_to_sheet_export" \
+  "<SUPABASE_URL>/functions/v1/supabase_to_sheet_export" \
   -H "Authorization: Bearer <DB_TO_SHEET_EXPORT_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"eventDate":"2026-04-28","dryRun":false,"overwriteMissingWithZero":false,"writeConcurrency":6}'
@@ -948,7 +948,7 @@ For full column overwrite on large ensembles, run in windows:
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/supabase_to_sheet_export" \
+  "<SUPABASE_URL>/functions/v1/supabase_to_sheet_export" \
   -H "Authorization: Bearer <DB_TO_SHEET_EXPORT_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"eventDate":"2026-04-28","dryRun":false,"overwriteMissingWithZero":true,"memberOffset":0,"memberLimit":25,"writeConcurrency":4}'
@@ -974,7 +974,7 @@ Manual export (all discovered tabs from `ATTENDANCE_SHEET_ID` in function env):
 ```bash
 curl -sS \
   -X POST \
-  "https://<project-ref>.functions.supabase.co/attendance_csv_export" \
+  "<SUPABASE_URL>/functions/v1/attendance_csv_export" \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{}'

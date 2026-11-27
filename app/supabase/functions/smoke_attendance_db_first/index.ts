@@ -259,20 +259,20 @@ function normalizeRole(rawRole: string | null): "member" | "section" | "board" |
 
 function deriveAttendanceWriteFunctionUrl(supabaseUrl: string): string {
   const base = new URL(supabaseUrl);
-  const projectRef = base.hostname.split(".")[0] ?? "";
-  if (!projectRef) {
-    throw new HttpError(500, "invalid_supabase_url", "Could not derive project ref from SUPABASE_URL.");
+  const projectRef = base.hostname.match(/^([a-z0-9]+)\.supabase\.co$/i)?.[1];
+  if (projectRef) {
+    return `https://${projectRef}.functions.supabase.co/attendance_write_sheet_first`;
   }
-  return `https://${projectRef}.functions.supabase.co/attendance_write_sheet_first`;
+  return `${base.origin}/functions/v1/attendance_write_sheet_first`;
 }
 
 function deriveSheetSyncFunctionUrl(supabaseUrl: string): string {
   const base = new URL(supabaseUrl);
-  const projectRef = base.hostname.split(".")[0] ?? "";
-  if (!projectRef) {
-    throw new HttpError(500, "invalid_supabase_url", "Could not derive project ref from SUPABASE_URL.");
+  const projectRef = base.hostname.match(/^([a-z0-9]+)\.supabase\.co$/i)?.[1];
+  if (projectRef) {
+    return `https://${projectRef}.functions.supabase.co/sheet_to_supabase_sync`;
   }
-  return `https://${projectRef}.functions.supabase.co/sheet_to_supabase_sync`;
+  return `${base.origin}/functions/v1/sheet_to_supabase_sync`;
 }
 
 function parseNumericRatio(rawValue: unknown): number | null {

@@ -197,8 +197,10 @@ export function useAttendanceEntries({
       setIsEntriesLoading(true);
       setErrorMessage(null);
       try {
+        // The entry panel shows what the board entered in the app, not the
+        // original sheet (docs/reference/attendance-model.md).
         const { data, error } = await client
-          .from("attendance_entries")
+          .from("app_attendance_entries")
           .select("member_id,attendance_ratio")
           .eq("event_id", selectedCanonicalEventId);
 

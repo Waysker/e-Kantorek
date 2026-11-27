@@ -60,7 +60,7 @@ Triggers:
 
 ```bash
 curl -sS -X POST \
-  "https://<project-ref>.functions.supabase.co/smoke_attendance_db_first" \
+  "<SUPABASE_URL>/functions/v1/smoke_attendance_db_first" \
   -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
   -H "Content-Type: application/json" \
   -d '{"requireExportTriggerOk":false,"checkSyncContract":true}'
