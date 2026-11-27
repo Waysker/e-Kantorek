@@ -11,6 +11,7 @@ export type SessionRow = {
   event_date: string;
   source_header: string | null;
   source_column: string | null;
+  source_sheet_id?: string | null;
 };
 
 export type AttendanceEntryRow = {

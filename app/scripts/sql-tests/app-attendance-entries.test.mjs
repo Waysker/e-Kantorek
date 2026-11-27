@@ -1,4 +1,4 @@
-// Runs migrations 010 and 029 on an in-process Postgres (PGlite) and checks that
+// Runs migrations 010, 013, 029 and 030 on an in-process Postgres (PGlite) and checks that
 // app-entered attendance (app_attendance_entries) is readable by every signed-in
 // member, writable only server-side, and kept apart from attendance_entries
 // (the original sheet). See docs/reference/attendance-model.md.
@@ -44,11 +44,15 @@ before(async () => {
     create role anon;
     create role authenticated;
     create role service_role bypassrls; -- as in Supabase
+    create schema auth;
+    create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
     create table public.profiles (id uuid primary key, full_name text, role text);
   `);
   // PGlite ships without pgcrypto; gen_random_uuid() is built in since Postgres 13.
   await db.exec(migration("010_attendance_sync_foundation.sql").replace(/create extension[^;]*;/i, ""));
+  await db.exec(migration("013_attendance_sheet_first_write_path.sql"));
   await db.exec(migration("029_app_attendance_entries.sql"));
+  await db.exec(migration("030_sheet_member_rows_read.sql"));
   await db.exec(`
     insert into profiles values ('${BOARD}', 'Zarząd', 'board');
     insert into members (member_id, first_name, last_name, full_name, instrument)
@@ -123,5 +127,22 @@ describe("app_attendance_entries", () => {
     await db.exec("delete from events where event_id = 'evt-2026-12-03-gwarek'");
     const { rows } = await db.query("select count(*)::int as n from app_attendance_entries where event_id = 'evt-2026-12-03-gwarek'");
     assert.deepEqual(rows, [{ n: 0 }]);
+  });
+});
+
+describe("sheet_member_rows (030)", () => {
+  it("lets signed-in members read rows but not change them", async () => {
+    await db.exec(`insert into sheet_member_rows (member_id, source_sheet_id, source_gid, source_row_number)
+      values ('m1', 'sheet-2026', '70324873', 2), ('m2', 'sheet-2025', '70324873', 2)`);
+    const { rows } = await as(
+      "authenticated",
+      "select member_id from sheet_member_rows where source_sheet_id = 'sheet-2026'",
+    );
+    assert.deepEqual(rows, [{ member_id: "m1" }]);
+    // In Supabase the default grant lets the update run and RLS filters every row;
+    // here it is refused outright. Either way nothing changes.
+    await errorOf("authenticated", "update sheet_member_rows set source_row_number = 9");
+    const { rows: unchanged } = await db.query("select count(*)::int as n from sheet_member_rows where source_row_number = 9");
+    assert.deepEqual(unchanged, [{ n: 0 }]);
   });
 });
