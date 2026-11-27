@@ -122,8 +122,11 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`
      (pokazują się w panelu wpisywania).
 3. ~~Rozdzielić zbiory~~ (w repo: migracja 029, zapis, eksport do kopii, panel).
-   Na orbit trzeba: uruchomić migrację 029, wdrożyć `attendance_write_sheet_first`
-   i `supabase_to_sheet_export`, ustawić `ATTENDANCE_WRITE_SOURCE_MODE=db_first`.
+   Wdrożone na orbit 2026-11-27: migracja 029, obie funkcje (kopie
+   `index.ts.bak-step3`), `ATTENDANCE_WRITE_SOURCE_MODE=db_first` w
+   `docker-compose.orbit-quick.yml` (kopia `.bak-step3`). Eksport do kopii jest
+   wyłączony do kroku 4 (`supabase_to_sheet_export` zwraca
+   `missing_target_sheet_id`).
    Smoke (`smoke_attendance_db_first`, `scripts/smoke-attendance-db-first.mjs`)
    czyta jeszcze `attendance_entries` i pisze na prawdziwych danych, więc
    zaśmieciłby zbiór „aplikacja”: do przerobienia na osobne wydarzenie testowe
