@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../../auth/supabaseAuthClient";
+import { resolveEdgeFunctionUrl } from "../../auth/edgeFunctionUrl";
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
 import { Button } from "../../ui/Button";
@@ -30,26 +31,11 @@ const ATTENDANCE_CSV_EXPORT_FUNCTION_NAME = "attendance_csv_export";
 const ATTENDANCE_CSV_EXPORT_FUNCTION_URL = resolveAttendanceCsvExportFunctionUrl();
 
 function resolveAttendanceCsvExportFunctionUrl(): string | null {
-  const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_CSV_EXPORT_FUNCTION_URL?.trim();
-  if (explicitUrl) {
-    return explicitUrl;
-  }
-
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-  if (!supabaseUrl) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(supabaseUrl);
-    const projectRef = parsed.hostname.split(".")[0]?.trim();
-    if (!projectRef) {
-      return null;
-    }
-    return `https://${projectRef}.functions.supabase.co/${ATTENDANCE_CSV_EXPORT_FUNCTION_NAME}`;
-  } catch {
-    return null;
-  }
+  return resolveEdgeFunctionUrl(
+    ATTENDANCE_CSV_EXPORT_FUNCTION_NAME,
+    process.env.EXPO_PUBLIC_ATTENDANCE_CSV_EXPORT_FUNCTION_URL,
+    process.env.EXPO_PUBLIC_SUPABASE_URL,
+  );
 }
 
 function toMonthKey(date: Date): string {

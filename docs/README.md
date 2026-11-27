@@ -25,6 +25,10 @@
 14. `docs/contracts/attendance-sheet-contract.md`
 15. `docs/ops/forum-instrument-mapping.md`
 
+## Attendance (product model)
+
+- `docs/reference/attendance-model.md` — how actual attendance should work in the current "trust-building" stage: original sheet as source of truth, app entries kept separately and exported to a fresh copy, who writes, how the board verifies. Read before changing attendance screens or pipelines.
+
 ## App design
 
 - `docs/design-system.md` — the "Partytura" design system: where its source of truth lives (Claude Design), how a change travels (system first, then code) and where each token and component lives in the code. Read before adding or changing a screen.

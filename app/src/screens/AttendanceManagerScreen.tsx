@@ -20,6 +20,7 @@ import type {
   SnapshotEventDetail,
 } from "./attendance-manager/types";
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
+import { resolveEdgeFunctionUrl } from "../auth/edgeFunctionUrl";
 import {
   canonicalizeInstrumentLabel,
   normalizeInstrumentKey,
@@ -101,26 +102,11 @@ const REHEARSAL_KEYWORDS = ["proba", "próba", "rehearsal", "wtorek", "czwartek"
 const ATTENDANCE_RATIO_EPSILON = 0.001;
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
-  const explicitUrl = process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL?.trim();
-  if (explicitUrl) {
-    return explicitUrl;
-  }
-
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-  if (!supabaseUrl) {
-    return null;
-  }
-
-  try {
-    const parsed = new URL(supabaseUrl);
-    const projectRef = parsed.hostname.split(".")[0]?.trim();
-    if (!projectRef) {
-      return null;
-    }
-    return `https://${projectRef}.functions.supabase.co/${ATTENDANCE_WRITE_FUNCTION_NAME}`;
-  } catch {
-    return null;
-  }
+  return resolveEdgeFunctionUrl(
+    ATTENDANCE_WRITE_FUNCTION_NAME,
+    process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_FUNCTION_URL,
+    process.env.EXPO_PUBLIC_SUPABASE_URL,
+  );
 }
 
 function parseBooleanEnv(rawValue: string | undefined): boolean {
