@@ -126,6 +126,7 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
      wydarzenia (`ATTENDANCE_SHEET_ID`, ewentualnie `ATTENDANCE_EXPORT_LAYOUT_SHEET_ID`).
      Wcześniej brał ostatni znany wiersz, także z zeszłego sezonu: 2026-11-27
      Agnieszka Barnaś (zeszły sezon, wiersz 2) trafiła w wiersz Julii Depczyńskiej.
+     Poprawka i migracja 030 wdrożone na orbit 2026-11-27 (kopia `index.ts.bak-rows`).
 3. ~~Rozdzielić zbiory~~ (w repo: migracja 029, zapis, eksport do kopii, panel).
    Wdrożone na orbit 2026-11-27: migracja 029, obie funkcje (kopie
    `index.ts.bak-step3`), `ATTENDANCE_WRITE_SOURCE_MODE=db_first` w
