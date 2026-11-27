@@ -108,7 +108,9 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
      (są tylko „03.12”, „04.12”). Parser powinien brać miesiąc z dat DD.MM w tej
      samej zakładce. Poprawione w repo: miesiąc liczony z dat jednoznacznych i DD.MM,
      a zakładka bez żadnej wskazówki bierze styl RRRR-DD-MM z całego arkusza.
-     Po wdrożeniu trzeba usunąć wydarzenie `evt-2026-01-12-proba` (0 wpisów).
+     Wdrożone na orbit 2026-11-27 19:14 UTC (kopia starego kodu:
+     `index.ts.bak-2026-11-27`), `evt-2026-01-12-proba` usunięte. Przebieg 19:15:
+     „Próba 2026-01-12” → 2026-12-01, 734 wpisy, 0 błędów.
    - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`
      (pokazują się w panelu wpisywania).
 3. Rozdzielić zbiory „referencja” i „aplikacja” (migracja + sync + zapis + eksport).
