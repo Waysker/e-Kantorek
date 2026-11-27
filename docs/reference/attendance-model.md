@@ -25,8 +25,16 @@ zawsze wyglądałaby „zgodnie” i porównanie nic by nie dawało.
 
 ## Dwa zbiory danych w bazie
 
-- **Referencja**: obecność wczytana z oryginału (`sheet_to_supabase_sync`).
-- **Aplikacja**: obecność wpisana przez zarząd w aplikacji.
+- **Referencja**: obecność wczytana z oryginału, tabela `attendance_entries`.
+  Pisze do niej wyłącznie `sheet_to_supabase_sync`.
+- **Aplikacja**: obecność wpisana przez zarząd w aplikacji, tabela
+  `app_attendance_entries` (migracja 029, z `recorded_by_profile_id` i `source`).
+  Pisze do niej wyłącznie `attendance_write_sheet_first` w trybie `db_first`;
+  czytają ją panel wpisywania i `supabase_to_sheet_export`.
+
+Obie tabele mają ten sam klucz (`member_id`, `event_id`) i te same `members`
+oraz `events`. Eksport CSV (`attendance_csv_export`) i podsumowania czytają
+referencję.
 
 Zbiory się nie nadpisują. Sync z oryginału nie zmienia wpisów z aplikacji, a zapis
 z aplikacji nie zmienia referencji. Eksport do kopii bierze wyłącznie zbiór
@@ -113,10 +121,17 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
      „Próba 2026-01-12” → 2026-12-01, 734 wpisy, 0 błędów.
    - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`
      (pokazują się w panelu wpisywania).
-3. Rozdzielić zbiory „referencja” i „aplikacja” (migracja + sync + zapis + eksport).
+3. ~~Rozdzielić zbiory~~ (w repo: migracja 029, zapis, eksport do kopii, panel).
+   Na orbit trzeba: uruchomić migrację 029, wdrożyć `attendance_write_sheet_first`
+   i `supabase_to_sheet_export`, ustawić `ATTENDANCE_WRITE_SOURCE_MODE=db_first`.
+   Smoke (`smoke_attendance_db_first`, `scripts/smoke-attendance-db-first.mjs`)
+   czyta jeszcze `attendance_entries` i pisze na prawdziwych danych, więc
+   zaśmieciłby zbiór „aplikacja”: do przerobienia na osobne wydarzenie testowe
+   przed ponownym włączeniem.
 4. Założyć nową kopię: arkusz, Apps Script webhook (`docs/ops/sheet-sync-setup.md`,
    sekcja 3a), sekrety `ATTENDANCE_EXPORT_TARGET_SHEET_ID` i webhooka.
-5. Backend: zapis tylko dla `board`/`admin`.
+5. ~~Backend: zapis tylko dla `board`/`admin`~~ (w repo). Zapis zbiorczy nie
+   wymaga już, żeby osoba z zarządu była w arkuszu (`actor_member_id` może być puste).
 6. Kalendarz wpisywania: wydarzenia z forum zamiast z kolumn oryginału (dziś
    `AttendanceManagerScreen` czyta tabelę `events` z syncu arkusza).
 7. Panel zarządu: odnośniki do arkuszy i lista ostatnich zapisów.

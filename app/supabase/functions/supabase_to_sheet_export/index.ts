@@ -523,14 +523,16 @@ async function loadAttendanceEntries(
     return [];
   }
 
+  // The copy sheet shows only what the board entered in the app
+  // (docs/reference/attendance-model.md), never the original sheet's values.
   const { data, error } = await supabaseAdmin
-    .from("attendance_entries")
+    .from("app_attendance_entries")
     .select("member_id,event_id,attendance_ratio")
     .in("event_id", eventIds)
     .returns<AttendanceEntryRow[]>();
 
   if (error) {
-    throw new HttpError(500, "attendance_entries_load_failed", error.message);
+    throw new HttpError(500, "app_attendance_entries_load_failed", error.message);
   }
 
   return data ?? [];

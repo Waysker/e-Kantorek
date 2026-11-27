@@ -1760,10 +1760,15 @@ async function maybeTriggerDbToSheetExport(params: {
   }
 }
 
+// App writes go to app_attendance_entries only. attendance_entries holds the
+// original sheet and is written solely by sheet_to_supabase_sync
+// (docs/reference/attendance-model.md).
 async function upsertAttendanceEntriesDbFirst(
   supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventId: string;
+    recordedByProfileId: string;
+    source: string;
     changes: Array<{
       memberId: string;
       attendanceRatio: number;
@@ -1771,21 +1776,21 @@ async function upsertAttendanceEntriesDbFirst(
     }>;
   },
 ): Promise<void> {
-  const sourceUpdatedAt = new Date().toISOString();
   const rows = payload.changes.map((change) => ({
     member_id: change.memberId,
     event_id: payload.eventId,
     attendance_ratio: change.attendanceRatio,
     source_raw_value: change.rawValue,
-    source_updated_at: sourceUpdatedAt,
+    source: payload.source,
+    recorded_by_profile_id: payload.recordedByProfileId,
   }));
 
   const { error } = await supabaseAdmin
-    .from("attendance_entries")
+    .from("app_attendance_entries")
     .upsert(rows, { onConflict: "member_id,event_id" });
 
   if (error) {
-    throw new HttpError(500, "attendance_entries_upsert_failed", error.message);
+    throw new HttpError(500, "app_attendance_entries_upsert_failed", error.message);
   }
 }
 
@@ -1840,15 +1845,14 @@ async function handleDbFirstEnqueueMode(
   const explicitMemberId = normalizeWhitespace(body.memberId ?? body.member_id ?? "");
   const targetMemberId = explicitMemberId || actorMemberId;
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges =
-    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  const hasManagerPrivileges = profileRole === "board" || profileRole === "admin";
   const isSelfWrite = targetMemberId === actorMemberId;
 
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only section/board/admin can use this write path.",
+      "Only board/admin can use this write path.",
     );
   }
 
@@ -1871,6 +1875,8 @@ async function handleDbFirstEnqueueMode(
 
   await upsertAttendanceEntriesDbFirst(supabaseAdmin, {
     eventId,
+    recordedByProfileId: profile.id,
+    source,
     changes: [{
       memberId: targetMemberId,
       attendanceRatio: ratio,
@@ -1879,7 +1885,7 @@ async function handleDbFirstEnqueueMode(
   });
 
   await supabaseAdmin.from("change_journal").insert({
-    entity_type: "attendance_entries",
+    entity_type: "app_attendance_entries",
     entity_id: `${eventId}:${targetMemberId}`,
     action: "attendance_write_db_applied",
     actor: `profile:${profile.id}`,
@@ -1937,17 +1943,26 @@ async function handleDbFirstEnqueueBatchMode(
   const user = await resolveUserFromToken(accessToken);
   const profile = await loadProfile(supabaseAdmin, user.id);
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges =
-    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  const hasManagerPrivileges = profileRole === "board" || profileRole === "admin";
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only section/board/admin can use this write path.",
+      "Only board/admin can use this write path.",
     );
   }
 
-  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile);
+  // The board member saving the batch does not have to play in the orchestra,
+  // so a missing or ambiguous member mapping only leaves actor_member_id empty.
+  const actorMemberId = await resolveMemberIdForProfile(supabaseAdmin, profile).catch((error) => {
+    if (
+      error instanceof HttpError &&
+      (error.code === "member_not_mapped" || error.code === "ambiguous_member_mapping")
+    ) {
+      return null;
+    }
+    throw error;
+  });
   const eventIdInput = normalizeWhitespace(body.eventId ?? body.event_id ?? "");
   const eventDateInput = parseEventDateInput(body.eventDate ?? body.event_date ?? body.startsAt ?? body.starts_at);
   const eventTitleInput = normalizeWhitespace(body.eventTitle ?? body.event_title ?? body.title ?? "");
@@ -2010,24 +2025,26 @@ async function handleDbFirstEnqueueBatchMode(
     });
   }
 
+  const sourceRaw = normalizeWhitespace(body.source ?? "");
+  const source = sourceRaw
+    ? sourceRaw.toLowerCase().slice(0, 64)
+    : "manager_panel_db_first";
+
   await upsertAttendanceEntriesDbFirst(supabaseAdmin, {
     eventId,
+    recordedByProfileId: profile.id,
+    source,
     changes: Array.from(dedupedChanges.entries()).map(([memberId, value]) => ({
       memberId,
       attendanceRatio: value.attendanceRatio,
       rawValue: value.rawValue,
     })),
   });
-
-  const sourceRaw = normalizeWhitespace(body.source ?? "");
-  const source = sourceRaw
-    ? sourceRaw.toLowerCase().slice(0, 64)
-    : "manager_panel_db_first";
   const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
   const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
 
   await supabaseAdmin.from("change_journal").insert({
-    entity_type: "attendance_entries",
+    entity_type: "app_attendance_entries",
     entity_id: eventId,
     action: "attendance_write_db_applied_batch",
     actor: `profile:${profile.id}`,
@@ -2098,15 +2115,14 @@ async function handleEnqueueMode(
   const explicitMemberId = normalizeWhitespace(body.memberId ?? body.member_id ?? "");
   const targetMemberId = explicitMemberId || actorMemberId;
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges =
-    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  const hasManagerPrivileges = profileRole === "board" || profileRole === "admin";
   const isSelfWrite = targetMemberId === actorMemberId;
 
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only section/board/admin can use this write path.",
+      "Only board/admin can use this write path.",
     );
   }
 
@@ -2201,13 +2217,12 @@ async function handleEnqueueBatchMode(
   const profile = await loadProfile(supabaseAdmin, user.id);
 
   const profileRole = normalizeProfileRole(profile.role);
-  const hasManagerPrivileges =
-    profileRole === "section" || profileRole === "board" || profileRole === "admin";
+  const hasManagerPrivileges = profileRole === "board" || profileRole === "admin";
   if (!hasManagerPrivileges) {
     throw new HttpError(
       403,
       "management_only_write_path",
-      "Only section/board/admin can use this write path.",
+      "Only board/admin can use this write path.",
     );
   }
 
