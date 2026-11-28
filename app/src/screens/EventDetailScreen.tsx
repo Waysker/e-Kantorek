@@ -285,9 +285,10 @@ export function EventDetailScreen({
               {needsDeclaration ? declarationCard : null}
 
               <View style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.kicker}>{tr("Skład", "Line-up")}</Text>
-                  {canRemind ? (
+                {/* Just the tiles: tapping one opens Skład (Partytura: no heading, no "Kto gra"). */}
+                {canRemind ? (
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.kicker}>{tr("Skład", "Line-up")}</Text>
                     <Pressable
                       onPress={() => void handleRemindPress()}
                       style={[styles.smallButton, isReminding && styles.smallButtonDisabled]}
@@ -298,8 +299,8 @@ export function EventDetailScreen({
                         {isReminding ? tr("Wysyłanie…", "Sending…") : tr("Ponaglij", "Remind")}
                       </Text>
                     </Pressable>
-                  ) : null}
-                </View>
+                  </View>
+                ) : null}
                 <View style={styles.statsRow}>
                   {stats.map((item) => {
                     const meta = statusMeta(item.key);
@@ -322,9 +323,6 @@ export function EventDetailScreen({
                     );
                   })}
                 </View>
-                <Pressable onPress={() => onOpenAttendance("going")} accessibilityRole="link">
-                  <Text style={styles.linkLabel}>{tr("Kto gra ›", "Who's playing ›")}</Text>
-                </Pressable>
                 {reminderFeedback ? (
                   <Text
                     style={[
