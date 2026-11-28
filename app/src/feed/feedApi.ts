@@ -17,7 +17,14 @@ export type FeedAttachment = {
 };
 
 export type FeedPollOption = { id: string; label: string; votes: number; mine: boolean };
-export type FeedPoll = { question: string; multiple: boolean; voterCount: number; options: FeedPollOption[] };
+export type FeedPoll = {
+  question: string;
+  multiple: boolean;
+  /** Imported from Facebook: results only. */
+  closed?: boolean;
+  voterCount: number;
+  options: FeedPollOption[];
+};
 
 export type FeedPost = {
   id: string;
@@ -28,6 +35,9 @@ export type FeedPost = {
   editedAt: string | null;
   pinned: boolean;
   mine: boolean;
+  /** "facebook": copied from the FB group (migration 037). */
+  source?: "app" | "facebook";
+  externalUrl?: string | null;
   likeCount: number;
   likedByMe: boolean;
   commentCount: number;
@@ -175,6 +185,68 @@ export async function createPost(body: string, attachments: NewAttachment[], pol
     }
     throw error;
   }
+}
+
+export type FacebookImport = {
+  authorName: string;
+  createdAt: string;
+  body: string;
+  externalUrl: string | null;
+  likeCount: number;
+  poll: { question: string; multiple: boolean; options: Array<{ label: string; votes: number }> } | null;
+  comments: Array<{ authorName: string; body: string; createdAt: string | null }>;
+};
+
+async function uploadAll(attachments: NewAttachment[]) {
+  const supabase = client();
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) {
+    throw new Error("Zaloguj się ponownie.");
+  }
+  const uploaded: string[] = [];
+  const described = [];
+  try {
+    for (const attachment of attachments) {
+      const path = `${uid}/${randomId()}/${safeFileName(attachment.fileName)}`;
+      const { error } = await supabase.storage.from(BUCKET).upload(path, attachment.blob, {
+        contentType: attachment.mimeType,
+        upsert: false,
+      });
+      if (error) {
+        fail(error, `Nie udało się wysłać pliku „${attachment.fileName}”.`);
+      }
+      uploaded.push(path);
+      described.push({
+        path,
+        kind: attachment.kind,
+        fileName: attachment.fileName,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.blob.size,
+        width: attachment.width ?? null,
+        height: attachment.height ?? null,
+      });
+    }
+  } catch (error) {
+    if (uploaded.length > 0) {
+      await supabase.storage.from(BUCKET).remove(uploaded);
+    }
+    throw error;
+  }
+  return { uploaded, described };
+}
+
+/** Board/admin: copies one Facebook post over (no push). */
+export async function importFacebookPost(post: FacebookImport, attachments: NewAttachment[]): Promise<string> {
+  const { uploaded, described } = await uploadAll(attachments);
+  const { data, error } = await client().rpc("import_feed_post", { p: { ...post, attachments: described } });
+  if (error) {
+    if (uploaded.length > 0) {
+      await client().storage.from(BUCKET).remove(uploaded);
+    }
+    fail(error, "Nie udało się dodać wpisu.");
+  }
+  return data as string;
 }
 
 export async function updatePost(postId: string, body: string) {

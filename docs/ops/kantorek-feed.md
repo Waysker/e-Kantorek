@@ -43,3 +43,20 @@ ustawiane w Ja → Powiadomienia; karta na Start włącza oba.
 
 `select count(*) from feed_posts;`, `select id, created_at, notified_at from feed_posts order by created_at desc limit 5;`,
 `select id from storage.buckets;`.
+
+## Historia z Facebooka
+
+Facebook nie daje eksportu całej grupy, więc wpisy z „Wirtualnego kantorka” zarząd przenosi
+ręcznie: Kantorek → „Import z Facebooka” (tylko board/admin). Formularz: autor, data
+(`21.10.2026 18:40`, czas Warszawy), treść (na FB najpierw „Zobacz więcej”), link do wpisu,
+liczba polubień, zdjęcia i pliki, ankieta z liczbą głosów, komentarze. Po dodaniu formularz
+się czyści (autor i data zostają).
+
+Migracja `037_feed_facebook_import.sql`: `feed_posts.source = 'facebook'`, nazwisko autora z
+FB, link, polubienia z FB; zamknięte ankiety z głosami z FB; RPC `import_feed_post` (tylko
+zarząd, `notified_at` od razu, więc bez push). Zaimportowane wpisy nie należą do żadnego
+konta; poprawia je i usuwa zarząd. Przed przenoszeniem zarząd ogłasza to w grupie; kto nie
+chce, zgłasza się, a jego wpisy pomijamy albo usuwamy.
+
+Wdrożenie 037: `sudo docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < /home/waysker/e-Kantorek-sync/app/supabase/migrations/037_feed_facebook_import.sql`
+(po `git pull`), potem deploy frontu.

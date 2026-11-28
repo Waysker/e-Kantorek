@@ -207,7 +207,7 @@ export function PollView({
   poll: FeedPoll;
   onChanged: () => void;
 }) {
-  const voted = poll.options.some((option) => option.mine);
+  const voted = poll.closed || poll.options.some((option) => option.mine);
   const [editing, setEditing] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -267,7 +267,8 @@ export function PollView({
               {showResults && option.mine ? "✓ " : ""}
               {option.label}
             </Text>
-            {showResults ? (
+            {showResults && poll.closed ? <Text style={styles.pollCount}>{option.votes}</Text> : null}
+            {showResults && !poll.closed ? (
               <Pressable
                 onPress={() =>
                   setPeople({ title: option.label, load: () => listPeople(postId, option.id) })
@@ -284,8 +285,13 @@ export function PollView({
       })}
       {error ? <Notice tone="error">{error}</Notice> : null}
       <View style={styles.pollFooter}>
-        <Text style={styles.meta}>{plural(poll.voterCount, "osoba głosowała", "osoby głosowały", "osób głosowało")}</Text>
-        {showResults ? (
+        <Text style={styles.meta}>
+          {poll.closed ? tr("Ankieta z Facebooka · ", "Poll from Facebook · ") : ""}
+          {poll.closed
+            ? plural(poll.voterCount, "głos", "głosy", "głosów")
+            : plural(poll.voterCount, "osoba głosowała", "osoby głosowały", "osób głosowało")}
+        </Text>
+        {poll.closed ? null : showResults ? (
           <Pressable onPress={() => setEditing(true)} hitSlop={8} accessibilityRole="button">
             <Text style={styles.linkSmall}>{tr("Zmień głos", "Change vote")}</Text>
           </Pressable>
@@ -354,6 +360,7 @@ export function PostCard({
             {post.editedAt ? tr(" · edytowany", " · edited") : ""}
           </Text>
         </View>
+        {post.source === "facebook" ? <Tag label={tr("Z Facebooka", "From Facebook")} /> : null}
         {post.pinned ? <Tag label={tr("Przypięte", "Pinned")} /> : null}
         {menu}
       </View>
@@ -372,6 +379,11 @@ export function PostCard({
         content
       )}
       {post.attachments.length > 0 ? <AttachmentsView attachments={post.attachments} compact={!expanded} /> : null}
+      {expanded && post.externalUrl ? (
+        <Pressable onPress={() => openUrl(post.externalUrl as string)} accessibilityRole="link" style={styles.fbLink}>
+          <Text style={styles.linkSmall}>{tr("Zobacz na Facebooku ↗", "See on Facebook ↗")}</Text>
+        </Pressable>
+      ) : null}
       {post.poll ? (
         <PollView postId={post.id} poll={post.poll} onChanged={onReload} />
       ) : null}
@@ -431,6 +443,11 @@ const styles = themedStyles((colors) => ({
   meta: {
     fontSize: 13,
     color: colors.muted,
+  },
+  fbLink: {
+    minHeight: 44,
+    justifyContent: "center",
+    alignSelf: "flex-start",
   },
   openArea: {
     gap: tokens.spacing.sm,
