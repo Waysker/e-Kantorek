@@ -147,6 +147,11 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    wymaga już, żeby osoba z zarządu była w arkuszu (`actor_member_id` może być puste).
 6. Kalendarz wpisywania: wydarzenia z forum zamiast z kolumn oryginału (dziś
    `AttendanceManagerScreen` czyta tabelę `events` z syncu arkusza).
-7. Panel zarządu: odnośniki do arkuszy i lista ostatnich zapisów.
+7. ~~Panel zarządu: odnośniki do arkuszy i lista ostatnich zapisów~~ (w repo):
+   karta „Porównanie z arkuszami” w panelu wpisywania (`SheetCheckPanel`),
+   RPC `attendance_board_overview` (migracja 031, tylko `board`/`admin`).
+   Oryginał to arkusz najnowszego wydarzenia; ID kopii w `attendance_settings`
+   (klucz `copy_sheet_id`). Wynik eksportu do kopii zapisuje się w dzienniku
+   zmian przy każdym zapisie z panelu.
 8. Podsumowanie: przełącznik referencja / aplikacja; dostęp dla wszystkich.
 9. Później: lista osób z forum.

@@ -1693,7 +1693,14 @@ async function maybeTriggerDbToSheetExport(params: {
   eventDate: string;
   memberIds?: string[];
   overwriteMissingWithZero?: boolean;
-}): Promise<{ triggered: boolean; ok: boolean; status?: number; message?: string }> {
+}): Promise<{
+  triggered: boolean;
+  ok: boolean;
+  status?: number;
+  message?: string;
+  cells_written?: number;
+  missing_rows_count?: number;
+}> {
   if (!TRIGGER_DB_EXPORT_AFTER_WRITE) {
     return {
       triggered: false,
@@ -1746,10 +1753,22 @@ async function maybeTriggerDbToSheetExport(params: {
       };
     }
 
+    // Counts let the board panel show whether the copy sheet got every change.
+    let summary: Record<string, unknown> = {};
+    try {
+      summary = await response.json() as Record<string, unknown>;
+    } catch {
+      summary = {};
+    }
+    const cellsWritten = Number(summary.cells_written);
+    const missingRowsCount = Number(summary.missing_member_row_mappings_count);
+
     return {
       triggered: true,
       ok: true,
       status: response.status,
+      ...(Number.isFinite(cellsWritten) ? { cells_written: cellsWritten } : {}),
+      ...(Number.isFinite(missingRowsCount) ? { missing_rows_count: missingRowsCount } : {}),
     };
   } catch (error) {
     return {
@@ -2043,6 +2062,13 @@ async function handleDbFirstEnqueueBatchMode(
   const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
   const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
 
+  const exportTrigger = await maybeTriggerDbToSheetExport({
+    eventId,
+    eventDate: exportEventDate,
+    memberIds: Array.from(dedupedChanges.keys()),
+    overwriteMissingWithZero: false,
+  });
+
   await supabaseAdmin.from("change_journal").insert({
     entity_type: "app_attendance_entries",
     entity_id: eventId,
@@ -2062,14 +2088,8 @@ async function handleDbFirstEnqueueBatchMode(
       changed_member_ids: Array.from(dedupedChanges.keys()).slice(0, 500),
       mode: "db_first",
       request_note: requestNote,
+      export_trigger: { ...exportTrigger, message: exportTrigger.message?.slice(0, 300) },
     },
-  });
-
-  const exportTrigger = await maybeTriggerDbToSheetExport({
-    eventId,
-    eventDate: exportEventDate,
-    memberIds: Array.from(dedupedChanges.keys()),
-    overwriteMissingWithZero: false,
   });
 
   return jsonResponse({
