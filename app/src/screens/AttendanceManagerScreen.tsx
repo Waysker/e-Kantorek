@@ -104,6 +104,8 @@ const ATTENDANCE_WRITE_FUNCTION_URL = resolveAttendanceWriteFunctionUrl();
 const ATTENDANCE_WRITE_UI_ENABLED = parseBooleanEnv(process.env.EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED);
 const REHEARSAL_KEYWORDS = ["proba", "próba", "rehearsal", "wtorek", "czwartek", "tuesday", "thursday"];
 const ATTENDANCE_RATIO_EPSILON = 0.001;
+// Monday-first indexes of the planned rehearsal days (Tuesday, Thursday).
+const REHEARSAL_WEEKDAY_INDEXES = new Set([1, 3]);
 
 function resolveAttendanceWriteFunctionUrl(): string | null {
   return resolveEdgeFunctionUrl(
@@ -1052,8 +1054,11 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           </View>
 
           <View style={styles.weekdayRow}>
-            {weekdayLabels.map((label) => (
-              <Text key={label} style={styles.weekdayLabel}>
+            {weekdayLabels.map((label, index) => (
+              <Text
+                key={label}
+                style={[styles.weekdayLabel, REHEARSAL_WEEKDAY_INDEXES.has(index) && styles.rehearsalColumnHead]}
+              >
                 {label}
               </Text>
             ))}
@@ -1062,20 +1067,20 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           <View style={styles.calendarGrid}>
             {calendarCells.map((cell) => {
               const allSessionsForDate = sessionsByDate.get(cell.date) ?? [];
-              // Counted: forum events and sheet rehearsals; a planned rehearsal without
-              // a sheet column shows as the amber "P" only.
+              // Counted: forum events and sheet rehearsals. Planned rehearsals are shown
+              // by the shaded Tuesday/Thursday columns instead of a mark per day.
               const sessionsForDate = allSessionsForDate.filter(
                 (session) => Boolean(session.forum_event_id) || !session.isVirtual,
               );
               const hasSessions = sessionsForDate.length > 0;
               const isSelected = cell.date === selectedDate;
               const isToday = cell.date === todayIso;
-              const rehearsalExpected = expectedRehearsalSet.has(cell.date);
-              const rehearsalMissingMapping = rehearsalExpected &&
-                allSessionsForDate.some((session) => session.isVirtual && !session.forum_event_id);
+              const isRehearsalWeekday = REHEARSAL_WEEKDAY_INDEXES.has(
+                weekdayMonToSun(parseIsoDateAsLocalNoon(cell.date)) - 1,
+              );
 
               return (
-                <View key={cell.date} style={styles.dayCellSlot}>
+                <View key={cell.date} style={[styles.dayCellSlot, isRehearsalWeekday && styles.rehearsalColumn]}>
                   <Pressable
                     onPress={() => {
                       setSelectedDate(cell.date);
@@ -1086,7 +1091,6 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                     style={[
                       styles.dayCell,
                       hasSessions && styles.dayCellHasSessions,
-                      rehearsalMissingMapping && styles.dayCellGap,
                       isToday && styles.dayCellToday,
                       isSelected && styles.dayCellSelected,
                     ]}
@@ -1107,17 +1111,6 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                           {sessionsForDate.length}
                         </Text>
                       ) : null}
-                      {rehearsalExpected ? (
-                        <Text
-                          style={[
-                            styles.dayMark,
-                            rehearsalMissingMapping && styles.dayMarkMissing,
-                            isSelected && styles.dayNumberSelected,
-                          ]}
-                        >
-                          {tr("P", "R")}
-                        </Text>
-                      ) : null}
                     </View>
                   </Pressable>
                 </View>
@@ -1127,8 +1120,8 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
           <Text style={styles.legend}>
             {tr(
-              "Liczba = sesje w dniu · P = planowana próba (wt/czw) · bursztynowe = próba bez kolumny w arkuszu",
-              "Number = sessions that day · R = planned rehearsal (Tue/Thu) · amber = rehearsal without a sheet column",
+              "Liczba = wydarzenia w dniu · zacienione kolumny wt i czw = dni prób",
+              "Number = events that day · shaded Tue and Thu columns = rehearsal days",
             )}
           </Text>
 
@@ -1481,12 +1474,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dayCellHasSessions: {
+  // Tuesday/Thursday rehearsal days: a neutral band down the whole column.
+  rehearsalColumn: {
     backgroundColor: tokens.colors.surfaceMuted,
   },
-  dayCellGap: {
-    backgroundColor: tokens.colors.warningSurface,
-    borderColor: tokens.colors.warningBorder,
+  rehearsalColumnHead: {
+    backgroundColor: tokens.colors.surfaceMuted,
+    borderTopLeftRadius: tokens.radii.sm,
+    borderTopRightRadius: tokens.radii.sm,
+    paddingVertical: 4,
+    color: tokens.colors.ink,
+  },
+  dayCellHasSessions: {
+    backgroundColor: tokens.colors.surface,
+    borderColor: tokens.colors.border,
   },
   dayCellToday: {
     borderColor: tokens.colors.brand,
@@ -1516,9 +1517,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: tokens.colors.muted,
-  },
-  dayMarkMissing: {
-    color: tokens.colors.warningInk,
   },
   legend: {
     fontSize: 12,

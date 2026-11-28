@@ -1,5 +1,6 @@
 import type { DimensionValue } from "react-native";
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fragment } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { tr } from "../../i18n";
 import { tokens } from "../../theme/tokens";
@@ -49,6 +50,17 @@ function markColors(mark: 0 | 1 | 0.75 | 0.5 | 0.25) {
   return { bg: tokens.colors.brandTint, fg: tokens.colors.successInk };
 }
 
+// Splits cards into rows of `columns`, filling the last row with placeholders so
+// columns line up (the grid FlatList used to do this with numColumns).
+function chunkRows(cards: SectionMemberCard[], columns: number): SectionMemberCard[][] {
+  const size = Math.max(1, columns);
+  const rows: SectionMemberCard[][] = [];
+  for (let index = 0; index < cards.length; index += size) {
+    rows.push(cards.slice(index, index + size));
+  }
+  return rows;
+}
+
 export function SectionMembersPanel({
   sectionLabel,
   sectionSummaryText,
@@ -64,6 +76,55 @@ export function SectionMembersPanel({
   formatMarkLabel,
   formatAttendanceValue,
 }: SectionMembersPanelProps) {
+  function renderCard(item: SectionMemberCard) {
+        if (item.kind === "placeholder") {
+          return <View style={styles.placeholderCell} />;
+        }
+        const colors = markColors(item.mark);
+
+        return (
+          <View style={[styles.cell, memberGridColumns > 1 && styles.cellMultiCol]}>
+            <Pressable
+              disabled={item.isDisabled}
+              onPress={() => onSetAttendance(item.memberId, item.nextRatio)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.fullName}, ${formatMarkLabel(item.mark)}`}
+              style={(state) => [
+                styles.row,
+                item.mark === 1 && styles.rowPresent,
+                item.isRsvpHinted && item.mark === 0 && styles.rowHinted,
+                item.hasPendingOverride && styles.rowPending,
+                item.isDisabled && styles.rowDisabled,
+                ((state as { hovered?: boolean }).hovered || state.pressed) &&
+                  !item.isDisabled &&
+                  styles.rowHovered,
+              ]}
+            >
+              <View style={styles.textCol}>
+                <Text numberOfLines={2} style={styles.name}>
+                  {item.fullName}
+                </Text>
+                {item.isRsvpHinted || item.hasPendingOverride ? (
+                  <View style={styles.metaRow}>
+                    {item.isRsvpHinted ? (
+                      <Text style={styles.hintBadge}>{tr("✓ forum", "✓ forum")}</Text>
+                    ) : null}
+                    {item.hasPendingOverride ? (
+                      <Text style={styles.pendingLabel}>{tr("do zapisu", "unsaved")}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+              <View style={[styles.markPill, { backgroundColor: colors.bg }]}>
+                <Text style={[styles.markLabel, { color: colors.fg }]}>
+                  {formatAttendanceValue(item.mark)}
+                </Text>
+              </View>
+            </Pressable>
+          </View>
+        );
+  }
+
   return (
     <>
       <View style={styles.header}>
@@ -95,68 +156,17 @@ export function SectionMembersPanel({
           )}
         </Text>
       ) : (
-        <FlatList
-          key={`members-${sectionLabel}-${memberGridColumns}`}
-          data={cards}
-          numColumns={memberGridColumns}
-          scrollEnabled={false}
-          removeClippedSubviews={cards.length > 40}
-          initialNumToRender={Math.min(Math.max(memberGridColumns * 8, 12), cards.length || 12)}
-          maxToRenderPerBatch={Math.max(memberGridColumns * 8, 16)}
-          windowSize={7}
-          extraData={`${selectedSessionKey ?? ""}:${pendingChangesCount}:${isBatchSaving ? "saving" : "idle"}:${sectionLabel}`}
-          contentContainerStyle={[styles.list, isDesktop && styles.listDesktop]}
-          columnWrapperStyle={memberGridColumns > 1 ? styles.columnWrapper : undefined}
-          keyExtractor={(item) => item.key}
-          renderItem={({ item }) => {
-            if (item.kind === "placeholder") {
-              return <View style={styles.placeholderCell} />;
-            }
-            const colors = markColors(item.mark);
-
-            return (
-              <View style={[styles.cell, memberGridColumns > 1 && styles.cellMultiCol]}>
-                <Pressable
-                  disabled={item.isDisabled}
-                  onPress={() => onSetAttendance(item.memberId, item.nextRatio)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.fullName}, ${formatMarkLabel(item.mark)}`}
-                  style={(state) => [
-                    styles.row,
-                    item.mark === 1 && styles.rowPresent,
-                    item.isRsvpHinted && item.mark === 0 && styles.rowHinted,
-                    item.hasPendingOverride && styles.rowPending,
-                    item.isDisabled && styles.rowDisabled,
-                    ((state as { hovered?: boolean }).hovered || state.pressed) &&
-                      !item.isDisabled &&
-                      styles.rowHovered,
-                  ]}
-                >
-                  <View style={styles.textCol}>
-                    <Text numberOfLines={2} style={styles.name}>
-                      {item.fullName}
-                    </Text>
-                    {item.isRsvpHinted || item.hasPendingOverride ? (
-                      <View style={styles.metaRow}>
-                        {item.isRsvpHinted ? (
-                          <Text style={styles.hintBadge}>{tr("✓ forum", "✓ forum")}</Text>
-                        ) : null}
-                        {item.hasPendingOverride ? (
-                          <Text style={styles.pendingLabel}>{tr("do zapisu", "unsaved")}</Text>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={[styles.markPill, { backgroundColor: colors.bg }]}>
-                    <Text style={[styles.markLabel, { color: colors.fg }]}>
-                      {formatAttendanceValue(item.mark)}
-                    </Text>
-                  </View>
-                </Pressable>
-              </View>
-            );
-          }}
-        />
+        // A plain grid, not FlatList: on the web a FlatList with scrollEnabled={false}
+        // gets touch-action: none, so a finger on the list could not scroll the page.
+        <View style={[styles.list, isDesktop && styles.listDesktop]}>
+          {chunkRows(cards, memberGridColumns).map((row, rowIndex) => (
+            <View key={`row-${rowIndex}`} style={memberGridColumns > 1 ? styles.columnWrapper : undefined}>
+              {row.map((item) => (
+                <Fragment key={item.key}>{renderCard(item)}</Fragment>
+              ))}
+            </View>
+          ))}
+        </View>
       )}
     </>
   );
