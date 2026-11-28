@@ -205,6 +205,37 @@ export function EventDetailScreen({
     </View>
   );
 
+  const declarationCard = (
+    <View style={[styles.card, needsDeclaration && styles.cardAction]}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={[styles.kicker, needsDeclaration && styles.kickerAction]}>
+          {tr("Twoja deklaracja", "Your declaration")}
+        </Text>
+        <StatusPill status={event.attendanceStatus} large />
+      </View>
+      {forumUrl ? (
+        <Button
+          size="lg"
+          variant={needsDeclaration ? "primary" : "secondary"}
+          label={
+            needsDeclaration
+              ? tr("Zadeklaruj na forum", "Declare on the forum")
+              : tr("Zmień na forum", "Change on the forum")
+          }
+          trailingIcon="external"
+          accessibilityRole="link"
+          onPress={() => openForumThread(event.id)}
+        />
+      ) : null}
+      <Text style={styles.hint}>
+        {tr(
+          "Status zmieni się tutaj po synchronizacji (do ~20 min).",
+          "Your status updates here after the next sync (up to ~20 min).",
+        )}
+      </Text>
+    </View>
+  );
+
   return (
     <>
       <ScrollView style={styles.screenScroll} showsVerticalScrollIndicator={false}>
@@ -238,40 +269,20 @@ export function EventDetailScreen({
               {stripTitleDatePrefix(event.title)}
             </Text>
             {event.venue ? <Text style={styles.heroVenue}>{event.venue}</Text> : null}
+            {!needsDeclaration && event.attendanceStatus !== "unknown" ? (
+              <View style={styles.heroStatus}>
+                <StatusPill status={event.attendanceStatus} />
+              </View>
+            ) : null}
           </View>
         </View>
 
         <View style={[styles.inner, styles.body]}>
           <View style={[styles.columns, isDesktop && styles.columnsDesktop]}>
             <View style={styles.primaryColumn}>
-              <View style={[styles.card, needsDeclaration && styles.cardAction]}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={[styles.kicker, needsDeclaration && styles.kickerAction]}>
-                    {tr("Twoja deklaracja", "Your declaration")}
-                  </Text>
-                  <StatusPill status={event.attendanceStatus} large />
-                </View>
-                {forumUrl ? (
-                  <Button
-                    size="lg"
-                    variant={needsDeclaration ? "primary" : "secondary"}
-                    label={
-                      needsDeclaration
-                        ? tr("Zadeklaruj na forum", "Declare on the forum")
-                        : tr("Zmień na forum", "Change on the forum")
-                    }
-                    trailingIcon="external"
-                    accessibilityRole="link"
-                    onPress={() => openForumThread(event.id)}
-                  />
-                ) : null}
-                <Text style={styles.hint}>
-                  {tr(
-                    "Status zmieni się tutaj po synchronizacji (do ~20 min).",
-                    "Your status updates here after the next sync (up to ~20 min).",
-                  )}
-                </Text>
-              </View>
+              {/* Missing declaration first (amber); once declared the status is in
+                  the header and changing it waits at the end (Partytura: Declaring). */}
+              {needsDeclaration ? declarationCard : null}
 
               <View style={styles.card}>
                 <View style={styles.cardHeaderRow}>
@@ -336,59 +347,52 @@ export function EventDetailScreen({
                 </View>
               ) : null}
 
-              <View style={styles.card}>
-                <Text style={styles.kicker}>
-                  {tr("Aktualizacje organizatora", "Organizer updates")}
-                </Text>
-                {event.updates.length > 0 ? (
-                  event.updates.map((update, index) => (
+              {event.updates.length > 0 ? (
+                <View style={styles.card}>
+                  <Text style={styles.kicker}>
+                    {tr("Aktualizacje organizatora", "Organizer updates")}
+                  </Text>
+                  {event.updates.map((update, index) => (
                     <View key={update.id} style={[styles.update, index === 0 && styles.updateLatest]}>
                       <Text style={styles.meta}>
                         {update.authorName} · {formatRelativeLabel(update.createdAt)}
                       </Text>
                       <Text style={styles.bodyText}>{update.body}</Text>
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.muted}>
-                    {tr("Brak aktualizacji od organizatorów.", "No organizer updates yet.")}
-                  </Text>
-                )}
-              </View>
-
-              <View style={styles.card}>
-                <View style={styles.cardHeaderRow}>
-                  <Text style={styles.kicker}>
-                    {tr("Dyskusja", "Discussion")}
-                    {event.comments.length > 0 ? ` · ${event.comments.length}` : ""}
-                  </Text>
-                  {forumUrl ? (
-                    <Pressable
-                      onPress={() => openForumThread(event.id)}
-                      accessibilityRole="link"
-                      hitSlop={8}
-                    >
-                      <Text style={styles.linkLabel}>
-                        {tr("Odpowiedz na forum ↗", "Reply on the forum ↗")}
-                      </Text>
-                    </Pressable>
-                  ) : null}
+                  ))}
                 </View>
-                {event.comments.length > 0 ? (
-                  event.comments.map((comment) => (
+              ) : null}
+
+              {event.comments.length > 0 ? (
+                <View style={styles.card}>
+                  <View style={styles.cardHeaderRow}>
+                    <Text style={styles.kicker}>
+                      {tr("Dyskusja", "Discussion")} · {event.comments.length}
+                    </Text>
+                    {forumUrl ? (
+                      <Pressable
+                        onPress={() => openForumThread(event.id)}
+                        accessibilityRole="link"
+                        hitSlop={8}
+                      >
+                        <Text style={styles.linkLabel}>
+                          {tr("Odpowiedz na forum ↗", "Reply on the forum ↗")}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                  {event.comments.map((comment) => (
                     <View key={comment.id} style={styles.comment}>
                       <Text style={styles.meta}>
                         {comment.authorName} · {formatRelativeLabel(comment.createdAt)}
                       </Text>
                       <Text style={styles.bodyText}>{comment.body}</Text>
                     </View>
-                  ))
-                ) : (
-                  <Text style={styles.muted}>
-                    {tr("Brak komentarzy w wątku na forum.", "No comments in the forum thread yet.")}
-                  </Text>
-                )}
-              </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {needsDeclaration ? null : declarationCard}
             </View>
 
             {isDesktop ? <View style={styles.rail}>{setlistCard}</View> : null}
@@ -491,6 +495,10 @@ const styles = themedStyles((colors) => ({
   heroTitleDesktop: {
     fontSize: 44,
     lineHeight: 48,
+  },
+  heroStatus: {
+    flexDirection: "row",
+    marginTop: tokens.spacing.sm,
   },
   heroVenue: {
     marginTop: tokens.spacing.xs,
