@@ -52,7 +52,7 @@ before(async () => {
     create role authenticated;
     create role service_role bypassrls; -- as in Supabase
     create schema auth;
-    create table auth.users (id uuid primary key);
+    create table auth.users (id uuid primary key, email_confirmed_at timestamptz default now());
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('test.uid', true), '')::uuid $$;
     grant usage on schema auth to authenticated;
@@ -67,6 +67,7 @@ before(async () => {
   await db.exec(migration("034_push_notifications.sql"));
   await db.exec(migration("035_feed.sql"));
   await db.exec(migration("037_feed_facebook_import.sql"));
+  await db.exec(migration("038_feed_link_accounts.sql"));
 });
 
 after(async () => {
@@ -242,5 +243,40 @@ describe("feed (035)", () => {
       as(BOARD, "select public.import_feed_post($1::jsonb)", [JSON.stringify({ authorName: "A", createdAt: "wczoraj", body: "x" })]),
       /invalid_date/,
     );
+  });
+
+  it("links an imported post and comment to accounts the board picks", async () => {
+    await assert.rejects(as(ANIA, "select * from public.feed_list_members()"), /only_board/);
+    const members = (await as(BOARD, "select full_name from public.feed_list_members()")).rows.map((r) => r.full_name);
+    assert.ok(members.includes("Ania Raczkowska"));
+
+    const payload = {
+      authorName: "Ania R.",
+      authorProfileId: ANIA,
+      createdAt: "2026-10-27T10:00:00+01:00",
+      body: "Próby sekcyjne 03.11 i 05.11",
+      comments: [{ authorName: "Bartek z FB", authorProfileId: BARTEK, body: "Będę" }],
+    };
+    const { id } = await one(BOARD, "select public.import_feed_post($1::jsonb) as id", [JSON.stringify(payload)]);
+    const detail = await post(ANIA, id);
+    assert.equal(detail.post.authorName, "Ania Raczkowska");
+    assert.equal(detail.post.mine, true);
+    assert.equal(detail.post.source, "facebook");
+    assert.deepEqual(detail.comments.map((c) => [c.authorName, c.mine]), [["Bartek Nowak", false]]);
+    // The linked member may edit it now.
+    await as(ANIA, "select public.update_feed_post($1, 'Próby sekcyjne: 03.11 i 05.11')", [id]);
+
+    // Unknown accounts are refused; the board can unlink and relink.
+    await assert.rejects(
+      as(BOARD, "select public.import_feed_post($1::jsonb)", [
+        JSON.stringify({ ...payload, authorProfileId: "00000000-0000-0000-0000-0000000000ff" }),
+      ]),
+      /unknown_account/,
+    );
+    await assert.rejects(as(ANIA, "select public.set_feed_author($1, null)", [id]), /only_board/);
+    await as(BOARD, "select public.set_feed_author($1, null)", [id]);
+    assert.equal((await post(ANIA, id)).post.authorName, "Ania R.");
+    await as(BOARD, "select public.set_feed_author($1, $2)", [id, ANIA]);
+    assert.equal((await post(BARTEK, id)).post.authorName, "Ania Raczkowska");
   });
 });

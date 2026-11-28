@@ -60,3 +60,14 @@ chce, zgłasza się, a jego wpisy pomijamy albo usuwamy.
 
 Wdrożenie 037: `sudo docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < /home/waysker/e-Kantorek-sync/app/supabase/migrations/037_feed_facebook_import.sql`
 (po `git pull`), potem deploy frontu.
+
+### Łączenie z kontem w e-Kantorku
+
+Migracja `038_feed_link_accounts.sql`. Pod polem „Autor” (i przy autorze każdego komentarza)
+formularz podpowiada konta; jedno dokładne dopasowanie (bez wielkości liter i znaków
+diakrytycznych) wybiera od razu, resztę wybiera zarząd. Połączony wpis pokazuje nazwisko z
+konta i należy do tej osoby (może go edytować i usunąć). Na zaimportowanym wpisie zarząd ma
+„Połącz z kontem” / „Odłącz od konta” (`set_feed_author`). Lista kont: `feed_list_members`
+(tylko zarząd, konta z potwierdzonym e-mailem).
+
+Wdrożenie 038: `sudo docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < /home/waysker/e-Kantorek-sync/app/supabase/migrations/038_feed_link_accounts.sql`.
