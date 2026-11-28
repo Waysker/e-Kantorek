@@ -4,8 +4,9 @@
 export type NotificationPayload = {
   title: string;
   body: string;
-  /** Opened on tap; absent = Start. */
+  /** Opened on tap (sw.js → ?event= / ?post=); neither = Start. */
   eventId?: string;
+  postId?: string;
   tag: string;
 };
 
@@ -67,5 +68,61 @@ export function buildPayloads(events: NewEvent[]): NotificationPayload[] {
     body: eventMetaLine(event.startsAt, event.venue),
     eventId: event.id,
     tag: event.id,
+  }));
+}
+
+// ---------------------------------------------------------------- Kantorek
+
+export type NewPost = {
+  id: string;
+  authorName: string;
+  body: string;
+  hasPoll: boolean;
+  attachmentCount: number;
+};
+
+export function polishPostsCount(count: number): string {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  if (count === 1) {
+    return "1 nowy wpis";
+  }
+  if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) {
+    return `${count} nowe wpisy`;
+  }
+  return `${count} nowych wpisów`;
+}
+
+// First non-empty line, shortened; a post without text says what it has.
+export function postPreview(post: NewPost): string {
+  const firstLine = post.body
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (firstLine) {
+    return firstLine.length > 120 ? `${firstLine.slice(0, 119).trimEnd()}…` : firstLine;
+  }
+  if (post.hasPoll) {
+    return "Ankieta";
+  }
+  return post.attachmentCount > 0 ? "Zdjęcie lub plik" : "";
+}
+
+export function buildPostPayloads(posts: NewPost[]): NotificationPayload[] {
+  if (posts.length > MAX_SEPARATE_NOTIFICATIONS) {
+    const authors = [...new Set(posts.map((post) => post.authorName).filter(Boolean))].slice(0, 3);
+    return [
+      {
+        title: `${polishPostsCount(posts.length)} w Kantorku`,
+        body: authors.join(", "),
+        tag: "new-posts",
+      },
+    ];
+  }
+  return posts.map((post) => ({
+    title: `Nowy wpis: ${post.authorName || "Kantorek"}`,
+    body: postPreview(post),
+    postId: post.id,
+    tag: `post-${post.id}`,
   }));
 }

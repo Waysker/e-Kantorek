@@ -35,6 +35,9 @@ function getTabLabel(tab: PrimaryTab): string {
   if (tab === "events") {
     return tr("Wydarzenia", "Events");
   }
+  if (tab === "feed") {
+    return tr("Kantorek", "Kantorek");
+  }
   if (tab === "board") {
     return tr("Zarząd", "Board");
   }
@@ -47,6 +50,9 @@ function getTabIcon(tab: PrimaryTab): IconName {
   }
   if (tab === "events") {
     return "list";
+  }
+  if (tab === "feed") {
+    return "chat";
   }
   if (tab === "board") {
     return "board";

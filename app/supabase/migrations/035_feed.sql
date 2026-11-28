@@ -6,7 +6,9 @@
 --
 -- Attachments: the client uploads to the private Storage bucket "feed" under
 -- "<auth.uid()>/<random>/<file name>" first, then passes the paths to
--- create_feed_post, which checks that each path is the caller's own.
+-- create_feed_post, which checks that each path is the caller's own. The
+-- bucket and its policies are in 036 (run as supabase_admin: storage tables
+-- belong to supabase_storage_admin, not postgres).
 -- Push: push_new_events announces posts with notified_at null
 -- (claim_feed_posts_for_push); push_subscriptions.topics says who wants them.
 
@@ -593,43 +595,3 @@ revoke all on function public.feed_is_moderator(uuid) from public, anon, authent
 revoke all on function public.claim_feed_posts_for_push() from public, anon, authenticated;
 grant execute on function public.claim_feed_posts_for_push() to service_role;
 grant execute on function public.feed_require_uid() to authenticated;
-
--- ---------------------------------------------------------------- storage
-
--- Private bucket; members read everything in it, write only under their uid.
-do $$
-begin
-  if to_regclass('storage.buckets') is null then
-    raise notice 'storage schema missing: bucket "feed" not created';
-    return;
-  end if;
-
-  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-  values (
-    'feed', 'feed', false, 10485760,
-    array[
-      'image/jpeg', 'image/png', 'image/webp', 'image/gif',
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.ms-excel', 'application/msword', 'text/plain'
-    ]
-  )
-  on conflict (id) do update
-    set public = excluded.public,
-        file_size_limit = excluded.file_size_limit,
-        allowed_mime_types = excluded.allowed_mime_types;
-
-  execute 'drop policy if exists "Feed files: members read" on storage.objects';
-  execute $p$create policy "Feed files: members read" on storage.objects
-    for select to authenticated using (bucket_id = 'feed')$p$;
-  execute 'drop policy if exists "Feed files: upload own" on storage.objects';
-  execute $p$create policy "Feed files: upload own" on storage.objects
-    for insert to authenticated
-    with check (bucket_id = 'feed' and (storage.foldername(name))[1] = auth.uid()::text)$p$;
-  execute 'drop policy if exists "Feed files: delete own" on storage.objects';
-  execute $p$create policy "Feed files: delete own" on storage.objects
-    for delete to authenticated
-    using (bucket_id = 'feed' and (storage.foldername(name))[1] = auth.uid()::text)$p$;
-end;
-$$;

@@ -1,5 +1,6 @@
-// Push notification "Nowe wydarzenie: …" for every forum event the app has not
-// seen before (Partytura → Patterns → Notifications). pg_cron calls it every few
+// Push notifications (Partytura → Patterns → Notifications, Kantorek):
+// "Nowe wydarzenie: …" for every forum event the app has not seen before, and
+// "Nowy wpis: <autor>" for every new Kantorek post (migration 035). pg_cron calls it every few
 // minutes (schedule_push_new_events, migration 034); a run with nothing new only
 // reads the snapshot.
 //
@@ -12,7 +13,13 @@
 // VAPID_PRIVATE_KEY, optional VAPID_SUBJECT (mailto: or https:).
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
-import { buildPayloads, stripTitleDatePrefix, type NotificationPayload } from "./notificationText.ts";
+import {
+  buildPayloads,
+  buildPostPayloads,
+  stripTitleDatePrefix,
+  type NewPost,
+  type NotificationPayload,
+} from "./notificationText.ts";
 import { sendWebPush, type VapidKeys } from "./webPush.ts";
 
 type SupabaseAdminClient = SupabaseClient<any, "public", any>;
@@ -31,7 +38,11 @@ type SubscriptionRow = {
   p256dh: string;
   auth_secret: string;
   failure_count: number;
+  /** Push topics this browser wants (migration 035); absent before it = all. */
+  topics?: string[] | null;
 };
+
+type Topic = "new_event" | "new_post";
 
 class HttpError extends Error {
   status: number;
@@ -99,18 +110,28 @@ async function loadSnapshotEvents(client: SupabaseAdminClient): Promise<Snapshot
   return Array.isArray(events) ? (events as SnapshotEvent[]) : [];
 }
 
-async function loadSubscriptions(client: SupabaseAdminClient, profileId?: string): Promise<SubscriptionRow[]> {
-  let query = client
-    .from("push_subscriptions")
-    .select("id,profile_id,endpoint,p256dh,auth_secret,failure_count");
-  if (profileId) {
-    query = query.eq("profile_id", profileId);
+async function loadSubscriptions(
+  client: SupabaseAdminClient,
+  options: { profileId?: string; topic?: Topic } = {},
+): Promise<SubscriptionRow[]> {
+  const run = (columns: string) => {
+    let query = client.from("push_subscriptions").select(columns);
+    if (options.profileId) {
+      query = query.eq("profile_id", options.profileId);
+    }
+    return query;
+  };
+  let { data, error } = await run("id,profile_id,endpoint,p256dh,auth_secret,failure_count,topics");
+  if (error && /topics/.test(error.message)) {
+    // Before migration 035: no topics column, everyone gets everything.
+    ({ data, error } = await run("id,profile_id,endpoint,p256dh,auth_secret,failure_count"));
   }
-  const { data, error } = await query;
   if (error) {
     throw new HttpError(500, "subscriptions_read_failed", error.message);
   }
-  return (data ?? []) as SubscriptionRow[];
+  const rows = (data ?? []) as unknown as SubscriptionRow[];
+  const topic = options.topic;
+  return topic ? rows.filter((row) => !Array.isArray(row.topics) || row.topics.includes(topic)) : rows;
 }
 
 // Sends every payload to every subscription; deletes the ones the push service
@@ -251,7 +272,7 @@ async function runNewEvents(client: SupabaseAdminClient, dryRun: boolean) {
     return { status: "ok", new_events: unseen.length, announced: 0, bootstrap };
   }
 
-  const subscriptions = await loadSubscriptions(client);
+  const subscriptions = await loadSubscriptions(client, { topic: "new_event" });
   const result =
     subscriptions.length > 0
       ? await deliver(client, subscriptions, buildPayloads(announce))
@@ -272,8 +293,79 @@ async function runNewEvents(client: SupabaseAdminClient, dryRun: boolean) {
   };
 }
 
+// New Kantorek posts (migration 035): each claimed once; posts older than a day
+// (e.g. after downtime) are only marked. The author's own devices are skipped.
+async function runNewPosts(client: SupabaseAdminClient, dryRun: boolean) {
+  if (dryRun) {
+    const { count, error } = await client
+      .from("feed_posts")
+      .select("id", { count: "exact", head: true })
+      .is("notified_at", null);
+    return error ? { skipped: "feed_not_installed" } : { pending_posts: count ?? 0 };
+  }
+  const { data, error } = await client.rpc("claim_feed_posts_for_push");
+  if (error) {
+    if (/claim_feed_posts_for_push|does not exist|schema cache/i.test(error.message)) {
+      return { skipped: "feed_not_installed" };
+    }
+    throw new HttpError(500, "feed_claim_failed", error.message);
+  }
+  const rows = (data ?? []) as Array<{
+    id: string;
+    author_id: string | null;
+    author_name: string;
+    body: string;
+    has_poll: boolean;
+    attachment_count: number;
+    fresh: boolean;
+  }>;
+  const fresh = rows.filter((row) => row.fresh);
+  if (fresh.length === 0) {
+    return { new_posts: rows.length, announced: 0 };
+  }
+
+  const subscriptions = await loadSubscriptions(client, { topic: "new_post" });
+  const posts: Array<NewPost & { authorId: string | null }> = fresh.map((row) => ({
+    id: row.id,
+    authorId: row.author_id,
+    authorName: text(row.author_name),
+    body: String(row.body ?? ""),
+    hasPoll: Boolean(row.has_poll),
+    attachmentCount: Number(row.attachment_count ?? 0),
+  }));
+
+  // Group devices by the set of posts they should hear about (never their own).
+  const groups = new Map<string, SubscriptionRow[]>();
+  for (const subscription of subscriptions) {
+    const key = posts
+      .filter((post) => post.authorId !== subscription.profile_id)
+      .map((post) => post.id)
+      .join(",");
+    if (key) {
+      groups.set(key, [...(groups.get(key) ?? []), subscription]);
+    }
+  }
+  const totals = { delivered: 0, failed: 0, removed_subscriptions: 0 };
+  const errors: Array<{ status: number; body: string }> = [];
+  for (const [key, group] of groups) {
+    const ids = new Set(key.split(","));
+    const result = await deliver(client, group, buildPostPayloads(posts.filter((post) => ids.has(post.id))));
+    totals.delivered += result.delivered;
+    totals.failed += result.failed;
+    totals.removed_subscriptions += result.removed_subscriptions;
+    errors.push(...result.errors);
+  }
+  return {
+    new_posts: rows.length,
+    announced: fresh.length,
+    subscriptions: subscriptions.length,
+    ...totals,
+    errors: errors.slice(0, 5),
+  };
+}
+
 async function runTest(client: SupabaseAdminClient, profileId: string) {
-  const subscriptions = await loadSubscriptions(client, profileId);
+  const subscriptions = await loadSubscriptions(client, { profileId });
   if (subscriptions.length === 0) {
     return { status: "ok", test: true, subscriptions: 0, note: "no_subscriptions_for_profile" };
   }
@@ -308,7 +400,10 @@ Deno.serve(async (request) => {
       }
       return jsonResponse(await runTest(client, testProfileId));
     }
-    return jsonResponse(await runNewEvents(client, body.dryRun === true));
+    const dryRun = body.dryRun === true;
+    const events = await runNewEvents(client, dryRun);
+    const posts = await runNewPosts(client, dryRun);
+    return jsonResponse({ ...events, posts });
   } catch (error) {
     if (error instanceof HttpError) {
       return jsonResponse({ status: "error", code: error.code, message: error.message }, error.status);

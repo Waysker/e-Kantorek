@@ -27,7 +27,10 @@ export function NotificationsPrompt({ busy, errorMessage, onEnable, onDismiss }:
         <Text style={styles.title}>{tr("Powiadomienia", "Notifications")}</Text>
       </View>
       <Text style={styles.body}>
-        {tr("Daj znać, gdy na forum pojawi się nowe wydarzenie.", "Tell me when a new event appears on the forum.")}
+        {tr(
+          "Daj znać, gdy pojawi się nowe wydarzenie albo wpis w Kantorku.",
+          "Tell me about new events and new posts in Kantorek.",
+        )}
       </Text>
       {errorMessage ? <Notice tone="error">{errorMessage}</Notice> : null}
       <View style={styles.actions}>

@@ -13,7 +13,12 @@ import {
   sendWebPush,
   vapidAuthorization,
 } from "../supabase/functions/push_new_events/webPush.ts";
-import { buildPayloads, eventMetaLine, polishEventsCount } from "../supabase/functions/push_new_events/notificationText.ts";
+import {
+  buildPayloads,
+  buildPostPayloads,
+  eventMetaLine,
+  polishEventsCount,
+} from "../supabase/functions/push_new_events/notificationText.ts";
 
 const subtle = crypto.webcrypto.subtle;
 const encoder = new TextEncoder();
@@ -157,5 +162,27 @@ describe("notification texts", () => {
       "22 nowe wydarzenia",
       "25 nowych wydarzeń",
     ]);
+  });
+});
+
+describe("Kantorek post notifications", () => {
+  const post = (id, body, extra = {}) => ({ id, authorName: "Ania Raczkowska", body, hasPoll: false, attachmentCount: 0, ...extra });
+
+  it("names the author and shows the first line", () => {
+    assert.deepEqual(buildPostPayloads([post("p1", "\n[warsztaty 2026]\nStartujemy z zapisami!")]), [
+      { title: "Nowy wpis: Ania Raczkowska", body: "[warsztaty 2026]", postId: "p1", tag: "post-p1" },
+    ]);
+  });
+
+  it("says what a post without text has", () => {
+    const [poll] = buildPostPayloads([post("p2", "", { hasPoll: true })]);
+    const [photo] = buildPostPayloads([post("p3", "  ", { attachmentCount: 2 })]);
+    assert.equal(poll.body, "Ankieta");
+    assert.equal(photo.body, "Zdjęcie lub plik");
+  });
+
+  it("summarises many posts", () => {
+    const payloads = buildPostPayloads([1, 2, 3, 4].map((n) => post(`p${n}`, `Wpis ${n}`)));
+    assert.deepEqual(payloads, [{ title: "4 nowe wpisy w Kantorku", body: "Ania Raczkowska", tag: "new-posts" }]);
   });
 });
