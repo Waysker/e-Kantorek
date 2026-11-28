@@ -1,4 +1,4 @@
-export type PrimaryTab = "home" | "events" | "board" | "profile";
+export type PrimaryTab = "home" | "events" | "feed" | "board" | "profile";
 export type BoardSection = "attendance" | "summary" | "roles" | "instruments";
 export type AttendanceFocusStatus = "going" | "not_going";
 
@@ -16,6 +16,9 @@ export type AppRoute =
   | { name: "roleManagement" }
   | { name: "instrumentMapping" }
   | { name: "orchestraAttendance" }
+  | { name: "feed" }
+  | { name: "feedPost"; postId: string }
+  | { name: "feedCompose" }
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
@@ -29,6 +32,10 @@ export function routeToTab(route: AppRoute): PrimaryTab {
 
   if (route.name === "calendar") {
     return "events";
+  }
+
+  if (route.name === "feed" || route.name === "feedPost" || route.name === "feedCompose") {
+    return "feed";
   }
 
   if (

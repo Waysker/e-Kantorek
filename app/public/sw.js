@@ -49,7 +49,7 @@ self.addEventListener("push", (event) => {
       tag: data.tag || undefined,
       icon: "./icons/icon-192.png",
       lang: "pl",
-      data: { eventId: data.eventId || null },
+      data: { eventId: data.eventId || null, postId: data.postId || null },
     }),
   );
 });
@@ -58,10 +58,14 @@ self.addEventListener("push", (event) => {
 // app at ?event=<id> (App.tsx reads it once and drops it from the address).
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const eventId = event.notification.data && event.notification.data.eventId;
+  const data = event.notification.data || {};
+  const eventId = data.eventId || null;
+  const postId = data.postId || null;
   const target = new URL(self.registration.scope);
   if (eventId) {
     target.searchParams.set("event", eventId);
+  } else if (postId) {
+    target.searchParams.set("post", postId);
   }
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
@@ -69,6 +73,8 @@ self.addEventListener("notificationclick", (event) => {
       if (open) {
         if (eventId) {
           open.postMessage({ type: "open-event", eventId });
+        } else if (postId) {
+          open.postMessage({ type: "open-post", postId });
         }
         return open.focus();
       }

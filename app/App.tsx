@@ -9,6 +9,7 @@ import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabas
 import { usePushNotifications } from "./src/push/usePushNotifications";
 import { NotificationsPrompt } from "./src/ui/NotificationsPrompt";
 import { PullToRefresh } from "./src/ui/PullToRefresh";
+import { FeedComposeScreen, FeedPostScreen, FeedScreen } from "./src/feed/FeedScreens";
 import { describeAuthError } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
@@ -240,6 +241,10 @@ function isSameRoute(left: AppRoute, right: AppRoute): boolean {
     return false;
   }
 
+  if (left.name === "feedPost" && right.name === "feedPost") {
+    return left.postId === right.postId;
+  }
+
   if (!("eventId" in left) && !("eventId" in right)) {
     return true;
   }
@@ -279,9 +284,16 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     candidate.name === "attendanceWorkspace" ||
     candidate.name === "attendanceManager" ||
     candidate.name === "attendanceSummary" ||
-    candidate.name === "roleManagement"
+    candidate.name === "roleManagement" ||
+    candidate.name === "feed" ||
+    candidate.name === "feedCompose"
   ) {
     return true;
+  }
+
+  if (candidate.name === "feedPost") {
+    const postId = (value as { postId?: unknown }).postId;
+    return typeof postId === "string" && postId.trim().length > 0;
   }
 
   if (
@@ -373,7 +385,8 @@ function AppContent() {
   const authenticatedUserId =
     authState.status === "signed_in" ? authState.session.user.id : null;
   const pushNotifications = usePushNotifications(authenticatedUserId);
-  // Event to open from a tapped push notification (?event=… or a message from sw.js).
+  // Event ("forum-event-…") or Kantorek post ("post:<uuid>") to open from a tapped
+  // push notification (?event= / ?post= or a message from sw.js).
   const pendingEventIdRef = useRef<string | null>(null);
   const [pendingEventTick, setPendingEventTick] = useState(0);
 
@@ -479,14 +492,21 @@ function AppContent() {
     }
     const isEventId = (value: unknown): value is string =>
       typeof value === "string" && /^forum-event-\d+$/.test(value);
+    const isPostId = (value: unknown): value is string =>
+      typeof value === "string" && /^[0-9a-f-]{36}$/i.test(value);
 
     const url = new URL(window.location.href);
     const fromUrl = url.searchParams.get("event");
-    if (fromUrl !== null) {
+    const postFromUrl = url.searchParams.get("post");
+    if (fromUrl !== null || postFromUrl !== null) {
       url.searchParams.delete("event");
+      url.searchParams.delete("post");
       window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
       if (isEventId(fromUrl)) {
         pendingEventIdRef.current = fromUrl;
+        setPendingEventTick((tick) => tick + 1);
+      } else if (isPostId(postFromUrl)) {
+        pendingEventIdRef.current = `post:${postFromUrl}`;
         setPendingEventTick((tick) => tick + 1);
       }
     }
@@ -494,8 +514,12 @@ function AppContent() {
     const serviceWorker = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
     const handleMessage = (message: MessageEvent) => {
       const data = message.data as { type?: unknown; eventId?: unknown } | null;
+      const postId = (data as { postId?: unknown } | null)?.postId;
       if (data?.type === "open-event" && isEventId(data.eventId)) {
         pendingEventIdRef.current = data.eventId;
+        setPendingEventTick((tick) => tick + 1);
+      } else if (data?.type === "open-post" && isPostId(postId)) {
+        pendingEventIdRef.current = `post:${postId}`;
         setPendingEventTick((tick) => tick + 1);
       }
     };
@@ -509,9 +533,14 @@ function AppContent() {
     if (state.status !== "ready" || !pendingEventIdRef.current) {
       return;
     }
-    const eventId = pendingEventIdRef.current;
+    const target = pendingEventIdRef.current;
     pendingEventIdRef.current = null;
-    pushRoute({ name: "eventDetail", eventId });
+    if (target.startsWith("post:")) {
+      resetToRoute({ name: "feed" });
+      pushRoute({ name: "feedPost", postId: target.slice("post:".length) });
+    } else {
+      pushRoute({ name: "eventDetail", eventId: target });
+    }
     // pushRoute only sets state; it is recreated every render, so not a dependency.
   }, [state.status, pendingEventTick]);
 
@@ -1127,6 +1156,7 @@ function AppContent() {
   const navigationTabs: PrimaryTab[] = [
     "home",
     "events",
+    "feed",
     ...(boardSections.length > 0 ? (["board"] as const) : []),
     "profile",
   ];
@@ -1252,6 +1282,11 @@ function AppContent() {
     if (tab === "events") {
       // Reopen the view (list or calendar) the user used last.
       resetToRoute({ name: lastEventsView });
+      return;
+    }
+
+    if (tab === "feed") {
+      resetToRoute({ name: "feed" });
       return;
     }
 
@@ -1450,6 +1485,32 @@ function AppContent() {
             }}
             pushNotifications={pushNotifications}
             showNotificationsList={ATTENDANCE_REMINDERS_ENABLED}
+          />
+        );
+      case "feed":
+        return (
+          <FeedScreen
+            onOpenPost={(postId) => pushRoute({ name: "feedPost", postId })}
+            onCompose={() => pushRoute({ name: "feedCompose" })}
+          />
+        );
+      case "feedPost":
+        return (
+          <FeedPostScreen
+            key={route.postId}
+            postId={route.postId}
+            isModerator={effectiveCurrentUser.role === "board" || effectiveCurrentUser.role === "admin"}
+            onBack={() => goBack({ name: "feed" })}
+          />
+        );
+      case "feedCompose":
+        return (
+          <FeedComposeScreen
+            onBack={() => goBack({ name: "feed" })}
+            onPublished={(postId) => {
+              resetToRoute({ name: "feed" });
+              pushRoute({ name: "feedPost", postId });
+            }}
           />
         );
       case "orchestraAttendance":

@@ -37,6 +37,10 @@
 
 - `docs/ops/push-notifications.md` — push "Nowe wydarzenie" from the installed web app: how it works, keys, deploy on orbit, testing, turning it off.
 
+## Kantorek (feed)
+
+- `docs/ops/kantorek-feed.md` — the in-app feed: who can do what, tables and RPCs (035), Storage bucket (036), push for new posts, deploy.
+
 ## Supabase hosting
 
 - `docs/ops/cloudflare-tunnel-supabase-self-hosting.md` — current self-hosted database topology, Cloudflare Tunnel, GitHub secret names, data-copy status, and operating runbook. Read this before changing the Supabase endpoint or sync deployment.

@@ -196,40 +196,46 @@ export function ProfileScreen({
 
           {pushNotifications && showPushRow ? (
             <View style={[styles.pushRow, !showNotificationsList && styles.pushRowAlone]}>
-              <View style={styles.settingRow}>
-                <View style={styles.forumIdentityText}>
-                  <Text style={styles.settingLabel}>{tr("Nowe wydarzenia", "New events")}</Text>
-                  <Text style={styles.muted}>
-                    {pushNotifications.state === "on"
-                      ? tr("Włączone", "On")
-                      : pushNotifications.state === "blocked"
-                        ? tr(
-                            "Zablokowane w przeglądarce. Zmień to w ustawieniach strony.",
-                            "Blocked in the browser. Change it in the site settings.",
-                          )
-                        : tr("Wyłączone", "Off")}
-                  </Text>
-                </View>
-                {pushNotifications.state === "blocked" ? null : (
-                  <Pressable
-                    onPress={() =>
-                      void (pushNotifications.state === "on" ? pushNotifications.disable() : pushNotifications.enable())
-                    }
-                    disabled={pushNotifications.busy}
-                    accessibilityRole="button"
-                    hitSlop={8}
-                    style={styles.forumIdentityChange}
-                  >
-                    <Text style={styles.forumIdentityChangeLabel}>
-                      {pushNotifications.busy
-                        ? "…"
-                        : pushNotifications.state === "on"
-                          ? tr("Wyłącz", "Turn off")
-                          : tr("Włącz", "Turn on")}
+              {pushNotifications.state === "blocked" ? (
+                <View style={styles.settingRow}>
+                  <View style={styles.forumIdentityText}>
+                    <Text style={styles.settingLabel}>{tr("Na tym urządzeniu", "On this device")}</Text>
+                    <Text style={styles.muted}>
+                      {tr(
+                        "Zablokowane w przeglądarce. Zmień to w ustawieniach strony.",
+                        "Blocked in the browser. Change it in the site settings.",
+                      )}
                     </Text>
-                  </Pressable>
-                )}
-              </View>
+                  </View>
+                </View>
+              ) : (
+                ([
+                  ["new_event", tr("Nowe wydarzenia", "New events")],
+                  ["new_post", tr("Nowe wpisy w Kantorku", "New posts in Kantorek")],
+                ] as const).map(([topic, label]) => {
+                  const on = pushNotifications.state === "on" && pushNotifications.topics.includes(topic);
+                  return (
+                    <View key={topic} style={styles.settingRow}>
+                      <View style={styles.forumIdentityText}>
+                        <Text style={styles.settingLabel}>{label}</Text>
+                        <Text style={styles.muted}>{on ? tr("Włączone", "On") : tr("Wyłączone", "Off")}</Text>
+                      </View>
+                      <Pressable
+                        onPress={() => void pushNotifications.setTopic(topic, !on)}
+                        disabled={pushNotifications.busy}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${label}: ${on ? tr("wyłącz", "turn off") : tr("włącz", "turn on")}`}
+                        hitSlop={8}
+                        style={styles.forumIdentityChange}
+                      >
+                        <Text style={styles.forumIdentityChangeLabel}>
+                          {pushNotifications.busy ? "…" : on ? tr("Wyłącz", "Turn off") : tr("Włącz", "Turn on")}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
               {pushNotifications.errorMessage ? (
                 <Notice tone="error">{pushNotifications.errorMessage}</Notice>
               ) : null}

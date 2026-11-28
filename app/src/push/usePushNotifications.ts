@@ -20,8 +20,16 @@ export type PushState =
   | "off"
   | "on";
 
+/** What a browser hears about (push_subscriptions.topics, migration 035). */
+export type PushTopic = "new_event" | "new_post";
+const ALL_TOPICS: PushTopic[] = ["new_event", "new_post"];
+
 export type PushNotifications = {
   state: PushState;
+  /** Topics on for this browser (only meaningful when state is "on"). */
+  topics: PushTopic[];
+  /** Turns one topic on or off; turning one on when push is off subscribes (both topics). */
+  setTopic: (topic: PushTopic, enabled: boolean) => Promise<void>;
   /** Show the Start card: can work here, not on yet, and not answered on this device. */
   shouldPrompt: boolean;
   busy: boolean;
@@ -89,12 +97,25 @@ async function saveSubscription(subscription: PushSubscription) {
   }
 }
 
+// null: unknown (before migration 035, or an error) — treat as all topics.
+async function loadTopics(endpoint: string): Promise<PushTopic[] | null> {
+  if (!supabaseAuthClient) {
+    return null;
+  }
+  const { data, error } = await supabaseAuthClient.rpc("get_push_topics", { p_endpoint: endpoint });
+  if (error || !Array.isArray(data)) {
+    return null;
+  }
+  return ALL_TOPICS.filter((topic) => (data as string[]).includes(topic));
+}
+
 export function usePushNotifications(userId: string | null): PushNotifications {
   const supported = isPushSupported();
   const [state, setState] = useState<PushState>(supported ? "off" : "unsupported");
   const [answered, setAnswered] = useState(() => (supported ? readAnswered() : true));
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [topics, setTopics] = useState<PushTopic[]>(ALL_TOPICS);
 
   // Current state; a subscription the browser still has is saved again for the
   // signed-in account (keys may rotate, another account may have used it).
@@ -117,6 +138,10 @@ export function usePushNotifications(userId: string | null): PushNotifications {
         if (subscription && Notification.permission === "granted") {
           setState("on");
           await saveSubscription(subscription).catch(() => undefined);
+          const saved = await loadTopics(subscription.endpoint);
+          if (!cancelled && saved) {
+            setTopics(saved);
+          }
         } else {
           setState("off");
         }
@@ -163,6 +188,7 @@ export function usePushNotifications(userId: string | null): PushNotifications {
       await saveSubscription(subscription);
       writeAnswered();
       setAnswered(true);
+      setTopics((await loadTopics(subscription.endpoint)) ?? ALL_TOPICS);
       setState("on");
     } catch {
       setErrorMessage("Nie udało się włączyć powiadomień. Spróbuj ponownie.");
@@ -198,8 +224,47 @@ export function usePushNotifications(userId: string | null): PushNotifications {
     }
   }, [supported]);
 
+  const setTopic = useCallback(
+    async (topic: PushTopic, enabled: boolean) => {
+      if (state !== "on") {
+        if (enabled) {
+          await enable();
+        }
+        return;
+      }
+      const next = enabled
+        ? ALL_TOPICS.filter((item) => item === topic || topics.includes(item))
+        : topics.filter((item) => item !== topic);
+      setBusy(true);
+      setErrorMessage(null);
+      try {
+        const registration = await getRegistration();
+        const subscription = await registration.pushManager.getSubscription();
+        if (!subscription || !supabaseAuthClient) {
+          setState("off");
+          return;
+        }
+        const { error } = await supabaseAuthClient.rpc("set_push_topics", {
+          p_endpoint: subscription.endpoint,
+          p_topics: next,
+        });
+        if (error) {
+          throw error;
+        }
+        setTopics(next);
+      } catch {
+        setErrorMessage("Nie udało się zapisać ustawienia. Spróbuj ponownie.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [enable, state, topics],
+  );
+
   return {
     state,
+    topics,
+    setTopic,
     shouldPrompt: supported && !answered && state === "off",
     busy,
     errorMessage,
