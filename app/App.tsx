@@ -45,6 +45,13 @@ import { SquadScreen } from "./src/screens/SquadScreen";
 import { tr } from "./src/i18n";
 import { tokens } from "./src/theme/tokens";
 import { AppShell } from "./src/ui/AppShell";
+import { ForumIdentityPrompt } from "./src/ui/ForumIdentityPrompt";
+import { Notice } from "./src/ui/Notice";
+import {
+  forumParticipantId,
+  parseForumIdentity,
+  type ForumIdentity,
+} from "./src/domain/forumIdentity";
 import { UnmappedMembersBanner } from "./src/ui/UnmappedMembersBanner";
 import {
   canManageInstrumentMappingByRole,
@@ -65,6 +72,7 @@ type LoadedData = {
     primaryInstrument: string;
     role: UserProfile["role"];
   } | null;
+  forumIdentity: ForumIdentity;
 };
 
 type AppState =
@@ -98,26 +106,42 @@ function normalizeIdentityName(value: string | null | undefined): string {
     .trim();
 }
 
+// Who the signed-in member is in forum polls. A linked account matches by forum
+// uid only; without the link RPC (older database) it falls back to the name;
+// an unlinked account (or one without a forum account) gets "unknown", never a
+// false "Brak deklaracji".
 function applySignedInUserAttendance(
   events: EventListItem[],
   details: EventDetail[],
   identityNames: string[],
+  forumIdentity: ForumIdentity,
 ): { events: EventListItem[]; details: Record<string, EventDetail> } {
   const names = new Set(identityNames.map(normalizeIdentityName).filter(Boolean));
+  const linkedParticipantId =
+    forumIdentity.kind === "linked" ? forumParticipantId(forumIdentity.forumUid) : null;
+  const isUnknown = forumIdentity.kind === "unlinked" || forumIdentity.kind === "no_forum_account";
+  const isMe = (participant: { id: string; fullName: string }) =>
+    linkedParticipantId
+      ? participant.id === linkedParticipantId
+      : names.has(normalizeIdentityName(participant.fullName));
   const updatedDetails = details.map((event) => {
-    const matchingResponses = event.attendanceGroups.filter((group) =>
-      group.participants.some((participant) => names.has(normalizeIdentityName(participant.fullName))),
-    );
-    const userStatus: EventDetail["attendanceSummary"]["userStatus"] = matchingResponses.length === 1
-      ? matchingResponses[0].status
-      : "no_response";
+    const matchingResponses = isUnknown
+      ? []
+      : event.attendanceGroups.filter((group) => group.participants.some(isMe));
+    const userStatus: EventDetail["attendanceSummary"]["userStatus"] = isUnknown
+      ? "unknown"
+      : matchingResponses.length === 1
+        ? matchingResponses[0].status
+        : "no_response";
     const userStatusLabel = userStatus === "going"
       ? tr("Będę", "Going")
       : userStatus === "maybe"
         ? tr("Może", "Maybe")
         : userStatus === "not_going"
           ? tr("Nie będę", "Not going")
-          : tr("Brak deklaracji", "No response");
+          : userStatus === "unknown"
+            ? ""
+            : tr("Brak deklaracji", "No response");
     return {
       ...event,
       attendanceStatus: userStatus,
@@ -306,6 +330,9 @@ export default function App() {
   const [authInfoMessage, setAuthInfoMessage] = useState<string | null>(null);
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const [authView, setAuthView] = useState<AuthView>("sign_in");
+  // E-mail of a sign-in refused as "not confirmed": offers "Wyślij link ponownie".
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [state, setState] = useState<AppState>({ status: "loading" });
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationsErrorMessage, setNotificationsErrorMessage] = useState<string | null>(null);
@@ -313,6 +340,11 @@ export default function App() {
   const [isMarkingNotificationsRead, setIsMarkingNotificationsRead] = useState(false);
   const [routeStack, setRouteStack] = useState<AppRoute[]>([ROOT_ROUTE]);
   const [lastEventsView, setLastEventsView] = useState<EventsView>("events");
+  const [dataReloadKey, setDataReloadKey] = useState(0);
+  const [identityNotice, setIdentityNotice] = useState<string | null>(null);
+  const [isChangingForumIdentity, setIsChangingForumIdentity] = useState(false);
+  const [accountsToConfirmCount, setAccountsToConfirmCount] = useState(0);
+  const [accountsReloadKey, setAccountsReloadKey] = useState(0);
   const route = routeStack[routeStack.length - 1] ?? ROOT_ROUTE;
   const browserHistoryRestoreRef = useRef(false);
   const isWeb = Platform.OS === "web";
@@ -585,10 +617,24 @@ export default function App() {
           }
         }
 
+        let forumIdentity: ForumIdentity = { kind: "unavailable" };
+        if (supabaseAuthClient) {
+          const { data: identityRows, error: identityError } = await supabaseAuthClient.rpc(
+            "resolve_my_forum_identity",
+          );
+          if (identityError) {
+            // Database without migration 033: keep matching by name.
+            console.warn("[forum-identity] resolve", identityError);
+          } else {
+            forumIdentity = parseForumIdentity(identityRows);
+          }
+        }
+
         const personalizedAttendance = applySignedInUserAttendance(
           events,
           eventDetails,
           identityNames,
+          forumIdentity,
         );
 
         if (isCancelled) {
@@ -612,6 +658,7 @@ export default function App() {
                     role: normalizePrimaryRole(profileResult.data.role),
                   }
                 : null,
+              forumIdentity,
             },
           });
         });
@@ -638,7 +685,7 @@ export default function App() {
     return () => {
       isCancelled = true;
     };
-  }, [authenticatedUserId]);
+  }, [authenticatedUserId, dataReloadKey]);
 
   useEffect(() => {
     if (!authenticatedUserId || !supabaseAuthClient) {
@@ -694,6 +741,31 @@ export default function App() {
     };
   }, [authenticatedUserId]);
 
+  // Board/admin: accounts whose forum link waits for confirmation (badge on Zarząd).
+  const loadedRole = state.status === "ready" ? state.data.authProfile?.role ?? null : null;
+  useEffect(() => {
+    if (!supabaseAuthClient || !loadedRole || !canManageInstrumentMappingByRole(normalizePrimaryRole(loadedRole))) {
+      setAccountsToConfirmCount(0);
+      return;
+    }
+    let cancelled = false;
+    void supabaseAuthClient.rpc("list_forum_identity_links").then(({ data, error }) => {
+      if (cancelled) {
+        return;
+      }
+      if (error) {
+        console.warn("[forum-accounts] count", error);
+        setAccountsToConfirmCount(0);
+        return;
+      }
+      const rows = Array.isArray(data) ? (data as Array<{ status?: unknown }>) : [];
+      setAccountsToConfirmCount(rows.filter((row) => row.status === "proposed").length);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedRole, accountsReloadKey, dataReloadKey]);
+
   async function handleSignIn(email: string, password: string) {
     if (!supabaseAuthClient) {
       setAuthErrorMessage(
@@ -705,6 +777,7 @@ export default function App() {
     setIsAuthSubmitting(true);
     setAuthErrorMessage(null);
     setAuthInfoMessage(null);
+    setUnconfirmedEmail(null);
 
     const { error } = await supabaseAuthClient.auth.signInWithPassword({
       email,
@@ -713,9 +786,30 @@ export default function App() {
 
     if (error) {
       setAuthErrorMessage(describeAuthError(error, "sign_in"));
+      if (error.code === "email_not_confirmed" || error.message.toLowerCase().includes("email not confirmed")) {
+        setUnconfirmedEmail(email.trim());
+      }
     }
 
     setIsAuthSubmitting(false);
+  }
+
+  async function handleResendConfirmation() {
+    if (!supabaseAuthClient || !unconfirmedEmail) {
+      return;
+    }
+    setIsResendingConfirmation(true);
+    const { error } = await supabaseAuthClient.auth.resend({ type: "signup", email: unconfirmedEmail });
+    setIsResendingConfirmation(false);
+    if (error) {
+      setAuthErrorMessage(describeAuthError(error, "sign_up"));
+      return;
+    }
+    setAuthErrorMessage(null);
+    setUnconfirmedEmail(null);
+    setAuthInfoMessage(
+      tr("Wysłaliśmy nowy link. Sprawdź też folder Spam.", "We sent a new link. Check your Spam folder too."),
+    );
   }
 
   async function handleRegister(payload: {
@@ -861,6 +955,8 @@ export default function App() {
             isSubmitting={isAuthSubmitting}
             errorMessage={authErrorMessage}
             infoMessage={authInfoMessage}
+            onResendConfirmation={unconfirmedEmail ? handleResendConfirmation : undefined}
+            isResendingConfirmation={isResendingConfirmation}
           />
         )}
       </SafeAreaProvider>
@@ -893,6 +989,7 @@ export default function App() {
     dataSourceLabel,
     dataSourceGeneratedAt,
     authProfile,
+    forumIdentity,
   } = state.data;
   const sessionUserMetadata = authState.session.user.user_metadata;
   const metadataFirstName =
@@ -941,6 +1038,14 @@ export default function App() {
   const unmappedMembers = canSeeUnmappedMembersAlert
     ? findUnmappedSquadMembers(eventDetailsById)
     : [];
+  // "Osoby z forum" waits on two jobs: instruments to assign, account links to confirm.
+  const forumPeopleWaitingCount = unmappedMembers.length + (canManageInstrumentMapping ? accountsToConfirmCount : 0);
+  const forumPeopleBadgeLabel =
+    unmappedMembers.length > 0 && accountsToConfirmCount > 0
+      ? tr(`${forumPeopleWaitingCount} do sprawdzenia`, `${forumPeopleWaitingCount} to check`)
+      : accountsToConfirmCount > 0
+        ? tr(`${accountsToConfirmCount} do potwierdzenia`, `${accountsToConfirmCount} to confirm`)
+        : tr(`${unmappedMembers.length} do przypisania`, `${unmappedMembers.length} to assign`);
   const boardSections: BoardSection[] = [
     ...(canWriteAttendance ? (["attendance"] as const) : []),
     ...(canViewAttendanceSummary ? (["summary"] as const) : []),
@@ -1096,12 +1201,34 @@ export default function App() {
     resetToRoute({ name: "profile" });
   }
 
+  function handleForumIdentityLinked(message: string) {
+    setIdentityNotice(message);
+    setIsChangingForumIdentity(false);
+    setDataReloadKey((key) => key + 1);
+  }
+
+  const identityNoticeNode = identityNotice ? <Notice tone="success">{identityNotice}</Notice> : null;
+
+  function renderForumIdentityPrompt(initialMode: "suggest" | "list", onCancel?: () => void) {
+    return (
+      <ForumIdentityPrompt
+        profileFullName={effectiveCurrentUser.fullName}
+        profileInstrument={effectiveCurrentUser.primaryInstrument ?? null}
+        initialMode={initialMode}
+        onLinked={handleForumIdentityLinked}
+        onCancel={onCancel}
+      />
+    );
+  }
+
   function renderScreen() {
     switch (route.name) {
       case "home":
         return (
           <StartScreen
             events={events}
+            identityPrompt={forumIdentity.kind === "unlinked" ? renderForumIdentityPrompt("suggest") : undefined}
+            topNotice={identityNoticeNode}
             firstName={effectiveCurrentUser.fullName.trim().split(/\s+/)[0] || null}
             unreadNotificationsCount={unreadNotificationsCount}
             onOpenEvent={(eventId) => pushRoute({ name: "eventDetail", eventId })}
@@ -1232,6 +1359,18 @@ export default function App() {
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
             onOpenOrchestraAttendance={() => pushRoute({ name: "orchestraAttendance" })}
+            forumIdentity={forumIdentity}
+            forumIdentityEditor={
+              isChangingForumIdentity
+                ? renderForumIdentityPrompt("list", () => setIsChangingForumIdentity(false))
+                : forumIdentity.kind === "unlinked"
+                  ? renderForumIdentityPrompt("suggest")
+                  : undefined
+            }
+            onChangeForumIdentity={() => {
+              setIdentityNotice(null);
+              setIsChangingForumIdentity(true);
+            }}
           />
         );
       case "orchestraAttendance":
@@ -1283,7 +1422,7 @@ export default function App() {
         );
       case "instrumentMapping":
         return canManageInstrumentMapping ? (
-          <InstrumentMappingScreen />
+          <InstrumentMappingScreen onAccountsChanged={() => setAccountsReloadKey((key) => key + 1)} />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "events" })}
@@ -1302,8 +1441,8 @@ export default function App() {
         activeTab={activeTab}
         tabBadges={{
           ...(unreadNotificationsCount > 0 ? { profile: unreadNotificationsCount } : {}),
-          ...(canManageInstrumentMapping && unmappedMembers.length > 0
-            ? { board: unmappedMembers.length }
+          ...(canManageInstrumentMapping && forumPeopleWaitingCount > 0
+            ? { board: forumPeopleWaitingCount }
             : {}),
         }}
         hideNavigation={route.name === "setlist"}
@@ -1327,10 +1466,11 @@ export default function App() {
             sections={boardSections}
             activeSection={activeBoardSection}
             badges={
-              canManageInstrumentMapping && unmappedMembers.length > 0
-                ? { instruments: unmappedMembers.length }
+              canManageInstrumentMapping && forumPeopleWaitingCount > 0
+                ? { instruments: forumPeopleWaitingCount }
                 : undefined
             }
+            badgeLabels={{ instruments: forumPeopleBadgeLabel }}
             onSelect={openBoardSection}
           />
         ) : null}

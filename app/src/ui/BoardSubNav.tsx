@@ -9,6 +9,8 @@ type BoardSubNavProps = {
   sections: BoardSection[];
   activeSection: BoardSection;
   badges?: Partial<Record<BoardSection, number>>;
+  /** Badge text per section; defaults to "N do przypisania". */
+  badgeLabels?: Partial<Record<BoardSection, string>>;
   onSelect: (section: BoardSection) => void;
 };
 
@@ -22,11 +24,11 @@ function getSectionLabel(section: BoardSection) {
   if (section === "roles") {
     return tr("Role", "Roles");
   }
-  return tr("Instrumenty", "Instruments");
+  return tr("Osoby z forum", "Forum people");
 }
 
 // Second-level navigation inside the "Zarząd" tab.
-export function BoardSubNav({ sections, activeSection, badges, onSelect }: BoardSubNavProps) {
+export function BoardSubNav({ sections, activeSection, badges, badgeLabels, onSelect }: BoardSubNavProps) {
   if (sections.length < 2) {
     return null;
   }
@@ -54,7 +56,7 @@ export function BoardSubNav({ sections, activeSection, badges, onSelect }: Board
                 {getSectionLabel(section)}
               </Text>
               {badge > 0 ? (
-                <Badge variant="soft" value={tr(`${badge} do przypisania`, `${badge} to assign`)} />
+                <Badge variant="soft" value={badgeLabels?.[section] ?? tr(`${badge} do przypisania`, `${badge} to assign`)} />
               ) : null}
             </Pressable>
           );

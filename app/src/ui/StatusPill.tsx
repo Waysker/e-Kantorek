@@ -44,6 +44,15 @@ export function statusMeta(status: AttendanceStatus): StatusMeta {
         accent: tokens.colors.neutralInk,
         needsAction: false,
       };
+    case "unknown":
+      return {
+        glyph: "",
+        label: "",
+        bg: tokens.colors.neutralSurface,
+        fg: tokens.colors.neutralInk,
+        accent: tokens.colors.border,
+        needsAction: false,
+      };
     default:
       return {
         glyph: "!",
@@ -57,6 +66,9 @@ export function statusMeta(status: AttendanceStatus): StatusMeta {
 }
 
 export function StatusPill({ status, large }: { status: AttendanceStatus; large?: boolean }) {
+  if (status === "unknown") {
+    return null;
+  }
   const meta = statusMeta(status);
   return (
     <View

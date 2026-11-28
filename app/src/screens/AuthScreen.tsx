@@ -15,6 +15,9 @@ type AuthScreenProps = {
   isSubmitting: boolean;
   errorMessage: string | null;
   infoMessage?: string | null;
+  /** Shown when sign-in failed because the e-mail is not confirmed yet. */
+  onResendConfirmation?: () => Promise<void>;
+  isResendingConfirmation?: boolean;
 };
 
 type LoginErrors = {
@@ -46,6 +49,8 @@ export function AuthScreen({
   isSubmitting,
   errorMessage,
   infoMessage,
+  onResendConfirmation,
+  isResendingConfirmation,
 }: AuthScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -112,6 +117,17 @@ export function AuthScreen({
           />
 
           {errorMessage ? <View style={styles.field}><Notice tone="error">{errorMessage}</Notice></View> : null}
+          {onResendConfirmation ? (
+            <View style={styles.field}>
+              <Button
+                variant="secondary"
+                label={tr("Wyślij link ponownie", "Send the link again")}
+                onPress={onResendConfirmation}
+                loading={isResendingConfirmation}
+                disabled={isResendingConfirmation}
+              />
+            </View>
+          ) : null}
           {infoMessage ? <View style={styles.field}><Notice tone="success">{infoMessage}</Notice></View> : null}
 
           <Button

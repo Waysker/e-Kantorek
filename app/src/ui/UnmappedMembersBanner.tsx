@@ -35,7 +35,7 @@ export function UnmappedMembersBanner({ members, canAssign }: UnmappedMembersBan
       <Text style={styles.detailsLabel}>
         {namesLabel}.{" "}
         {canAssign
-          ? tr("Przypisz je w zakładce Instrumenty.", "Assign them in the Instruments tab.")
+          ? tr("Przypisz je w zakładce Osoby z forum.", "Assign them in the Forum people tab.")
           : tr(
               "Daj znać zarządowi, jaki grają instrument.",
               "Let the board know which instrument they play.",

@@ -1,5 +1,7 @@
+import type { ReactNode } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
+import type { ForumIdentity } from "../domain/forumIdentity";
 import type { AppNotification, UserProfile } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
@@ -57,6 +59,9 @@ export function ProfileScreen({
   signedInEmail,
   onSignOut,
   onOpenOrchestraAttendance,
+  forumIdentity,
+  forumIdentityEditor,
+  onChangeForumIdentity,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -72,6 +77,11 @@ export function ProfileScreen({
   onSignOut?: () => Promise<void>;
   /** Opens the attendance summary of the whole orchestra (read-only for members). */
   onOpenOrchestraAttendance?: () => void;
+  /** The account's link to a forum person ("Konto na forum"). */
+  forumIdentity?: ForumIdentity;
+  /** The ForumIdentityPrompt while the member changes the link. */
+  forumIdentityEditor?: ReactNode;
+  onChangeForumIdentity?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
@@ -95,6 +105,31 @@ export function ProfileScreen({
           </Text>
         </View>
       </View>
+
+      {forumIdentityEditor ? (
+        forumIdentityEditor
+      ) : forumIdentity && (forumIdentity.kind === "linked" || forumIdentity.kind === "no_forum_account") ? (
+        <View style={styles.card}>
+          <View style={styles.settingRow}>
+            <View style={styles.forumIdentityText}>
+              <Text style={styles.kicker}>{tr("Konto na forum", "Forum account")}</Text>
+              <Text style={styles.settingLabel}>
+                {forumIdentity.kind === "linked"
+                  ? forumIdentity.forumFullName
+                  : tr("Bez konta na forum", "No forum account")}
+              </Text>
+              {forumIdentity.kind === "linked" && forumIdentity.status === "proposed" ? (
+                <Text style={styles.muted}>{tr("Zarząd jeszcze to potwierdzi.", "The board will confirm it.")}</Text>
+              ) : null}
+            </View>
+            {onChangeForumIdentity ? (
+              <Pressable onPress={onChangeForumIdentity} accessibilityRole="button" hitSlop={8} style={styles.forumIdentityChange}>
+                <Text style={styles.forumIdentityChangeLabel}>{tr("Zmień", "Change")}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       {onOpenOrchestraAttendance ? (
         <View style={styles.card}>
@@ -298,6 +333,21 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.md,
   },
   kicker: textStyles.kicker,
+  forumIdentityText: {
+    flex: 1,
+    gap: 2,
+  },
+  forumIdentityChange: {
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: "center",
+    alignItems: "flex-end",
+  },
+  forumIdentityChangeLabel: {
+    fontSize: tokens.typography.body,
+    fontWeight: "600",
+    color: tokens.colors.brand,
+  },
   link: {
     fontSize: 13,
     fontWeight: "600",

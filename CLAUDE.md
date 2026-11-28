@@ -20,12 +20,20 @@
 Pełny opis procesu: `docs/ops/forum-instrument-mapping.md`.
 
 - Osoby bez instrumentu trafiają do grupy „Instrument not mapped yet". Sync zapisuje je do `app/.cache/forum-sync/unmapped.json` i loguje ostrzeżenie.
-- Alerty: push ntfy (`notify.sh unmapped`, powtarzany co 24 h). W aplikacji `board`/`admin` widzą licznik na zakładce „Zarząd” i przy podzakładce „Instrumenty”, a `section` (bez prawa przypisania) widzi baner z nazwiskami.
+- Alerty: push ntfy (`notify.sh unmapped`, powtarzany co 24 h). W aplikacji `board`/`admin` widzą licznik na zakładce „Zarząd” i przy podzakładce „Osoby z forum”, a `section` (bez prawa przypisania) widzi baner z nazwiskami.
 - Mapping to tabela `forum_instrument_overrides` (klucz `forum`, payload `{ byUid, byFullName, byUsername }`), a nie plik. `app/forum-sync.instrument-overrides.example.json` to tylko szablon.
-- Przypisanie i poprawianie robi zarząd w zakładce „Instrumenty" (w „Zarząd” → „Instrumenty”; widoki: Do przypisania, Przypisani, Historia; migracje 027 i 028). Każda zmiana trafia do `forum_instrument_mapping_audit`. Wpis działa po następnym syncu (do ~20 min).
+- Przypisanie i poprawianie robi zarząd w zakładce „Osoby z forum" (dawniej „Instrumenty”; „Zarząd” → „Osoby z forum”; widoki: Do przypisania, Przypisani, Historia; migracje 027 i 028). Każda zmiana trafia do `forum_instrument_mapping_audit`. Wpis działa po następnym syncu (do ~20 min).
 - Awaryjnie: SQL na orbit (przykład w docs/ops/forum-instrument-mapping.md).
 - Instrumentu nie ma w profilach forum, więc podaje go człowiek.
 - `publish-instrument-overrides-to-supabase.mjs` z `FORUM_SYNC_FORCE_OVERRIDE_PUBLISH=1` scala dane (wpisy z panelu zostają) i robi kopię w `.cache/forum-sync/`. Pełne nadpisanie tylko z dodatkowym `FORUM_SYNC_OVERRIDE_REPLACE=1`.
+
+## Konto w aplikacji ↔ osoba z forum
+
+Pełny opis: `docs/ops/forum-account-links.md`.
+
+- Deklaracje przypisuje się po uid forum z tabeli `profile_forum_links` (migracja 033), a nie po imieniu z rejestracji („Kasia” vs „Katarzyna”). Stan `proposed` (połączył sam członek albo dokładne imię+nazwisko+sekcja) wystarcza do odczytu; `verified` nadaje zarząd w „Zarząd” → „Osoby z forum” → „Konta”. Historia: `forum_identity_link_audit`.
+- Konto bez połączenia nie dostaje statusu (`unknown`), a nie fałszywe „Brak deklaracji”; na Start widzi kartę „Czy to Ty na forum?”.
+- Konta bez potwierdzonego e-maila są poza listą ról (osobna karta) i poza „Konta”. Przy logowaniu na niepotwierdzony adres jest „Wyślij link ponownie”.
 
 ## Design system („Partytura”)
 
