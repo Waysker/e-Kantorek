@@ -12,6 +12,7 @@ import {
 import { CsvExportPanel } from "./attendance-manager/CsvExportPanel";
 import { SectionGridPanel, type SectionGridTile } from "./attendance-manager/SectionGridPanel";
 import { SectionMembersPanel, type SectionMemberCard } from "./attendance-manager/SectionMembersPanel";
+import { SheetCheckPanel } from "./attendance-manager/SheetCheckPanel";
 import { useAttendanceBootData, useAttendanceEntries } from "./attendance-manager/useAttendanceManagerData";
 import type {
   ForumSnapshotPayload,
@@ -1280,6 +1281,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         <View style={styles.columns}>
           <View style={styles.sideColumn}>
             {sessionPicker}
+            <SheetCheckPanel refreshKey={lastSaveFeedback?.timestampMs} />
             <CsvExportPanel />
           </View>
           <View style={styles.mainColumn}>{markingPanel}</View>
@@ -1288,6 +1290,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         <>
           {sessionPicker}
           {markingPanel}
+          <SheetCheckPanel refreshKey={lastSaveFeedback?.timestampMs} />
           <CsvExportPanel />
         </>
       )}
