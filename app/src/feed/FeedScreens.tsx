@@ -14,6 +14,7 @@ import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
 import { TextField } from "../ui/TextField";
 import { formatRelativeLabel } from "../utils/format";
+import { AccountPickerModal } from "./AccountPicker";
 import { ConfirmModal, LinkedText, PostCard } from "./FeedParts";
 import {
   MAX_ATTACHMENTS,
@@ -23,12 +24,15 @@ import {
   deletePost,
   getPost,
   listFeed,
+  listMembers,
+  setAuthor,
   pickFiles,
   prepareFile,
   setPinned,
   updateComment,
   updatePost,
   type FeedComment,
+  type FeedMember,
   type FeedPost,
   type NewAttachment,
 } from "./feedApi";
@@ -166,6 +170,8 @@ export function FeedPostScreen({
   const [editingPost, setEditingPost] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<{ id: string; body: string } | null>(null);
   const [confirm, setConfirm] = useState<{ message: string; label: string; run: () => Promise<void> } | null>(null);
+  const [members, setMembers] = useState<FeedMember[] | null>(null);
+  const [linking, setLinking] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -265,6 +271,27 @@ export function FeedPostScreen({
               style={styles.textAction}
             >
               <Text style={styles.textActionLabel}>{post.pinned ? tr("Odepnij", "Unpin") : tr("Przypnij", "Pin")}</Text>
+            </Pressable>
+          ) : null}
+          {isModerator && post.source === "facebook" ? (
+            <Pressable
+              onPress={() =>
+                post.authorId
+                  ? void run(async () => {
+                      await setAuthor(post.id, null);
+                      await load();
+                    })
+                  : void run(async () => {
+                      setMembers(members ?? (await listMembers()));
+                      setLinking(true);
+                    })
+              }
+              accessibilityRole="button"
+              style={styles.textAction}
+            >
+              <Text style={styles.textActionLabel}>
+                {post.authorId ? tr("Odłącz od konta", "Unlink account") : tr("Połącz z kontem", "Link to account")}
+              </Text>
             </Pressable>
           ) : null}
           {canDeletePost ? (
@@ -372,6 +399,21 @@ export function FeedPostScreen({
         </Card>
       ) : null}
 
+      <AccountPickerModal
+        visible={linking}
+        members={members ?? []}
+        initialName={post?.authorName ?? ""}
+        onClose={() => setLinking(false)}
+        onPick={(profileId) => {
+          setLinking(false);
+          if (post) {
+            void run(async () => {
+              await setAuthor(post.id, profileId);
+              await load();
+            });
+          }
+        }}
+      />
       <ConfirmModal
         message={confirm?.message ?? null}
         confirmLabel={confirm?.label ?? ""}
@@ -607,7 +649,8 @@ const styles = themedStyles((colors) => ({
   },
   textActions: {
     flexDirection: "row",
-    gap: tokens.spacing.md,
+    flexWrap: "wrap",
+    columnGap: tokens.spacing.md,
   },
   textAction: {
     minHeight: 44,

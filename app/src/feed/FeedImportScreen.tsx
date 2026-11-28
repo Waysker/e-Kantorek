@@ -1,7 +1,7 @@
 // Board/admin: copy a post from the Facebook group into Kantorek by hand
 // (Partytura → Kantorek (feed) → History from Facebook). The form clears after
 // each post, so many can be added in a row. Imports never send push.
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, ScrollView, Switch, Text, View, useWindowDimensions } from "react-native";
 
 import { tr } from "../i18n";
@@ -13,7 +13,16 @@ import { Card } from "../ui/Card";
 import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
 import { TextField } from "../ui/TextField";
-import { MAX_ATTACHMENTS, importFacebookPost, pickFiles, prepareFile, type NewAttachment } from "./feedApi";
+import { AccountPicker, noAccount, type AccountChoice } from "./AccountPicker";
+import {
+  MAX_ATTACHMENTS,
+  importFacebookPost,
+  listMembers,
+  pickFiles,
+  prepareFile,
+  type FeedMember,
+  type NewAttachment,
+} from "./feedApi";
 
 const TZ = "Europe/Warsaw";
 const DATE_PATTERN = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ ,]+(\d{1,2}):(\d{2}))?$/;
@@ -39,14 +48,23 @@ export function parseWarsawDate(text: string): string | null {
   return new Date(asUtc - minutes * 60_000).toISOString();
 }
 
-type CommentDraft = { authorName: string; body: string; date: string };
+type CommentDraft = { authorName: string; body: string; date: string; account: AccountChoice };
 type OptionDraft = { label: string; votes: string };
 
-const emptyComment = (): CommentDraft => ({ authorName: "", body: "", date: "" });
+const emptyComment = (): CommentDraft => ({ authorName: "", body: "", date: "", account: noAccount });
 
 export function FeedImportScreen({ onBack, onOpenPost }: { onBack: () => void; onOpenPost: (postId: string) => void }) {
   const { width } = useWindowDimensions();
   const [author, setAuthor] = useState("");
+  const [authorAccount, setAuthorAccount] = useState<AccountChoice>(noAccount);
+  const [members, setMembers] = useState<FeedMember[]>([]);
+  const onAuthorAccount = useCallback((next: AccountChoice) => setAuthorAccount(next), []);
+
+  useEffect(() => {
+    listMembers()
+      .then(setMembers)
+      .catch(() => setMembers([]));
+  }, []);
   const [date, setDate] = useState("");
   const [body, setBody] = useState("");
   const [url, setUrl] = useState("");
@@ -130,6 +148,7 @@ export function FeedImportScreen({ onBack, onOpenPost }: { onBack: () => void; o
       const id = await importFacebookPost(
         {
           authorName: author.trim(),
+          authorProfileId: authorAccount.profileId,
           createdAt,
           body,
           externalUrl: url.trim() || null,
@@ -137,6 +156,7 @@ export function FeedImportScreen({ onBack, onOpenPost }: { onBack: () => void; o
           poll: pollOpen ? { question: question.trim(), multiple, options: pollOptions } : null,
           comments: commentRows.map((comment) => ({
             authorName: comment.authorName.trim(),
+            authorProfileId: comment.account.profileId,
             body: comment.body.trim(),
             createdAt: comment.date.trim() ? parseWarsawDate(comment.date) : null,
           })),
@@ -174,7 +194,19 @@ export function FeedImportScreen({ onBack, onOpenPost }: { onBack: () => void; o
       ) : null}
 
       <Card>
-        <TextField label={tr("Autor", "Author")} value={author} onChangeText={setAuthor} placeholder="Ania Raczkowska" maxLength={120} />
+        <TextField
+          label={tr("Autor", "Author")}
+          value={author}
+          onChangeText={(text) => {
+            setAuthor(text);
+            if (authorAccount.manual && !authorAccount.profileId) {
+              setAuthorAccount(noAccount);
+            }
+          }}
+          placeholder="Ania Raczkowska"
+          maxLength={120}
+        />
+        <AccountPicker members={members} name={author} value={authorAccount} onChange={onAuthorAccount} />
         <TextField
           label={tr("Data", "Date")}
           value={date}
@@ -301,6 +333,14 @@ export function FeedImportScreen({ onBack, onOpenPost }: { onBack: () => void; o
               value={comment.authorName}
               onChangeText={(text) =>
                 setComments((current) => current.map((value, at) => (at === index ? { ...value, authorName: text } : value)))
+              }
+            />
+            <AccountPicker
+              members={members}
+              name={comment.authorName}
+              value={comment.account}
+              onChange={(account) =>
+                setComments((current) => current.map((value, at) => (at === index ? { ...value, account } : value)))
               }
             />
             <TextField

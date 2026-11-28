@@ -187,14 +187,37 @@ export async function createPost(body: string, attachments: NewAttachment[], pol
   }
 }
 
+export type FeedMember = { id: string; fullName: string };
+
+/** Board/admin: confirmed accounts, for linking imported posts. */
+export async function listMembers(): Promise<FeedMember[]> {
+  const { data, error } = await client().rpc("feed_list_members");
+  if (error) {
+    fail(error, "Nie udało się wczytać listy kont.");
+  }
+  return ((data ?? []) as Array<{ id: string; full_name: string }>).map((row) => ({
+    id: row.id,
+    fullName: row.full_name,
+  }));
+}
+
+/** Board/admin: link an imported post to an account, or unlink (null). */
+export async function setAuthor(postId: string, profileId: string | null) {
+  const { error } = await client().rpc("set_feed_author", { p_post_id: postId, p_profile_id: profileId });
+  if (error) {
+    fail(error, "Nie udało się zmienić autora.");
+  }
+}
+
 export type FacebookImport = {
   authorName: string;
+  authorProfileId: string | null;
   createdAt: string;
   body: string;
   externalUrl: string | null;
   likeCount: number;
   poll: { question: string; multiple: boolean; options: Array<{ label: string; votes: number }> } | null;
-  comments: Array<{ authorName: string; body: string; createdAt: string | null }>;
+  comments: Array<{ authorName: string; authorProfileId: string | null; body: string; createdAt: string | null }>;
 };
 
 async function uploadAll(attachments: NewAttachment[]) {
