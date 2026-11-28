@@ -1,21 +1,10 @@
 name: Attendance Health Check
 
+# Runs against the self-hosted Supabase on orbit (SUPABASE_URL).
 on:
   workflow_dispatch:
   schedule:
     - cron: "23 */2 * * *"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - ".github/workflows/attendance-health-check.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - ".github/workflows/attendance-health-check.yml"
 
 permissions:
   contents: read
@@ -36,27 +25,19 @@ jobs:
       - name: Trigger Supabase attendance health check
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN: ${{ secrets.ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN }}
         run: |
-          if [ -z "$SUPABASE_PROJECT_REF" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              echo "::notice::Skipping attendance health check on pull_request because SUPABASE_PROJECT_REF is unavailable."
-              exit 0
-            fi
-            echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL is missing (repo secret)."
             exit 1
           fi
           if [ -z "$ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              echo "::notice::Skipping attendance health check on pull_request because ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN is unavailable (likely fork PR)."
-              exit 0
-            fi
             echo "::error::ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN is missing (repo secret)."
             exit 1
           fi
 
-          health_check_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/attendance_health_check"
+          health_check_url="${SUPABASE_URL%/}/functions/v1/attendance_health_check"
           payload='{"failureWindowMinutes":150,"staleProcessingMinutes":15,"rowLimit":50}'
 
           raw_response=""

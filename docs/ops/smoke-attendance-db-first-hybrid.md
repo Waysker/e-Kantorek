@@ -1,84 +1,73 @@
-# Smoke Attendance (`db_first`) Hybrid Model
+# Smoke obecności (`db_first`) i health-check
 
-## Goal
+Oba testy działają na self-hosted Supabase na orbit. Logika i hasła są w funkcjach
+na orbit, a GitHub Actions tylko je wywołuje tokenem.
 
-Run end-to-end regression checks without exposing test-user credentials to GitHub.
+## Smoke: co sprawdza
 
-Hybrid model:
+`smoke_attendance_db_first` przechodzi przez prawdziwą ścieżkę zapisu z panelu,
+ale **nigdy nie dotyka prawdziwej obecności**:
 
-- Supabase function executes the smoke scenario and stores sensitive runtime secrets.
-- GitHub Actions only triggers the function with a dedicated bearer token.
+1. Tworzy (albo odświeża) własne dane testowe:
+   - osobę `member-smoke-fixture` („Smoke Test”, `is_active=false`, więc nie ma jej
+     w panelu, podsumowaniach ani eksporcie),
+   - wydarzenie `evt-smoke-fixture` (2000-01-01, bez arkusza i forum, więc nie ma go
+     w kalendarzu panelu).
+2. Loguje się kontem testowym z rolą `board` lub `admin`.
+3. Zapisuje 0,5 przez `attendance_write_sheet_first` (`mode=enqueue_batch`,
+   `skipSheetExport=true`, więc nic nie trafia do kopii arkusza).
+4. Sprawdza, że:
+   - wpis jest w `app_attendance_entries` z kontem testowym jako autorem,
+   - `attendance_entries` (dane z oryginału) się nie zmieniło.
+5. Opcjonalnie: przebieg na sucho `sheet_to_supabase_sync` i jego kontrakt odpowiedzi
+   (`checkSyncContract`, domyślnie włączony w workflow).
+6. Sprząta: usuwa swój wpis z `app_attendance_entries` i swoje wiersze z
+   `change_journal`, więc nie widać go w „Ostatnich zapisach” panelu.
 
-## Runtime Ownership
+Wynik: `{"status":"ok", "sheet_data_untouched":true, "cleaned_up":true, …}`.
 
-Supabase secrets (function runtime):
+## Health-check: co sprawdza
 
-- `SMOKE_ATTENDANCE_TEST_EMAIL`
-- `SMOKE_ATTENDANCE_TEST_PASSWORD`
-- `SMOKE_ATTENDANCE_EVENT_ID`
-- `SMOKE_ATTENDANCE_MEMBER_ID`
-- optional `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK`
-- optional `SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT` (default `false`; can be enabled per call/workflow)
-- optional `SMOKE_SYNC_MAX_WARNINGS` (non-negative integer; fail when `warnings_count` is above threshold)
-- optional `SMOKE_SYNC_FORBID_WARNING_CODES` (comma-separated warning codes; fail when present in warning breakdown)
-- `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
-- `SHEET_SYNC_FUNCTION_AUTH_TOKEN` (required only when sync contract check is enabled)
+`attendance_health_check` zgłasza `status: "fail"`, gdy:
 
-GitHub settings (trigger only):
+- ostatni udany sync z oryginału był dawniej niż 60 min temu (`sheet_sync_stale`;
+  łapie też sytuację, w której sync w ogóle nie zapisuje przebiegów),
+- w ostatnich 150 min były nieudane synci,
+- w kolejce zapisu są wpisy `dead_letter` albo zawieszone `processing`.
 
-- secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
-- variable: `SUPABASE_PROJECT_REF`
-- optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
-- optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (defaults to `true` in workflow)
+## Konfiguracja
 
-## What Smoke Validates
+Zmienne funkcji na orbit (`docker-compose.orbit-quick.yml`, usługa `functions`,
+wartości sekretów w `.env`):
 
-1. Sign-in using dedicated manager account.
-2. Attendance write through `attendance_write_sheet_first` (`mode=enqueue_batch`, `db_first`).
-3. DB assertion that value changed.
-4. Rollback assertion that original value was restored.
-5. Optional contract check of `sheet_to_supabase_sync` (`dryRun=true`), including response shape validation.
-6. Optional quality gate for sync summary:
-   - `errors_count == 0`
-   - `attendance_entries_skipped_due_to_invalid_events == 0`
-   - optional warning limits via env thresholds.
+- `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` (wymagany; bez niego funkcja odmawia)
+- `SMOKE_ATTENDANCE_TEST_EMAIL`, `SMOKE_ATTENDANCE_TEST_PASSWORD` (konto testowe
+  z rolą `board`; wpisy KeePassXC `orbit/ekantorek-smoke-*`)
+- `ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN`
+- opcjonalnie `SMOKE_SYNC_MAX_WARNINGS`, `SMOKE_SYNC_FORBID_WARNING_CODES`
 
-## Workflow
+GitHub (tylko wywołanie):
 
-File:
+- sekrety `SUPABASE_URL`, `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`,
+  `ATTENDANCE_HEALTH_CHECK_FUNCTION_AUTH_TOKEN` (te same wartości co na orbit),
+- opcjonalna zmienna `SMOKE_CHECK_SYNC_CONTRACT` (domyślnie `true`).
 
-- `.github/workflows/smoke-attendance-db-first.yml`
+## Workflowy
 
-Triggers:
+- `.github/workflows/smoke-attendance-db-first.yml`: codziennie i ręcznie.
+- `.github/workflows/attendance-health-check.yml`: co 2 godziny i ręcznie.
 
-- `pull_request` (paths limited to app/workflow)
-- `push` to `main` (paths limited)
-- scheduled daily run
-- manual `workflow_dispatch`
+GitHub wyłącza zaplanowane workflowy po 60 dniach bez aktywności w repo; włącza
+się je `gh workflow enable <plik>`.
 
-## Manual Trigger
+## Ręcznie
 
 ```bash
-curl -sS -X POST \
-  "<SUPABASE_URL>/functions/v1/smoke_attendance_db_first" \
-  -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"requireExportTriggerOk":false,"checkSyncContract":true}'
+cd app && npm run smoke:attendance:db-first   # SUPABASE_URL + token w app/.env
 ```
 
-Expected result:
+## Rotacja
 
-- `{"status":"ok", ...}`
-
-## Rotation
-
-1. Rotate `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` in Supabase.
-2. Update GitHub secret `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`.
-3. If rotating smoke user password, update:
-   - Supabase Auth user password
-   - Supabase secret `SMOKE_ATTENDANCE_TEST_PASSWORD`
-
-## Failure Handling
-
-- Use `docs/ops/function-errors-runbook.md` for code-level remediation.
-- Use `docs/ops/attendance-ops-runbook.md` for SQL checks and queue/sync health.
+1. Nowy token: `secret.ps1 genpush` do `.env` na orbit, restart `functions`.
+2. Ta sama wartość do sekretu GitHub (`gh secret set …`).
+3. Hasło konta testowego: zmiana w aplikacji i `SMOKE_ATTENDANCE_TEST_PASSWORD`.

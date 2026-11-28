@@ -2180,12 +2180,17 @@ async function handleDbFirstEnqueueBatchMode(
   const requestNoteRaw = normalizeWhitespace(body.requestNote ?? body.note ?? "");
   const requestNote = requestNoteRaw ? requestNoteRaw.slice(0, 500) : null;
 
-  const exportTrigger = await maybeTriggerDbToSheetExport({
-    eventId,
-    eventDate: exportEventDate,
-    memberIds: Array.from(dedupedChanges.keys()),
-    overwriteMissingWithZero: false,
-  });
+  // The smoke test writes to its own hidden fixture event and must not touch the
+  // copy sheet, so it asks to skip the export.
+  const skipSheetExport = body.skipSheetExport === true || body.skip_sheet_export === true;
+  const exportTrigger = skipSheetExport
+    ? { triggered: false, ok: true, message: "skipped_by_request" }
+    : await maybeTriggerDbToSheetExport({
+      eventId,
+      eventDate: exportEventDate,
+      memberIds: Array.from(dedupedChanges.keys()),
+      overwriteMissingWithZero: false,
+    });
 
   await supabaseAdmin.from("change_journal").insert({
     entity_type: "app_attendance_entries",

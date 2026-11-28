@@ -84,9 +84,8 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
 
 1. ~~Adres funkcji w aplikacji~~ (zrobione: zapis i eksport CSV idą pod
    `<SUPABASE_URL>/functions/v1/<nazwa>`, `app/src/auth/edgeFunctionUrl.ts`).
-   Workflowy health-check i smoke oraz skrypty `smoke-attendance-db-first.mjs`
-   i `export-attendance-csv.mjs` nadal liczą adres z `SUPABASE_PROJECT_REF`
-   (chmura) — do poprawy razem z krokiem 2.
+   Workflowy health-check i smoke oraz skrypt `smoke-attendance-db-first.mjs` wołają
+   już orbit; `export-attendance-csv.mjs` nadal liczy adres z `SUPABASE_PROJECT_REF`.
 2. Orbit (sprawdzone 2026-11-27):
    - `pg_cron` i `pg_net` działają; jest tylko zadanie `sheet_to_supabase_sync_15m`
      (adres na orbit, poprawny) i retencja `sync_runs` (30 dni).
@@ -133,10 +132,10 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    `docker-compose.orbit-quick.yml` (kopia `.bak-step3`). Eksport do kopii jest
    wyłączony do kroku 4 (`supabase_to_sheet_export` zwraca
    `missing_target_sheet_id`).
-   Smoke (`smoke_attendance_db_first`, `scripts/smoke-attendance-db-first.mjs`)
-   czyta jeszcze `attendance_entries` i pisze na prawdziwych danych, więc
-   zaśmieciłby zbiór „aplikacja”: do przerobienia na osobne wydarzenie testowe
-   przed ponownym włączeniem.
+   Smoke pracuje na własnym ukrytym wydarzeniu `evt-smoke-fixture` i osobie
+   `member-smoke-fixture`, bez eksportu do kopii, i sprząta po sobie
+   (`docs/ops/smoke-attendance-db-first-hybrid.md`). Health-check zgłasza też
+   brak udanego syncu dłużej niż 60 min. Oba workflowy wołają orbit.
 4. ~~Założyć nową kopię~~ (2026-11-27). Kopia `1YKJYSVbeanDlp1ZSryo71ohnwYAGiukI2txsjWZ4urM`
    (3 zakładki z `gid` oryginału, tylko kolumny A–D), webhook
    `deploy/google-apps-script/attendance-copy-webhook.gs`, zmienne i tokeny na orbit

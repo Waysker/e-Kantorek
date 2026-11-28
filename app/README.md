@@ -41,53 +41,11 @@ Documentation map: `../docs/README.md`
 
 ## Automated Attendance Regression (db_first)
 
-Default model is hybrid:
+Smoke (`smoke_attendance_db_first`) and health check (`attendance_health_check`) run on
+the self-hosted Supabase on orbit, triggered by GitHub Actions. The smoke test writes
+only to its own hidden fixture event and cleans up; it never touches real attendance.
 
-- smoke logic and sensitive credentials live in Supabase (`smoke_attendance_db_first` function),
-- GitHub Actions only triggers that function with a dedicated bearer token.
-
-What the smoke run validates:
-
-- sign-in with manager account (`section` / `board` / `admin`),
-- attendance write via `attendance_write_sheet_first` (`mode=enqueue_batch`, `db_first`),
-- DB value changed,
-- rollback restores original value.
-
-Supabase secrets (runtime):
-
-- `SMOKE_ATTENDANCE_TEST_EMAIL`
-- `SMOKE_ATTENDANCE_TEST_PASSWORD`
-- `SMOKE_ATTENDANCE_EVENT_ID`
-- `SMOKE_ATTENDANCE_MEMBER_ID`
-- `SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK` (optional)
-- `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN` (required to protect smoke endpoint)
-
-Deploy function:
-
-```bash
-supabase functions deploy smoke_attendance_db_first --no-verify-jwt
-```
-
-GitHub Actions trigger setup:
-
-- workflow: `.github/workflows/smoke-attendance-db-first.yml`
-- required GitHub inputs:
-  - secret: `SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN`
-  - variable: `SUPABASE_PROJECT_REF`
-  - optional variable: `SMOKE_REQUIRE_EXPORT_TRIGGER_OK`
-  - optional variable: `SMOKE_CHECK_SYNC_CONTRACT` (defaults to `true`, validates `sheet_to_supabase_sync` response contract)
-
-Manual trigger:
-
-```bash
-curl -sS -X POST \
-  "<SUPABASE_URL>/functions/v1/smoke_attendance_db_first" \
-  -H "Authorization: Bearer <SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN>" \
-  -H "Content-Type: application/json" \
-  -d '{"requireExportTriggerOk":false}'
-```
-
-Local fallback script (kept for debugging):
+Details, configuration and rotation: `../docs/ops/smoke-attendance-db-first-hybrid.md`
 
 ```bash
 npm run smoke:attendance:db-first
