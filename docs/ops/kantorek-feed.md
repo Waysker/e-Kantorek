@@ -71,3 +71,14 @@ konta i należy do tej osoby (może go edytować i usunąć). Na zaimportowanym 
 (tylko zarząd, konta z potwierdzonym e-mailem).
 
 Wdrożenie 038: `sudo docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 < /home/waysker/e-Kantorek-sync/app/supabase/migrations/038_feed_link_accounts.sql`.
+
+### Import hurtowy ze zrzutów ekranu
+
+Facebook w przeglądarce na telefonie blokuje kopiowanie tekstu. Hurtowo: zrzuty rozwiniętych
+wpisów („Zobacz więcej”) z komentarzami → Claude przepisuje je do `posts.json` (kształt jak w
+`import_feed_post`; konto autora tylko gdy pewne, nazwisko z FB zostaje) →
+`deploy/orbit/kantorek-import/build_import_sql.py posts.json import.sql <profiles.id zarządu>` →
+plik na orbit do `/tmp` i `psql` jako `postgres` (instrukcja w nagłówku skryptu). Zdjęć tak
+nie przeniesiemy (na zrzutach są tylko podglądy); dodaje się je ręcznie albo pomija. Długie
+linki przepisane ze zrzutu sprawdzić po imporcie. Pierwszy wpis tą drogą: „[warsztaty 2026]”
+Ani Raczkowskiej, 2026-11-28. Taniej robić to w osobnej, krótkiej sesji (np. Sonnet).
