@@ -20,7 +20,8 @@ type RecentSave = {
   event_date: string | null;
   changed_count: number;
   saved_by: string | null;
-  export_triggered: boolean;
+  /** null: saved before the export result was recorded. */
+  export_triggered: boolean | null;
   export_ok: boolean | null;
   export_missing_rows: number | null;
 };
@@ -54,6 +55,13 @@ function polishPeople(count: number): string {
 }
 
 function exportStatus(save: RecentSave): { glyph: string; label: string; color: string } {
+  if (save.export_triggered == null) {
+    return {
+      glyph: "–",
+      label: tr("Brak informacji o kopii", "Copy status unknown"),
+      color: tokens.colors.neutralInk,
+    };
+  }
   if (!save.export_triggered) {
     return {
       glyph: "–",

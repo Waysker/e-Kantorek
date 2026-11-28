@@ -59,6 +59,8 @@ before(async () => {
        '{"changed_members_count": 2, "export_trigger": {"triggered": true, "ok": true, "missing_rows_count": 1}}', now() - interval '2 hours'),
       ('app_attendance_entries', 'evt-2026-12-01-proba', 'attendance_write_db_applied_batch', 'profile:${ADMIN}',
        '{"changed_members_count": 5, "export_trigger": {"triggered": true, "ok": false, "message": "boom"}}', now() - interval '1 hour'),
+      ('app_attendance_entries', 'evt-2025-12-02-proba', 'attendance_write_db_applied_batch', 'profile:${ADMIN}',
+       '{"changed_members_count": 1}', now() - interval '3 hours'),
       ('app_attendance_entries', 'evt-2026-12-01-proba:m1', 'manual_delete', 'owner:orbit-sql', '{}', now()),
       ('attendance_entries', 'x', 'attendance_write_db_applied_batch', 'profile:${ADMIN}', '{}', now());
   `);
@@ -92,6 +94,7 @@ describe("attendance_board_overview", () => {
       [
         ["Próba", 5, "Wojciech Stańczak", true, false, null],
         ["Barbórka PBI", 2, "Wojciech Stańczak", true, true, 1],
+        ["Próba", 1, "Wojciech Stańczak", null, null, null],
       ],
     );
   });

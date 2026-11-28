@@ -61,7 +61,8 @@ begin
       e.event_date,
       coalesce((j.payload ->> 'changed_members_count')::integer, 0) as changed_count,
       coalesce(nullif(trim(p.full_name), ''), null) as saved_by,
-      coalesce((j.payload -> 'export_trigger' ->> 'triggered')::boolean, false) as export_triggered,
+      -- null: saved before the export result was recorded (unknown).
+      (j.payload -> 'export_trigger' ->> 'triggered')::boolean as export_triggered,
       (j.payload -> 'export_trigger' ->> 'ok')::boolean as export_ok,
       (j.payload -> 'export_trigger' ->> 'missing_rows_count')::integer as export_missing_rows
     from public.change_journal j
