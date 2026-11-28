@@ -45,6 +45,13 @@ Bez `VAPID_PUBLIC_KEY` w buildzie aplikacja nie pokazuje niczego o powiadomienia
 
 ## Wdrożenie (jednorazowo)
 
+Szybko, bez KeePassXC (np. z telefonu): od razu krok 4. `push-setup.sh` sam wygeneruje
+brakujące klucze VAPID i token prosto do `.env` (bez wypisywania), a klucz publiczny
+zapisze też w `/home/waysker/supabase-selfhost-test/vapid-public-key.txt`. Potem przy
+komputerze skopiuj `VAPID_PRIVATE_KEY` i token z `.env` do KeePassXC.
+
+Z KeePassXC:
+
 1. Klucze VAPID, lokalnie: `node app/scripts/generate-vapid-keys.mjs` (prywatny do schowka,
    publiczny na ekran), potem `secret.ps1 clip -Entry orbit/ekantorek-vapid`,
    `secret.ps1 push -Entry orbit/ekantorek-vapid -Target /home/waysker/supabase-selfhost-test/.env -Key VAPID_PRIVATE_KEY`.
