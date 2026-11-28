@@ -500,73 +500,80 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.weekHeader}>
-          <View style={styles.monthHeader}>
-            <Text style={styles.weekTitle}>{weekLabel}</Text>
-            <View style={styles.monthNav}>
-              <Pressable onPress={goToToday} style={styles.textButton} accessibilityRole="button">
-                <Text style={styles.textButtonLabel}>{tr("Dzisiaj", "Today")}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => shiftWeek(-1)}
-                style={styles.navButton}
-                accessibilityRole="button"
-                accessibilityLabel={tr("Poprzedni tydzień", "Previous week")}
-              >
-                <Text style={styles.navGlyph}>{"‹"}</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => shiftWeek(1)}
-                style={styles.navButton}
-                accessibilityRole="button"
-                accessibilityLabel={tr("Następny tydzień", "Next week")}
-              >
-                <Text style={styles.navGlyph}>{"›"}</Text>
-              </Pressable>
-            </View>
-          </View>
-          <View style={styles.weekRow}>
-            {weekDays.map((key, index) => {
-              const dayEvents = eventsByDay.get(key) ?? [];
-              const meta = dayMeta(dayEvents);
-              const isToday = key === todayKey;
-              return (
-                <View key={key} style={styles.cellSlot}>
-                  <Text style={styles.weekday}>{WEEKDAYS[index]}</Text>
-                  <View
-                    style={[
-                      styles.cell,
-                      styles.weekCell,
-                      meta && { backgroundColor: meta.bg },
-                      meta?.needsAction && styles.cellDashed,
-                    ]}
+          {/* Folded: the week strip. Unfolded: the month only; showing both repeated
+              the same week twice. */}
+          {showMonthOnMobile ? (
+            miniMonth
+          ) : (
+            <>
+              <View style={styles.monthHeader}>
+                <Text style={styles.weekTitle}>{weekLabel}</Text>
+                <View style={styles.monthNav}>
+                  <Pressable onPress={goToToday} style={styles.textButton} accessibilityRole="button">
+                    <Text style={styles.textButtonLabel}>{tr("Dzisiaj", "Today")}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => shiftWeek(-1)}
+                    style={styles.navButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr("Poprzedni tydzień", "Previous week")}
                   >
-                    <View style={[styles.dayBubble, isToday && styles.dayBubbleToday]}>
-                      <Text
+                    <Text style={styles.navGlyph}>{"‹"}</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => shiftWeek(1)}
+                    style={styles.navButton}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr("Następny tydzień", "Next week")}
+                  >
+                    <Text style={styles.navGlyph}>{"›"}</Text>
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.weekRow}>
+                {weekDays.map((key, index) => {
+                  const dayEvents = eventsByDay.get(key) ?? [];
+                  const meta = dayMeta(dayEvents);
+                  const isToday = key === todayKey;
+                  return (
+                    <View key={key} style={styles.cellSlot}>
+                      <Text style={styles.weekday}>{WEEKDAYS[index]}</Text>
+                      <View
                         style={[
-                          styles.dayNumber,
-                          meta && { color: meta.fg, fontWeight: "700" },
-                          isToday && styles.dayNumberToday,
+                          styles.cell,
+                          styles.weekCell,
+                          meta && { backgroundColor: meta.bg },
+                          meta?.needsAction && styles.cellDashed,
                         ]}
                       >
-                        {Number(key.slice(8, 10))}
-                      </Text>
+                        <View style={[styles.dayBubble, isToday && styles.dayBubbleToday]}>
+                          <Text
+                            style={[
+                              styles.dayNumber,
+                              meta && { color: meta.fg, fontWeight: "700" },
+                              isToday && styles.dayNumberToday,
+                            ]}
+                          >
+                            {Number(key.slice(8, 10))}
+                          </Text>
+                        </View>
+                        {meta ? <Text style={[styles.cellGlyph, { color: meta.fg }]}>{meta.glyph}</Text> : null}
+                      </View>
                     </View>
-                    {meta ? <Text style={[styles.cellGlyph, { color: meta.fg }]}>{meta.glyph}</Text> : null}
-                  </View>
-                </View>
-              );
-            })}
-          </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
           <Pressable
             onPress={() => setShowMonthOnMobile((value) => !value)}
             style={styles.monthToggle}
             accessibilityRole="button"
           >
             <Text style={styles.textButtonLabel}>
-              {tr("Miesiąc", "Month")} {showMonthOnMobile ? "▴" : "▾"}
+              {showMonthOnMobile ? `${tr("Tydzień", "Week")} ▴` : `${tr("Miesiąc", "Month")} ▾`}
             </Text>
           </Pressable>
-          {showMonthOnMobile ? miniMonth : null}
         </View>
 
         <View style={styles.agendaContent}>
