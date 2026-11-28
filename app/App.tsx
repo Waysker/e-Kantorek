@@ -8,6 +8,7 @@ import type { OraghInstrument } from "./src/auth/instruments";
 import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabaseAuthClient";
 import { usePushNotifications } from "./src/push/usePushNotifications";
 import { NotificationsPrompt } from "./src/ui/NotificationsPrompt";
+import { PullToRefresh } from "./src/ui/PullToRefresh";
 import { describeAuthError } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
@@ -339,6 +340,7 @@ export default function App() {
   return (
     <ThemeContext.Provider value={theme}>
       <AppContent />
+      <PullToRefresh />
     </ThemeContext.Provider>
   );
 }
