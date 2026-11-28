@@ -25,9 +25,22 @@
       }
     </style>
   <link rel="icon" href="./favicon.ico" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="e-Kantorek" />
+    <meta name="mobile-web-app-capable" content="yes" />
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+    });
+  }
+</script>
+
 <script>
   (() => {
-    const buildId = "3c30fb0de117a449ab0ce38c5b478a25bce79c3f";
+    const buildId = "434c84606bc54c21e74c8302589e921ad93c5045";
     const url = new URL("./version.json", window.location.href);
     url.searchParams.set("check", String(Date.now()));
 
