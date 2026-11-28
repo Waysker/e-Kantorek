@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   Pressable,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -10,6 +9,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import type { PrimaryTab } from "../navigation/routes";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { DataFreshnessBanner } from "./DataFreshnessBanner";
 import { Badge } from "./Badge";
@@ -102,7 +102,7 @@ export function AppShell({
               {tabs.map((tab) => {
                 const isActive = tab === activeTab;
                 const badgeCount = tabBadges?.[tab] ?? 0;
-                const color = isActive ? tokens.colors.successInk : tokens.colors.neutralInk;
+                const color = isActive ? colors.successInk : colors.neutralInk;
 
                 return (
                   <Pressable
@@ -154,7 +154,7 @@ export function AppShell({
         {tabs.map((tab) => {
           const isActive = tab === activeTab;
           const badgeCount = tabBadges?.[tab] ?? 0;
-          const color = isActive ? tokens.colors.brand : tokens.colors.muted;
+          const color = isActive ? colors.brand : colors.muted;
 
           return (
             <Pressable
@@ -182,14 +182,14 @@ export function AppShell({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: {
     flex: 1,
-    backgroundColor: tokens.colors.background,
+    backgroundColor: colors.background,
   },
   immersiveRoot: {
     flex: 1,
-    backgroundColor: tokens.colors.readerBackdrop,
+    backgroundColor: colors.readerBackdrop,
   },
   immersiveContent: {
     flex: 1,
@@ -201,11 +201,11 @@ const styles = StyleSheet.create({
   sidebar: {
     width: 240,
     borderRightWidth: 1,
-    borderRightColor: tokens.colors.border,
+    borderRightColor: colors.border,
     paddingHorizontal: 14,
     paddingVertical: tokens.spacing.lg,
     gap: tokens.spacing.lg,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
   },
   brandBlock: {
     paddingHorizontal: 12,
@@ -215,11 +215,11 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.title,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   brandSubtitle: {
     fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   sidebarNav: {
     gap: 2,
@@ -233,10 +233,10 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radii.sm,
   },
   sidebarLinkHovered: {
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
   },
   sidebarLinkActive: {
-    backgroundColor: tokens.colors.brandTint,
+    backgroundColor: colors.brandTint,
   },
   sidebarLinkLabel: {
     fontSize: 15,
@@ -269,8 +269,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
   },
   bottomNavItem: {
     flex: 1,
@@ -284,4 +284,4 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
-});
+}));

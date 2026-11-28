@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { TextField } from "../ui/TextField";
 import { Notice } from "../ui/Notice";
@@ -152,7 +153,7 @@ export function AuthScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   field: {
     marginTop: tokens.spacing.md,
   },
@@ -167,8 +168,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryButtonLabel: {
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontSize: 15,
     fontWeight: "600",
   },
-});
+}));

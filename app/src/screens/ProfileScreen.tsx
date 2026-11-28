@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 
 import type { ForumIdentity } from "../domain/forumIdentity";
 import type { AppNotification, UserProfile } from "../domain/models";
 import { tr } from "../i18n";
+import { colors, themedStyles, useTheme, type ThemePreference } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { textStyles } from "../theme/text";
 import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { formatRelativeLabel } from "../utils/format";
 
 function formatRoleLabel(role: UserProfile["role"]) {
@@ -87,6 +89,7 @@ export function ProfileScreen({
   const isDesktop = width >= tokens.breakpoints.desktop;
   const latestNotifications = notifications.slice(0, 30);
   const instrument = currentUser.primaryInstrument ?? tr("Bez instrumentu", "No instrument");
+  const { preference, setPreference } = useTheme();
 
   return (
     <ScrollView
@@ -139,7 +142,7 @@ export function ProfileScreen({
             style={styles.settingRow}
           >
             <Text style={styles.settingLabel}>{tr("Obecność orkiestry", "Orchestra attendance")}</Text>
-            <Icon name="chevronRight" size={18} color={tokens.colors.muted} />
+            <Icon name="chevronRight" size={18} color={colors.muted} />
           </Pressable>
         </View>
       ) : null}
@@ -188,7 +191,7 @@ export function ProfileScreen({
 
         {isNotificationsLoading && latestNotifications.length === 0 ? (
           <View style={styles.loadingRow}>
-            <ActivityIndicator color={tokens.colors.brand} />
+            <ActivityIndicator color={colors.brand} />
             <Text style={styles.muted}>{tr("Wczytuję powiadomienia…", "Loading notifications…")}</Text>
           </View>
         ) : null}
@@ -231,6 +234,22 @@ export function ProfileScreen({
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.kicker}>
+          {tr("Wygląd", "Appearance")}
+        </Text>
+        <SegmentedControl<ThemePreference>
+          accessibilityLabel={tr("Wygląd", "Appearance")}
+          options={[
+            { key: "system", label: tr("Systemowy", "System") },
+            { key: "light", label: tr("Jasny", "Light") },
+            { key: "dark", label: tr("Ciemny", "Dark") },
+          ]}
+          value={preference}
+          onChange={setPreference}
+        />
+      </View>
+
+      <View style={styles.card}>
         {signedInEmail ? (
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>{tr("Konto", "Account")}</Text>
@@ -262,7 +281,7 @@ export function ProfileScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -287,14 +306,14 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: tokens.colors.brandDeep,
+    backgroundColor: colors.brandDeep,
     alignItems: "center",
     justifyContent: "center",
   },
   avatarLabel: {
     fontSize: 22,
     fontWeight: "800",
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   identityText: {
     flex: 1,
@@ -305,17 +324,17 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   muted: {
     fontSize: 14,
     lineHeight: 20,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -346,12 +365,12 @@ const styles = StyleSheet.create({
   forumIdentityChangeLabel: {
     fontSize: tokens.typography.body,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   link: {
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   noticeWrap: {
     marginBottom: 8,
@@ -370,7 +389,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   dot: {
     width: 8,
@@ -380,7 +399,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   dotUnread: {
-    backgroundColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningBorder,
   },
   notificationText: {
     flex: 1,
@@ -389,7 +408,7 @@ const styles = StyleSheet.create({
   notificationTitle: {
     fontSize: 15,
     lineHeight: 21,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   notificationKind: {
     fontWeight: "700",
@@ -397,11 +416,11 @@ const styles = StyleSheet.create({
   notificationBody: {
     fontSize: 14,
     lineHeight: 20,
-    color: tokens.colors.neutralInk,
+    color: colors.neutralInk,
   },
   meta: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   settingRow: {
     minHeight: 52,
@@ -412,21 +431,21 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   settingValue: {
     flexShrink: 1,
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   signOut: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
   },
   footnote: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
     textAlign: "center",
   },
-});
+}));

@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../../auth/supabaseAuthClient";
 import { resolveEdgeFunctionUrl } from "../../auth/edgeFunctionUrl";
 import { tr } from "../../i18n";
+import { colors, themedStyles } from "../../theme/theme";
 import { tokens } from "../../theme/tokens";
 import { Button } from "../../ui/Button";
 import { TextField } from "../../ui/TextField";
@@ -226,11 +227,11 @@ export function CsvExportPanel() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -246,12 +247,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   hint: {
     fontSize: 13,
     lineHeight: 18,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   controls: {
     flexDirection: "row",
@@ -263,7 +264,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 13,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   files: {
     gap: 6,
@@ -271,15 +272,15 @@ const styles = StyleSheet.create({
   fileRow: {
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   fileName: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   fileMeta: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

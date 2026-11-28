@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Icon, type IconName } from "./Icon";
 
@@ -14,6 +15,8 @@ type SegmentedControlProps<K extends string> = {
   value: K;
   onChange: (key: K) => void;
   style?: StyleProp<ViewStyle>;
+  /** Name of the whole control for screen readers ("Wygląd"). */
+  accessibilityLabel?: string;
 };
 
 // Switch between views of the same content (Lista / Kalendarz, Nadchodzące / Minione).
@@ -23,12 +26,13 @@ export function SegmentedControl<K extends string>({
   value,
   onChange,
   style,
+  accessibilityLabel,
 }: SegmentedControlProps<K>) {
   return (
-    <View style={[styles.track, style]} accessibilityRole="tablist">
+    <View style={[styles.track, style]} accessibilityRole="tablist" accessibilityLabel={accessibilityLabel}>
       {options.map((option) => {
         const isActive = option.key === value;
-        const color = isActive ? tokens.colors.ink : tokens.colors.muted;
+        const color = isActive ? colors.ink : colors.muted;
         return (
           <Pressable
             key={option.key}
@@ -48,13 +52,13 @@ export function SegmentedControl<K extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   track: {
     flexDirection: "row",
     gap: 4,
     padding: 4,
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
   },
   segment: {
     flex: 1,
@@ -67,7 +71,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   segmentActive: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     ...tokens.shadow.raised,
   },
   label: {
@@ -75,4 +79,4 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-});
+}));

@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 export function MissingEventScreen({
@@ -20,29 +21,29 @@ export function MissingEventScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   loadingScreen: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: tokens.spacing.xl,
-    backgroundColor: tokens.colors.background,
+    backgroundColor: colors.background,
   },
   errorEyebrow: {
     fontSize: tokens.typography.caption,
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   inlineButton: {
     marginTop: tokens.spacing.md,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   inlineButtonLabel: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
     fontWeight: "700",
   },
-});
+}));

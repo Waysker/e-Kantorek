@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type CardProps = {
@@ -27,17 +28,19 @@ export function Card({ children, variant = "default", style }: CardProps) {
   );
 }
 
-// Use on every list row except the first: index > 0 && listRowDivider.
-export const listRowDivider: ViewStyle = {
-  borderTopWidth: 1,
-  borderTopColor: tokens.colors.surfaceMuted,
-};
+// Use on every list row except the first: index > 0 && listRowStyles.divider.
+export const listRowStyles = themedStyles((colors) => ({
+  divider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.surfaceMuted,
+  },
+}));
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -49,8 +52,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   action: {
-    backgroundColor: tokens.colors.warningSurface,
-    borderColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.warningBorder,
     borderWidth: 1.5,
   },
-});
+}));

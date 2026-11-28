@@ -1,5 +1,6 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Pressable, Text } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type ChipProps = {
@@ -51,7 +52,7 @@ export function Chip({
         (state as { hovered?: boolean }).hovered && !selected && !blocksPress && styles.chipHovered,
       ]}
     >
-      <Text style={[styles.label, isAction && styles.labelAction, selected && styles.labelSelected]}>
+      <Text style={[styles.label, isAction && styles.labelAction, selected && (isAction ? styles.labelActionSelected : styles.labelSelected)]}>
         {/* One text node: browser translators replace text nodes, and React
             crashes if it has to insert a sibling next to a replaced one. */}
         {selected && role === "radio" ? `✓ ${label}` : label}
@@ -60,34 +61,34 @@ export function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   chip: {
     minHeight: tokens.controlHeight.sm,
     paddingHorizontal: 14,
     borderRadius: tokens.radii.round,
     borderWidth: 1,
-    borderColor: tokens.colors.controlBorder,
-    backgroundColor: tokens.colors.surface,
+    borderColor: colors.controlBorder,
+    backgroundColor: colors.surface,
     justifyContent: "center",
   },
   chipHovered: {
-    borderColor: tokens.colors.brand,
+    borderColor: colors.brand,
   },
   chipSelected: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   chipAction: {
     borderWidth: 1.5,
-    borderColor: tokens.colors.warningBorder,
-    backgroundColor: tokens.colors.warningSurface,
+    borderColor: colors.warningBorder,
+    backgroundColor: colors.warningSurface,
   },
   chipActionSelected: {
-    backgroundColor: tokens.colors.warningStrong,
-    borderColor: tokens.colors.warningStrong,
+    backgroundColor: colors.warningStrong,
+    borderColor: colors.warningStrong,
   },
   chipInvalid: {
-    borderColor: tokens.colors.dangerInk,
+    borderColor: colors.dangerInk,
   },
   chipDisabled: {
     opacity: 0.5,
@@ -95,12 +96,15 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   labelAction: {
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   labelSelected: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
   },
-});
+  labelActionSelected: {
+    color: colors.onStrong,
+  },
+}));

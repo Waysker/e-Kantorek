@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { StatusMark } from "./StatusMark";
 import { Tag } from "./Tag";
@@ -51,9 +52,9 @@ export function SectionTile({
           {mine ? <Tag label={tr("Twoja", "Yours")} /> : null}
         </View>
         <View style={styles.counts}>
-          <Text style={[styles.count, { color: tokens.colors.successInk }]}>✓ {going}</Text>
+          <Text style={[styles.count, { color: colors.successInk }]}>✓ {going}</Text>
           {notGoing > 0 ? (
-            <Text style={[styles.count, { color: tokens.colors.dangerInk }]}>✕ {notGoing}</Text>
+            <Text style={[styles.count, { color: colors.dangerInk }]}>✕ {notGoing}</Text>
           ) : null}
         </View>
       </View>
@@ -66,7 +67,7 @@ export function SectionTile({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   tile: {
     flex: 1,
     minWidth: 0,
@@ -75,25 +76,25 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.sm,
     borderRadius: tokens.radii.lg,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
   tileLarge: {
     minHeight: 120,
     padding: tokens.spacing.md,
   },
   tileHovered: {
-    borderColor: tokens.colors.controlBorder,
+    borderColor: colors.controlBorder,
   },
   // 2px edge with 1px less padding, so the content doesn't move.
   tileSelected: {
     borderWidth: 2,
-    borderColor: tokens.colors.brand,
+    borderColor: colors.brand,
     padding: 13,
   },
   tileSelectedLarge: {
     borderWidth: 2,
-    borderColor: tokens.colors.brand,
+    borderColor: colors.brand,
     padding: tokens.spacing.md - 1,
   },
   top: {
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   counts: {
     flexDirection: "row",
@@ -130,4 +131,4 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 4,
   },
-});
+}));

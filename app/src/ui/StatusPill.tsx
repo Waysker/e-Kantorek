@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import type { AttendanceStatus } from "../domain/models";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 export type StatusMeta = {
@@ -21,45 +22,45 @@ export function statusMeta(status: AttendanceStatus): StatusMeta {
       return {
         glyph: "✓",
         label: tr("Będę", "Going"),
-        bg: tokens.colors.successSurface,
-        fg: tokens.colors.successInk,
-        accent: tokens.colors.successInk,
+        bg: colors.successSurface,
+        fg: colors.successInk,
+        accent: colors.successInk,
         needsAction: false,
       };
     case "not_going":
       return {
         glyph: "✕",
         label: tr("Nie będę", "Not going"),
-        bg: tokens.colors.dangerSurface,
-        fg: tokens.colors.dangerInk,
-        accent: tokens.colors.dangerInk,
+        bg: colors.dangerSurface,
+        fg: colors.dangerInk,
+        accent: colors.dangerInk,
         needsAction: false,
       };
     case "maybe":
       return {
         glyph: "?",
         label: tr("Może", "Maybe"),
-        bg: tokens.colors.neutralSurface,
-        fg: tokens.colors.neutralInk,
-        accent: tokens.colors.neutralInk,
+        bg: colors.neutralSurface,
+        fg: colors.neutralInk,
+        accent: colors.neutralInk,
         needsAction: false,
       };
     case "unknown":
       return {
         glyph: "",
         label: "",
-        bg: tokens.colors.neutralSurface,
-        fg: tokens.colors.neutralInk,
-        accent: tokens.colors.border,
+        bg: colors.neutralSurface,
+        fg: colors.neutralInk,
+        accent: colors.border,
         needsAction: false,
       };
     default:
       return {
         glyph: "!",
         label: tr("Brak deklaracji", "No response"),
-        bg: tokens.colors.warningSurface,
-        fg: tokens.colors.warningInk,
-        accent: tokens.colors.warningBorder,
+        bg: colors.warningSurface,
+        fg: colors.warningInk,
+        accent: colors.warningBorder,
         needsAction: true,
       };
   }
@@ -86,7 +87,7 @@ export function StatusPill({ status, large }: { status: AttendanceStatus; large?
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   pill: {
     alignSelf: "flex-start",
     paddingHorizontal: tokens.spacing.sm,
@@ -106,4 +107,4 @@ const styles = StyleSheet.create({
   labelLarge: {
     fontSize: 15,
   },
-});
+}));

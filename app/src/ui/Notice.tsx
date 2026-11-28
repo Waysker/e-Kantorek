@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text } from "react-native";
+import { Text } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 export type NoticeTone = "error" | "success" | "warning" | "info";
@@ -10,19 +11,22 @@ type NoticeProps = {
   children: ReactNode;
 };
 
-const TONES: Record<NoticeTone, { bg: string; fg: string }> = {
-  error: { bg: tokens.colors.dangerSurface, fg: tokens.colors.dangerInk },
-  success: { bg: tokens.colors.successSurface, fg: tokens.colors.successInk },
-  warning: { bg: tokens.colors.warningSurface, fg: tokens.colors.warningInk },
-  info: { bg: tokens.colors.surfaceMuted, fg: tokens.colors.neutralInk },
-};
+function toneColors(tone: NoticeTone): { bg: string; fg: string } {
+  const tones: Record<NoticeTone, { bg: string; fg: string }> = {
+    error: { bg: colors.dangerSurface, fg: colors.dangerInk },
+    success: { bg: colors.successSurface, fg: colors.successInk },
+    warning: { bg: colors.warningSurface, fg: colors.warningInk },
+    info: { bg: colors.surfaceMuted, fg: colors.neutralInk },
+  };
+  return tones[tone];
+}
 
 // Inline message bar: save results, errors, "unsaved changes".
 export function Notice({ tone, children }: NoticeProps) {
-  const colors = TONES[tone];
+  const toneColor = toneColors(tone);
   return (
     <Text
-      style={[styles.notice, { backgroundColor: colors.bg, color: colors.fg }]}
+      style={[styles.notice, { backgroundColor: toneColor.bg, color: toneColor.fg }]}
       accessibilityRole={tone === "error" ? "alert" : undefined}
     >
       {children}
@@ -30,7 +34,7 @@ export function Notice({ tone, children }: NoticeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   notice: {
     fontSize: 14,
     lineHeight: 20,
@@ -39,4 +43,4 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     overflow: "hidden",
   },
-});
+}));

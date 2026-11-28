@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import type { AttendanceSummary } from "../domain/models";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 export type AttendanceSummaryFocusStatus = "going" | "not_going";
@@ -63,7 +64,7 @@ export function AttendanceSummaryStrip({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   row: {
     flexDirection: "row",
     gap: tokens.spacing.sm,
@@ -77,32 +78,32 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radii.md,
     paddingHorizontal: tokens.spacing.sm,
     paddingVertical: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
   },
   itemCompact: {
     paddingVertical: 8,
   },
   itemPositive: {
-    backgroundColor: tokens.colors.successSurface,
+    backgroundColor: colors.successSurface,
   },
   itemNegative: {
-    backgroundColor: tokens.colors.dangerSurface,
+    backgroundColor: colors.dangerSurface,
   },
   itemInteractive: {
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
   },
   itemInteractivePressed: {
     opacity: 0.85,
   },
   itemValue: {
     fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
+    color: colors.ink,
     fontWeight: "700",
   },
   itemLabel: {
     marginTop: 2,
     fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

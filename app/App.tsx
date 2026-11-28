@@ -1,6 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { startTransition, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import type { Session } from "@supabase/supabase-js";
 
@@ -43,6 +43,7 @@ import { RoleManagementScreen } from "./src/screens/RoleManagementScreen";
 import { SetlistScreen } from "./src/screens/SetlistScreen";
 import { SquadScreen } from "./src/screens/SquadScreen";
 import { tr } from "./src/i18n";
+import { ThemeContext, colors, getActiveColorScheme, themedStyles, useThemeRoot } from "./src/theme/theme";
 import { tokens } from "./src/theme/tokens";
 import { AppShell } from "./src/ui/AppShell";
 import { ForumIdentityPrompt } from "./src/ui/ForumIdentityPrompt";
@@ -324,7 +325,19 @@ function areRouteStacksEqual(left: AppRoute[], right: AppRoute[]): boolean {
   return left.every((route, index) => isSameRoute(route, right[index]));
 }
 
+// The theme is resolved here, above everything else, so that a theme change
+// re-renders the whole tree with the new palette.
 export default function App() {
+  const theme = useThemeRoot();
+  return (
+    <ThemeContext.Provider value={theme}>
+      <AppContent />
+    </ThemeContext.Provider>
+  );
+}
+
+function AppContent() {
+  const statusBarStyle = getActiveColorScheme() === "dark" ? "light" : "dark";
   const [authState, setAuthState] = useState<AuthState>({ status: "checking" });
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
   const [authInfoMessage, setAuthInfoMessage] = useState<string | null>(null);
@@ -895,9 +908,9 @@ export default function App() {
     return (
       <SafeAreaProvider>
         <View style={styles.loadingScreen}>
-          <StatusBar style="dark" />
+          <StatusBar style={statusBarStyle} />
           {showSpinner ? (
-            <ActivityIndicator color={tokens.colors.brand} size="large" />
+            <ActivityIndicator color={colors.brand} size="large" />
           ) : null}
           {eyebrow ? <Text style={styles.errorEyebrow}>{eyebrow}</Text> : null}
           <Text style={styles.loadingTitle}>{title}</Text>
@@ -932,7 +945,7 @@ export default function App() {
   if (authState.status === "signed_out") {
     return (
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={statusBarStyle} />
         {authView === "register" ? (
           <RegisterScreen
             onRegister={handleRegister}
@@ -1460,7 +1473,7 @@ export default function App() {
         }
         onNavigate={openTab}
       >
-        <StatusBar style={route.name === "setlist" ? "light" : "dark"} />
+        <StatusBar style={route.name === "setlist" ? "light" : statusBarStyle} />
         {activeBoardSection ? (
           <BoardSubNav
             sections={boardSections}
@@ -1480,19 +1493,19 @@ export default function App() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   loadingScreen: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: tokens.spacing.xl,
-    backgroundColor: tokens.colors.background,
+    backgroundColor: colors.background,
   },
   loadingTitle: {
     marginTop: tokens.spacing.md,
     fontSize: tokens.typography.title,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
     textAlign: "center",
   },
   loadingCopy: {
@@ -1500,12 +1513,12 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.body,
     lineHeight: 22,
     textAlign: "center",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   errorEyebrow: {
     fontSize: tokens.typography.caption,
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

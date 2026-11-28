@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import type { EventListItem } from "../domain/models";
 import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
 import { appLocaleTag, tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { stripTitleDatePrefix } from "../utils/format";
 import { Button } from "./Button";
@@ -92,11 +93,11 @@ export function DeclarationPrompt({ events, onOpenEvent }: DeclarationPromptProp
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: {
-    backgroundColor: tokens.colors.warningSurface,
+    backgroundColor: colors.warningSurface,
     borderWidth: 1.5,
-    borderColor: tokens.colors.warningBorder,
+    borderColor: colors.warningBorder,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -106,17 +107,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.7,
     textTransform: "uppercase",
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   meta: {
     marginTop: 2,
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   actions: {
     flexDirection: "row",
@@ -128,6 +129,6 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: tokens.typography.caption,
     lineHeight: 17,
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
-});
+}));

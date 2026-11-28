@@ -1,10 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import type { EventListItem } from "../domain/models";
 import { appLocaleTag } from "../i18n";
-import { tokens } from "../theme/tokens";
+import { colors, themedStyles } from "../theme/theme";
 import { stripTitleDatePrefix } from "../utils/format";
-import { listRowDivider } from "./Card";
+import { listRowStyles } from "./Card";
 import { StatusPill } from "./StatusPill";
 
 const TZ = "Europe/Warsaw";
@@ -45,7 +45,7 @@ export function EventRow({ event, onPress, index, dateStyle = "anchor", isPast }
       accessibilityRole="link"
       style={(state) => [
         styles.row,
-        index > 0 && listRowDivider,
+        index > 0 && listRowStyles.divider,
         ((state as { hovered?: boolean }).hovered || state.pressed) && styles.rowHovered,
       ]}
     >
@@ -68,7 +68,7 @@ export function EventRow({ event, onPress, index, dateStyle = "anchor", isPast }
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   rowHovered: {
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: colors.paper,
   },
   dateAnchor: {
     width: 44,
@@ -88,13 +88,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
     textTransform: "uppercase",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   day: {
     fontSize: 22,
     lineHeight: 24,
     fontWeight: "800",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   body: {
     flex: 1,
@@ -105,13 +105,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 20,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   mutedText: {
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   meta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -12,9 +11,10 @@ import {
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import { CANONICAL_INSTRUMENT_OPTIONS, canonicalizeInstrumentLabel } from "../domain/instruments";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { EmptyState } from "../ui/EmptyState";
-import { Card, listRowDivider } from "../ui/Card";
+import { Card, listRowStyles } from "../ui/Card";
 import { TextField } from "../ui/TextField";
 import { textStyles } from "../theme/text";
 import { Chip } from "../ui/Chip";
@@ -331,7 +331,7 @@ export function InstrumentMappingScreen({ onAccountsChanged }: { onAccountsChang
   function renderLoading(label: string) {
     return (
       <View style={styles.loadingRow}>
-        <ActivityIndicator color={tokens.colors.brand} />
+        <ActivityIndicator color={colors.brand} />
         <Text style={styles.muted}>{label}</Text>
       </View>
     );
@@ -424,7 +424,7 @@ export function InstrumentMappingScreen({ onAccountsChanged }: { onAccountsChang
             const isExpanded = expandedMappingKey === rowKey;
 
             return (
-              <View key={rowKey} style={[styles.listRow, index > 0 && listRowDivider]}>
+              <View key={rowKey} style={[styles.listRow, index > 0 && listRowStyles.divider]}>
                 <Pressable
                   onPress={() => setExpandedMappingKey(isExpanded ? null : rowKey)}
                   accessibilityRole="button"
@@ -479,7 +479,7 @@ export function InstrumentMappingScreen({ onAccountsChanged }: { onAccountsChang
         {audit.map((entry, index) => (
           <View
             key={`${entry.changedAt}-${entry.entryKey}-${index}`}
-            style={[styles.listRow, index > 0 && listRowDivider]}
+            style={[styles.listRow, index > 0 && listRowStyles.divider]}
           >
             <Text style={styles.name}>{entry.memberName ?? `UID ${entry.entryKey}`}</Text>
             <Text style={styles.change}>
@@ -557,7 +557,7 @@ function polishPeopleWithout(count: number) {
   return "osób bez";
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: 14,
     lineHeight: 20,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   loadingRow: {
     flexDirection: "row",
@@ -590,19 +590,19 @@ const styles = StyleSheet.create({
     paddingVertical: tokens.spacing.md,
   },
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
   },
   cardAction: {
-    borderColor: tokens.colors.warningBorder,
+    borderColor: colors.warningBorder,
     borderWidth: 1.5,
   },
   cardDone: {
-    borderColor: tokens.colors.successSurface,
+    borderColor: colors.successSurface,
   },
   cardHeader: {
     flexDirection: "row",
@@ -617,37 +617,37 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   meta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   pill: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
     borderWidth: 1.5,
     borderColor: "transparent",
   },
   pillLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.neutralInk,
+    color: colors.neutralInk,
   },
   pillAction: {
-    backgroundColor: tokens.colors.warningSurface,
-    borderColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.warningBorder,
   },
   pillLabelAction: {
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   pillDone: {
-    backgroundColor: tokens.colors.successSurface,
+    backgroundColor: colors.successSurface,
   },
   pillLabelDone: {
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   optionsRow: {
     flexDirection: "row",
@@ -669,19 +669,19 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   change: {
     fontSize: 14,
   },
   changeOld: {
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
     textDecorationLine: "line-through",
   },
   changeNew: {
     fontSize: 14,
     fontWeight: "700",
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
-});
+}));

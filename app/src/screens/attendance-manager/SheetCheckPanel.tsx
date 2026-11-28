@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Linking, StyleSheet, Text, View } from "react-native";
+import { Linking, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../../auth/supabaseAuthClient";
 import { tr } from "../../i18n";
 import { textStyles } from "../../theme/text";
+import { colors, themedStyles } from "../../theme/theme";
 import { tokens } from "../../theme/tokens";
 import { Button } from "../../ui/Button";
-import { listRowDivider } from "../../ui/Card";
+import { listRowStyles } from "../../ui/Card";
 import { formatDateLabel, formatRelativeLabel } from "../../utils/format";
 
 // Lets the board check app-entered attendance against the sheets by hand
@@ -59,21 +60,21 @@ function exportStatus(save: RecentSave): { glyph: string; label: string; color: 
     return {
       glyph: "–",
       label: tr("Brak informacji o kopii", "Copy status unknown"),
-      color: tokens.colors.neutralInk,
+      color: colors.neutralInk,
     };
   }
   if (!save.export_triggered) {
     return {
       glyph: "–",
       label: tr("Bez kopii arkusza", "No copy sheet"),
-      color: tokens.colors.neutralInk,
+      color: colors.neutralInk,
     };
   }
   if (save.export_ok !== true) {
     return {
       glyph: "✕",
       label: tr("Nie trafiło do kopii", "Not in the copy"),
-      color: tokens.colors.dangerInk,
+      color: colors.dangerInk,
     };
   }
   const missing = save.export_missing_rows ?? 0;
@@ -81,13 +82,13 @@ function exportStatus(save: RecentSave): { glyph: string; label: string; color: 
     return {
       glyph: "✕",
       label: tr(`${polishPeople(missing)} poza kopią`, `${missing} not in the copy`),
-      color: tokens.colors.dangerInk,
+      color: colors.dangerInk,
     };
   }
   return {
     glyph: "✓",
     label: tr("W kopii arkusza", "In the copy"),
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   };
 }
 
@@ -163,7 +164,7 @@ export function SheetCheckPanel({ refreshKey }: SheetCheckPanelProps) {
               formatRelativeLabel(save.saved_at),
             ].filter(Boolean).join(" · ");
             return (
-              <View key={`${save.saved_at}:${save.event_id}`} style={[styles.row, index > 0 && listRowDivider]}>
+              <View key={`${save.saved_at}:${save.event_id}`} style={[styles.row, index > 0 && listRowStyles.divider]}>
                 <Text style={styles.rowTitle}>{eventLabel}</Text>
                 <Text style={styles.meta}>{meta}</Text>
                 <Text style={[styles.status, { color: status.color }]}>
@@ -178,11 +179,11 @@ export function SheetCheckPanel({ refreshKey }: SheetCheckPanelProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   links: {
     flexDirection: "row",
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: 13,
     lineHeight: 18,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   row: {
     paddingVertical: 8,
@@ -220,4 +221,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-});
+}));

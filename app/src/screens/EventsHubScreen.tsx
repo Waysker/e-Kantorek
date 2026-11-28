@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Text, View, useWindowDimensions } from "react-native";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { textStyles } from "../theme/text";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -63,7 +64,7 @@ export function EventsHubScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   root: {
     flex: 1,
   },
@@ -81,10 +82,10 @@ const styles = StyleSheet.create({
     paddingTop: tokens.spacing.lg,
     paddingBottom: tokens.spacing.md,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.border,
+    borderBottomColor: colors.border,
   },
   title: textStyles.screenTitle,
   body: {
     flex: 1,
   },
-});
+}));

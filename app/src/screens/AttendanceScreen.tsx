@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -15,10 +14,11 @@ import {
   UNKNOWN_INSTRUMENT_LABEL,
 } from "../domain/instruments";
 import { appLocaleTag, tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { textStyles } from "../theme/text";
 import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
-import { Card, listRowDivider } from "../ui/Card";
+import { Card, listRowStyles } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { SectionTile } from "../ui/SectionTile";
@@ -194,7 +194,7 @@ export function AttendanceScreen({ event, onBack, userInstrument }: AttendanceSc
           <Text style={styles.peopleMeta}>{declarationsLabel(section.people.length)}</Text>
         </View>
         {section.people.map((person) => (
-          <View key={person.id} style={[styles.personRow, listRowDivider]}>
+          <View key={person.id} style={[styles.personRow, listRowStyles.divider]}>
             <Text style={styles.personName}>{person.fullName}</Text>
             <StatusPill status={person.status} />
           </View>
@@ -219,7 +219,7 @@ export function AttendanceScreen({ event, onBack, userInstrument }: AttendanceSc
             accessibilityRole="button"
             accessibilityLabel={tr("Wróć do wydarzenia", "Back to event")}
           >
-            <Icon name="chevronLeft" size={20} color={tokens.colors.surface} strokeWidth={2.2} />
+            <Icon name="chevronLeft" size={20} color={colors.onStrong} strokeWidth={2.2} />
           </Pressable>
           <Text style={styles.heroKicker}>{tr("Skład", "Line-up")}</Text>
         </View>
@@ -279,7 +279,7 @@ export function AttendanceScreen({ event, onBack, userInstrument }: AttendanceSc
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.lg,
   },
   hero: {
-    backgroundColor: tokens.colors.brandDeep,
+    backgroundColor: colors.brandDeep,
     borderRadius: tokens.radii.xl,
     padding: tokens.spacing.md,
     gap: 12,
@@ -313,12 +313,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brandDeepRaised,
+    backgroundColor: colors.brandDeepRaised,
     alignItems: "center",
     justifyContent: "center",
   },
   heroKicker: {
-    color: tokens.colors.brandDeepAccent,
+    color: colors.brandDeepAccent,
     fontSize: tokens.typography.caption,
     fontWeight: "600",
     letterSpacing: 0.7,
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   heroTitle: {
-    color: tokens.colors.surface,
+    color: colors.onStrong,
     fontSize: 26,
     lineHeight: 31,
     fontWeight: "800",
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   heroMeta: {
-    color: tokens.colors.brandDeepMuted,
+    color: colors.brandDeepMuted,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -399,13 +399,13 @@ const styles = StyleSheet.create({
   asideEmpty: {
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
+    borderColor: colors.borderStrong,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.lg,
   },
   asideEmptyLabel: {
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   peopleHeader: {
     flexDirection: "row",
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   },
   peopleMeta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   personRow: {
     flexDirection: "row",
@@ -432,6 +432,6 @@ const styles = StyleSheet.create({
   personName: {
     flex: 1,
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
-});
+}));

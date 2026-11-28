@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import {
@@ -9,9 +9,10 @@ import {
   type ForumPerson,
 } from "../domain/forumIdentity";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Button } from "./Button";
-import { listRowDivider } from "./Card";
+import { listRowStyles } from "./Card";
 import { Notice } from "./Notice";
 
 type ForumIdentityPromptProps = {
@@ -128,7 +129,7 @@ export function ForumIdentityPrompt({
   if (!people) {
     return (
       <View style={[styles.card, styles.loading]}>
-        <ActivityIndicator color={tokens.colors.warningInk} />
+        <ActivityIndicator color={colors.warningInk} />
       </View>
     );
   }
@@ -216,7 +217,7 @@ export function ForumIdentityPrompt({
               setSaveError(null);
               setMode("confirm");
             }}
-            style={[styles.row, index > 0 && listRowDivider]}
+            style={[styles.row, index > 0 && listRowStyles.divider]}
           >
             <Text style={styles.rowText}>{person.fullName}</Text>
             {!listsSection && person.instrument ? (
@@ -228,7 +229,7 @@ export function ForumIdentityPrompt({
           <Pressable
             accessibilityRole="button"
             onPress={() => setShowAllSections(true)}
-            style={[styles.row, listRowDivider]}
+            style={[styles.row, listRowStyles.divider]}
           >
             <Text style={styles.rowMuted}>{tr("Nie ma mnie tutaj: pokaż wszystkich", "Not here: show everyone")}</Text>
           </Pressable>
@@ -237,7 +238,7 @@ export function ForumIdentityPrompt({
           accessibilityRole="button"
           disabled={isSaving}
           onPress={() => save("declare_no_forum_account", null)}
-          style={[styles.row, listRowDivider]}
+          style={[styles.row, listRowStyles.divider]}
         >
           <Text style={styles.rowMuted}>{tr("Nie mam konta na forum", "I have no forum account")}</Text>
         </Pressable>
@@ -250,11 +251,11 @@ export function ForumIdentityPrompt({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   card: {
-    backgroundColor: tokens.colors.warningSurface,
+    backgroundColor: colors.warningSurface,
     borderWidth: 1.5,
-    borderColor: tokens.colors.warningBorder,
+    borderColor: colors.warningBorder,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -268,17 +269,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.7,
     textTransform: "uppercase",
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   meta: {
     marginTop: 2,
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   actions: {
     flexDirection: "row",
@@ -290,12 +291,12 @@ const styles = StyleSheet.create({
   hint: {
     fontSize: tokens.typography.caption,
     lineHeight: 17,
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   list: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.md,
     overflow: "hidden",
   },
@@ -309,15 +310,15 @@ const styles = StyleSheet.create({
   },
   rowText: {
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
     flexShrink: 1,
   },
   rowMeta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   rowMuted: {
     fontSize: 15,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

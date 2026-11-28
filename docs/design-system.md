@@ -27,16 +27,27 @@ explicit decision changes the look of the app.
 
 | System | Code |
 |---|---|
-| Colour tokens (`kebab-case`, e.g. `control-border`) | `app/src/theme/tokens.ts` → `tokens.colors.<camelCase>` (`controlBorder`) |
+| Colour tokens (`kebab-case`, e.g. `control-border`), themes `light` and `dark` | `app/src/theme/tokens.ts` → `palettes.light` / `palettes.dark` (`controlBorder`); screens read the active theme through `colors.<camelCase>` and `themedStyles((colors) => …)` from `app/src/theme/theme.ts`, never a palette directly |
 | Spacing `space-*`, radius `radius-*` | `tokens.spacing.*`, `tokens.radii.*` |
 | `control-sm/md/lg`, shadow `raised`, breakpoint `desktop` | `tokens.controlHeight.*`, `tokens.shadow.raised`, `tokens.breakpoints.desktop` |
 | Text styles (`screen-title`, `kicker`, …) | `app/src/theme/text.ts` → `textStyles.<camelCase>` |
 | Font (Inter) and the global keyboard focus ring | `app/src/theme/webFonts.ts` |
+| Theme choice (device setting or Ja → Wygląd), page background, focus ring colours | `app/src/theme/theme.ts` (`useThemeRoot` in `App.tsx`, `useTheme` in screens) |
 | Components (cards in the system) | `app/src/ui/<Name>.tsx`: `StatusPill`, `DeclarationPrompt`, `ForumIdentityPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `StatusMark`, `Tag`, `SectionTile` |
 | App chrome (not carded) | `app/src/ui/`: `Icon`, `AppShell`, `BoardSubNav`, `AuthLayout`, `DataFreshnessBanner`, `UnmappedMembersBanner` |
 | Pattern helpers | `app/src/domain/forumLinks.ts` (forum poll links), `stripTitleDatePrefix` in `app/src/utils/format.ts`, `app/src/domain/setlist.ts` |
 
 Use these components in screens instead of copying styles.
+
+## Colours in code
+
+- Read colours during render: `colors.ink` in a component, or a sheet made
+  with `themedStyles((colors) => ({ ... }))`. Never `StyleSheet.create` with
+  colours, and never a colour in a module-level constant: it would freeze the
+  theme that was active at load.
+- Text on a brand fill uses `onBrand`; on `brandDeep`, `warningStrong` or
+  `readerChrome` it uses `onStrong`. Not `surface`: it is dark in the dark
+  theme.
 
 ## Hidden features
 
@@ -52,6 +63,6 @@ npm run typecheck
 npm run web   # http://localhost:8081
 ```
 
-Check both a desktop width (≥960) and a phone width (375), and keyboard focus
-with Tab. The sign-in screen can be viewed without signing out at
+Check both a desktop width (≥960) and a phone width (375), both themes (Ja →
+Wygląd, or the system setting), and keyboard focus with Tab. The sign-in screen can be viewed without signing out at
 `http://[::1]:8081` (separate storage).

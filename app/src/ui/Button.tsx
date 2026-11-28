@@ -1,5 +1,6 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, Text, type StyleProp, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Icon, type IconName } from "./Icon";
 
@@ -30,7 +31,7 @@ export function Button({
   style,
 }: ButtonProps) {
   const isPrimary = variant === "primary";
-  const color = isPrimary ? tokens.colors.surface : tokens.colors.ink;
+  const color = isPrimary ? colors.onBrand : colors.ink;
   const isDisabled = disabled || loading;
   return (
     <Pressable
@@ -56,7 +57,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   button: {
     paddingHorizontal: 18,
     borderRadius: tokens.radii.md,
@@ -66,18 +67,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primary: {
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   primaryHovered: {
-    backgroundColor: tokens.colors.successInk,
+    backgroundColor: colors.successInk,
   },
   secondary: {
     borderWidth: 1,
-    borderColor: tokens.colors.controlBorder,
-    backgroundColor: tokens.colors.surface,
+    borderColor: colors.controlBorder,
+    backgroundColor: colors.surface,
   },
   secondaryHovered: {
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: colors.paper,
   },
   disabled: {
     opacity: 0.45,
@@ -89,4 +90,4 @@ const styles = StyleSheet.create({
   labelLarge: {
     fontSize: 16,
   },
-});
+}));

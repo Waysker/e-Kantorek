@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { statusMeta } from "./StatusPill";
 
@@ -24,14 +25,14 @@ export function StatusMark({ status, size = 18 }: StatusMarkProps) {
         styles.mark,
         { width: size, height: size },
         isGoing
-          ? { backgroundColor: tokens.colors.successInk }
+          ? { backgroundColor: colors.successInk }
           : { backgroundColor: meta.bg, borderWidth: 1.5, borderColor: meta.fg },
       ]}
     >
       <Text
         style={[
           styles.glyph,
-          { fontSize: size === 20 ? 11 : 10, color: isGoing ? tokens.colors.surface : meta.fg },
+          { fontSize: size === 20 ? 11 : 10, color: isGoing ? colors.surface : meta.fg },
         ]}
       >
         {meta.glyph}
@@ -40,7 +41,7 @@ export function StatusMark({ status, size = 18 }: StatusMarkProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   mark: {
     borderRadius: tokens.radii.round,
     alignItems: "center",
@@ -50,4 +51,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     lineHeight: 12,
   },
-});
+}));

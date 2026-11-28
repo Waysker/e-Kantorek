@@ -1,8 +1,9 @@
 import type { DimensionValue } from "react-native";
 import { Fragment } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { tr } from "../../i18n";
+import { colors, themedStyles } from "../../theme/theme";
 import { tokens } from "../../theme/tokens";
 import { Icon } from "../../ui/Icon";
 
@@ -42,12 +43,12 @@ type SectionMembersPanelProps = {
 
 function markColors(mark: 0 | 1 | 0.75 | 0.5 | 0.25) {
   if (mark === 1) {
-    return { bg: tokens.colors.successSurface, fg: tokens.colors.successInk };
+    return { bg: colors.successSurface, fg: colors.successInk };
   }
   if (mark === 0) {
-    return { bg: tokens.colors.surfaceMuted, fg: tokens.colors.muted };
+    return { bg: colors.surfaceMuted, fg: colors.muted };
   }
-  return { bg: tokens.colors.brandTint, fg: tokens.colors.successInk };
+  return { bg: colors.brandTint, fg: colors.successInk };
 }
 
 // Splits cards into rows of `columns`, filling the last row with placeholders so
@@ -134,7 +135,7 @@ export function SectionMembersPanel({
           accessibilityRole="button"
           accessibilityLabel={tr("Wróć do sekcji", "Back to sections")}
         >
-          <Icon name="chevronLeft" size={18} color={tokens.colors.ink} />
+          <Icon name="chevronLeft" size={18} color={colors.ink} />
         </Pressable>
         <View style={styles.headerText}>
           <Text style={styles.title}>{sectionLabel}</Text>
@@ -172,7 +173,7 @@ export function SectionMembersPanel({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: tokens.radii.sm,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -194,20 +195,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   summary: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   hint: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   empty: {
     fontSize: 15,
     lineHeight: 22,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   list: {
     gap: 6,
@@ -231,33 +232,33 @@ const styles = StyleSheet.create({
   row: {
     minHeight: 52,
     borderWidth: 1.5,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.md,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
   },
   rowPresent: {
-    borderColor: tokens.colors.successSurface,
-    backgroundColor: tokens.colors.paper,
+    borderColor: colors.successSurface,
+    backgroundColor: colors.paper,
   },
   rowHinted: {
     borderStyle: "dashed",
-    borderColor: tokens.colors.brandDeepAccent,
+    borderColor: colors.brandDeepAccent,
   },
   rowPending: {
     borderStyle: "solid",
-    borderColor: tokens.colors.warningBorder,
+    borderColor: colors.warningBorder,
   },
   rowDisabled: {
     opacity: 0.5,
   },
   rowHovered: {
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: colors.paper,
   },
   textCol: {
     flex: 1,
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   metaRow: {
     flexDirection: "row",
@@ -277,12 +278,12 @@ const styles = StyleSheet.create({
   hintBadge: {
     fontSize: 11,
     fontWeight: "600",
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   pendingLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   markPill: {
     minWidth: 48,
@@ -296,4 +297,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-});
+}));

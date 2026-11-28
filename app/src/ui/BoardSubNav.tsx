@@ -1,7 +1,8 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import type { BoardSection } from "../navigation/routes";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Badge } from "./Badge";
 
@@ -66,11 +67,11 @@ export function BoardSubNav({ sections, activeSection, badges, badgeLabels, onSe
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrapper: {
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.border,
-    backgroundColor: tokens.colors.background,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
   },
   row: {
     paddingHorizontal: tokens.spacing.lg,
@@ -85,14 +86,14 @@ const styles = StyleSheet.create({
     borderBottomColor: "transparent",
   },
   itemActive: {
-    borderBottomColor: tokens.colors.brand,
+    borderBottomColor: colors.brand,
   },
   label: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   labelActive: {
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
-});
+}));

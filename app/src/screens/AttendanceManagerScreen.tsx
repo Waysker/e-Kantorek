@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -28,6 +27,7 @@ import {
   REHEARSAL_SECTION_ROWS,
 } from "../domain/instruments";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Button } from "../ui/Button";
 import { textStyles } from "../theme/text";
@@ -1026,7 +1026,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     <View style={styles.card}>
       {isBootLoading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={tokens.colors.brand} size="small" />
+          <ActivityIndicator color={colors.brand} size="small" />
           <Text style={styles.muted}>{tr("Ładowanie sesji…", "Loading sessions…")}</Text>
         </View>
       ) : (
@@ -1040,7 +1040,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                 accessibilityRole="button"
                 accessibilityLabel={tr("Poprzedni miesiąc", "Previous month")}
               >
-                <Icon name="chevronLeft" size={18} color={tokens.colors.ink} />
+                <Icon name="chevronLeft" size={18} color={colors.ink} />
               </Pressable>
               <Pressable
                 onPress={() => setVisibleMonthKey((current) => shiftMonthKey(current, 1))}
@@ -1048,7 +1048,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                 accessibilityRole="button"
                 accessibilityLabel={tr("Następny miesiąc", "Next month")}
               >
-                <Icon name="chevronRight" size={18} color={tokens.colors.ink} />
+                <Icon name="chevronRight" size={18} color={colors.ink} />
               </Pressable>
             </View>
           </View>
@@ -1306,7 +1306,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       ) : null}
       {isEntriesLoading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={tokens.colors.brand} size="small" />
+          <ActivityIndicator color={colors.brand} size="small" />
           <Text style={styles.muted}>{tr("Ładowanie wpisów…", "Loading entries…")}</Text>
         </View>
       ) : null}
@@ -1332,7 +1332,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -1353,7 +1353,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   backLinkLabel: {
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontWeight: "600",
   },
   header: {
@@ -1373,11 +1373,11 @@ const styles = StyleSheet.create({
   title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   hint: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   headerActions: {
     flexDirection: "row",
@@ -1392,12 +1392,12 @@ const styles = StyleSheet.create({
   counterValue: {
     fontSize: 28,
     fontWeight: "800",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   counterTotal: {
     fontSize: 16,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   loadingRow: {
     flexDirection: "row",
@@ -1419,9 +1419,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
@@ -1434,7 +1434,7 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 17,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
     textTransform: "capitalize",
   },
   monthNav: {
@@ -1456,7 +1456,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 11,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   calendarGrid: {
     flexDirection: "row",
@@ -1476,38 +1476,38 @@ const styles = StyleSheet.create({
   },
   // Tuesday/Thursday rehearsal days: a neutral band down the whole column.
   rehearsalColumn: {
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
   },
   rehearsalColumnHead: {
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
     borderTopLeftRadius: tokens.radii.sm,
     borderTopRightRadius: tokens.radii.sm,
     paddingVertical: 4,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   dayCellHasSessions: {
-    backgroundColor: tokens.colors.surface,
-    borderColor: tokens.colors.border,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
   },
   dayCellToday: {
-    borderColor: tokens.colors.brand,
+    borderColor: colors.brand,
   },
   dayCellSelected: {
-    backgroundColor: tokens.colors.brand,
-    borderColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
+    borderColor: colors.brand,
   },
   dayNumber: {
     fontSize: 14,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   dayNumberOutside: {
-    color: tokens.colors.controlBorder,
+    color: colors.controlBorder,
   },
   dayNumberStrong: {
     fontWeight: "700",
   },
   dayNumberSelected: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
   },
   dayMarks: {
     flexDirection: "row",
@@ -1516,46 +1516,46 @@ const styles = StyleSheet.create({
   dayMark: {
     fontSize: 10,
     fontWeight: "700",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   legend: {
     fontSize: 12,
     lineHeight: 17,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   sessionBlock: {
     gap: 6,
     paddingTop: tokens.spacing.xs,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   sessionRow: {
     borderRadius: tokens.radii.md,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 2,
   },
   sessionRowVirtual: {
     borderStyle: "dashed",
-    borderColor: tokens.colors.controlBorder,
+    borderColor: colors.controlBorder,
   },
   sessionRowSelected: {
-    backgroundColor: tokens.colors.brandTint,
-    borderColor: tokens.colors.brand,
+    backgroundColor: colors.brandTint,
+    borderColor: colors.brand,
     borderStyle: "solid",
   },
   sessionTitle: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   sessionTitleSelected: {
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   sessionMeta: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

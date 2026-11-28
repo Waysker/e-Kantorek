@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
 import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import {
@@ -11,9 +11,10 @@ import {
 } from "../domain/forumIdentity";
 import { tr } from "../i18n";
 import { textStyles } from "../theme/text";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Button } from "../ui/Button";
-import { Card, listRowDivider } from "../ui/Card";
+import { Card, listRowStyles } from "../ui/Card";
 import { EmptyState } from "../ui/EmptyState";
 import { Notice } from "../ui/Notice";
 import { TextField } from "../ui/TextField";
@@ -188,7 +189,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
   if (links === null) {
     return (
       <View style={styles.loadingRow}>
-        <ActivityIndicator color={tokens.colors.brand} />
+        <ActivityIndicator color={colors.brand} />
         <Text style={styles.meta}>{tr("Wczytuję konta…", "Loading accounts…")}</Text>
       </View>
     );
@@ -220,7 +221,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
               accessibilityRole="button"
               disabled={savingProfileId !== null}
               onPress={() => setIdentity(link, person)}
-              style={[styles.pickerRow, index > 0 && listRowDivider]}
+              style={[styles.pickerRow, index > 0 && listRowStyles.divider]}
             >
               <Text style={styles.name}>{person.fullName}</Text>
               {person.instrument ? <Text style={styles.meta}>{person.instrument}</Text> : null}
@@ -230,7 +231,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
             accessibilityRole="button"
             disabled={savingProfileId !== null}
             onPress={() => setIdentity(link, null, true)}
-            style={[styles.pickerRow, listRowDivider]}
+            style={[styles.pickerRow, listRowStyles.divider]}
           >
             <Text style={styles.meta}>{tr("Bez konta na forum", "No forum account")}</Text>
           </Pressable>
@@ -255,7 +256,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
         ? people.find((person) => person.forumUid === link.forumUid) ?? null
         : null;
     return (
-      <View key={link.profileId} style={[styles.row, index > 0 && listRowDivider]}>
+      <View key={link.profileId} style={[styles.row, index > 0 && listRowStyles.divider]}>
         <Text style={styles.name}>{link.fullName}</Text>
         <Text style={styles.meta}>
           {link.instrument ?? ""}
@@ -354,7 +355,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
           <Text style={styles.kicker}>{tr("Ostatnie zmiany", "Recent changes")}</Text>
           <Card variant="list">
             {audit.map((entry, index) => (
-              <View key={`${entry.changedAt}-${index}`} style={[styles.row, index > 0 && listRowDivider]}>
+              <View key={`${entry.changedAt}-${index}`} style={[styles.row, index > 0 && listRowStyles.divider]}>
                 <Text style={styles.name}>{entry.profileFullName ?? "—"}</Text>
                 <Text style={styles.meta}>{describeAudit(entry)}</Text>
                 <Text style={styles.meta}>
@@ -370,7 +371,7 @@ export function ForumAccountLinksPanel({ onChanged }: { onChanged?: () => void }
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrapper: {
     gap: tokens.spacing.sm,
   },
@@ -392,11 +393,11 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   meta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   actions: {
     flexDirection: "row",
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
   },
   pickerList: {
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.md,
     overflow: "hidden",
   },
@@ -429,6 +430,6 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
-});
+}));
