@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type TagProps = {
@@ -17,18 +18,18 @@ export function Tag({ label, style }: TagProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   tag: {
     height: 20,
     paddingHorizontal: 8,
     borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.neutralSurface,
+    backgroundColor: colors.neutralSurface,
     alignItems: "center",
     justifyContent: "center",
   },
   label: {
     fontSize: 11,
     fontWeight: "600",
-    color: tokens.colors.neutralInk,
+    color: colors.neutralInk,
   },
-});
+}));

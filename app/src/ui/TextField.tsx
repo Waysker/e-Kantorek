@@ -1,5 +1,6 @@
-import { StyleSheet, Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
+import { Text, TextInput, View, type StyleProp, type TextInputProps, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type TextFieldProps = Omit<TextInputProps, "style"> & {
@@ -20,7 +21,7 @@ export function TextField({ label, error, hint, style, accessibilityLabel, ...in
       <TextInput
         {...inputProps}
         accessibilityLabel={accessibilityLabel ?? label}
-        placeholderTextColor={inputProps.placeholderTextColor ?? tokens.colors.muted}
+        placeholderTextColor={inputProps.placeholderTextColor ?? colors.muted}
         style={[styles.input, error ? styles.inputError : null]}
       />
       {error ? (
@@ -34,34 +35,34 @@ export function TextField({ label, error, hint, style, accessibilityLabel, ...in
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   wrap: {
     gap: 6,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   input: {
     minHeight: tokens.controlHeight.lg,
     borderWidth: 1,
-    borderColor: tokens.colors.controlBorder,
+    borderColor: colors.controlBorder,
     borderRadius: tokens.radii.md,
     paddingHorizontal: 14,
     fontSize: 16,
-    color: tokens.colors.ink,
-    backgroundColor: tokens.colors.surface,
+    color: colors.ink,
+    backgroundColor: colors.surface,
   },
   inputError: {
-    borderColor: tokens.colors.dangerInk,
+    borderColor: colors.dangerInk,
   },
   error: {
     fontSize: 13,
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
   },
   hint: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

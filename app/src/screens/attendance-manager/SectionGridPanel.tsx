@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, Text, View, useWindowDimensions } from "react-native";
 
 import { tr } from "../../i18n";
+import { colors, themedStyles } from "../../theme/theme";
 import { tokens } from "../../theme/tokens";
 import { textStyles } from "../../theme/text";
 
@@ -95,14 +96,14 @@ export function SectionGridPanel({ rows, onSelectSection }: SectionGridPanelProp
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   header: {
     gap: 2,
   },
   kicker: textStyles.kicker,
   hint: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   grid: {
     gap: tokens.spacing.xs,
@@ -116,10 +117,10 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 76,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.md,
     padding: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: "space-between",
     gap: tokens.spacing.xs,
   },
@@ -127,23 +128,23 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tileHovered: {
-    borderColor: tokens.colors.brand,
+    borderColor: colors.brand,
   },
   tileEmpty: {
-    backgroundColor: tokens.colors.paper,
+    backgroundColor: colors.paper,
     borderStyle: "dashed",
   },
   tileDone: {
-    backgroundColor: tokens.colors.successSurface,
-    borderColor: tokens.colors.successSurface,
+    backgroundColor: colors.successSurface,
+    borderColor: colors.successSurface,
   },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   labelEmpty: {
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   progressBlock: {
     gap: 4,
@@ -151,23 +152,23 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 12,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   metaDone: {
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   track: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
     overflow: "hidden",
   },
   fill: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   fillDone: {
-    backgroundColor: tokens.colors.successInk,
+    backgroundColor: colors.successInk,
   },
-});
+}));

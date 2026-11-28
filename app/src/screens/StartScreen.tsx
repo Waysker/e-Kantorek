@@ -1,8 +1,9 @@
 import { useMemo, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 
 import type { AttendanceStatus, EventListItem } from "../domain/models";
 import { appLocaleTag, tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { EventRow } from "../ui/EventRow";
 import { EmptyState } from "../ui/EmptyState";
@@ -246,7 +247,7 @@ export function StartScreen({
           }
           style={styles.bellButton}
         >
-          <Icon name="bell" size={20} color={tokens.colors.ink} />
+          <Icon name="bell" size={20} color={colors.ink} />
           {unreadNotificationsCount > 0 ? <View style={styles.bellDot} /> : null}
         </Pressable>
       </View>
@@ -285,7 +286,7 @@ export function StartScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -328,8 +329,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: tokens.radii.md,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -340,10 +341,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningBorder,
   },
   hero: {
-    backgroundColor: tokens.colors.brandDeep,
+    backgroundColor: colors.brandDeep,
     borderRadius: tokens.radii.xl,
     padding: 20,
     gap: 4,
@@ -361,28 +362,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.7,
     textTransform: "uppercase",
-    color: tokens.colors.brandDeepAccent,
+    color: colors.brandDeepAccent,
   },
   heroTitle: {
     fontSize: 26,
     lineHeight: 30,
     fontWeight: "800",
     letterSpacing: -0.3,
-    color: tokens.colors.surface,
+    color: colors.onStrong,
     marginBottom: 4,
   },
   heroMeta: {
     fontSize: 14,
-    color: tokens.colors.brandDeepMuted,
+    color: colors.brandDeepMuted,
   },
   heroLink: {
     marginTop: tokens.spacing.sm,
     paddingTop: tokens.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.brandDeepRaised,
+    borderTopColor: colors.brandDeepRaised,
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.brandDeepMuted,
+    color: colors.brandDeepMuted,
   },
   section: {
     gap: tokens.spacing.sm,
@@ -395,7 +396,7 @@ const styles = StyleSheet.create({
   link: {
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   weekRow: {
     flexDirection: "row",
@@ -412,20 +413,20 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   dayCellToday: {
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   dayWeekday: {
     fontSize: 10,
     fontWeight: "600",
     textTransform: "uppercase",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   dayNumber: {
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   dayTextToday: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
     fontWeight: "700",
   },
-});
+}));

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type EmptyStateProps = {
@@ -21,26 +22,26 @@ export function EmptyState({ title, children, tone = "neutral" }: EmptyStateProp
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   box: {
     padding: tokens.spacing.lg,
     borderRadius: tokens.radii.lg,
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: tokens.colors.borderStrong,
+    borderColor: colors.borderStrong,
     gap: tokens.spacing.xs,
   },
   title: {
     fontSize: 16,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   titleDone: {
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   copy: {
     fontSize: 14,
     lineHeight: 20,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

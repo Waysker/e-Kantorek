@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -13,8 +12,9 @@ import { supabaseAuthClient } from "../auth/supabaseAuthClient";
 import type { PrimaryRole } from "../domain/models";
 import { normalizePrimaryRole, PRIMARY_ROLE_SEQUENCE } from "../domain/roles";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
-import { Card, listRowDivider } from "../ui/Card";
+import { Card, listRowStyles } from "../ui/Card";
 import { TextField } from "../ui/TextField";
 import { textStyles } from "../theme/text";
 import { Chip } from "../ui/Chip";
@@ -344,7 +344,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
 
       {isLoading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={tokens.colors.brand} />
+          <ActivityIndicator color={colors.brand} />
           <Text style={styles.muted}>{tr("Wczytuję konta…", "Loading accounts…")}</Text>
         </View>
       ) : visibleProfiles.length === 0 ? (
@@ -358,7 +358,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
             return (
               <View
                 key={profile.id}
-                style={[styles.row, isWide && styles.rowWide, index > 0 && listRowDivider]}
+                style={[styles.row, isWide && styles.rowWide, index > 0 && listRowStyles.divider]}
               >
                 <View style={styles.person}>
                   <Text style={styles.name}>
@@ -398,7 +398,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
                         accessibilityState={{ checked: isSelected, disabled: isDisabled }}
                       >
                         {isSavingCurrent && isSelected ? (
-                          <ActivityIndicator size="small" color={tokens.colors.surface} />
+                          <ActivityIndicator size="small" color={colors.onBrand} />
                         ) : (
                           <Text
                             style={[styles.segmentLabel, isSelected && styles.segmentLabelSelected]}
@@ -449,15 +449,15 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   unconfirmedCard: {
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: 6,
   },
   unconfirmedName: {
-    color: tokens.colors.ink,
+    color: colors.ink,
     fontWeight: "600",
   },
   screenScroll: {
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   backLinkLabel: {
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontWeight: "600",
   },
   header: {
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   muted: {
     fontSize: 14,
     lineHeight: 20,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   chips: {
     flexDirection: "row",
@@ -523,23 +523,23 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 15,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   selfTag: {
     fontSize: 13,
     fontWeight: "500",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   meta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   segmented: {
     flexDirection: "row",
     gap: 3,
     padding: 3,
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
   },
   segmentedWide: {
     width: 380,
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   segmentSelected: {
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   segmentDisabled: {
     opacity: 0.45,
@@ -561,9 +561,9 @@ const styles = StyleSheet.create({
   segmentLabel: {
     fontSize: 12,
     fontWeight: "600",
-    color: tokens.colors.neutralInk,
+    color: colors.neutralInk,
   },
   segmentLabelSelected: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
   },
-});
+}));

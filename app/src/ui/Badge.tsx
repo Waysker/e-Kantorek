@@ -1,5 +1,6 @@
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type BadgeProps = {
@@ -21,7 +22,7 @@ export function Badge({ value, variant = "strong", style }: BadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   badge: {
     borderRadius: tokens.radii.round,
     alignItems: "center",
@@ -31,14 +32,14 @@ const styles = StyleSheet.create({
     minWidth: 20,
     height: 20,
     paddingHorizontal: 6,
-    backgroundColor: tokens.colors.warningStrong,
+    backgroundColor: colors.warningStrong,
   },
   soft: {
     height: 22,
     paddingHorizontal: 8,
     borderWidth: 1.5,
-    borderColor: tokens.colors.warningBorder,
-    backgroundColor: tokens.colors.warningSurface,
+    borderColor: colors.warningBorder,
+    backgroundColor: colors.warningSurface,
   },
   label: {
     fontWeight: "700",
@@ -46,10 +47,10 @@ const styles = StyleSheet.create({
   labelStrong: {
     fontSize: 11,
     lineHeight: 13,
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   labelSoft: {
     fontSize: 12,
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
-});
+}));

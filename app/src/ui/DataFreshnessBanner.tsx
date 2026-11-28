@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { formatDateLabel, formatRelativeTime } from "../utils/format";
 
@@ -128,7 +129,7 @@ export function DataFreshnessBanner({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   container: {
     borderBottomWidth: 1,
     paddingHorizontal: tokens.spacing.md,
@@ -136,36 +137,36 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   containerStale: {
-    backgroundColor: tokens.colors.dangerSurface,
-    borderBottomColor: tokens.colors.dangerInk,
+    backgroundColor: colors.dangerSurface,
+    borderBottomColor: colors.dangerInk,
   },
   containerUnknown: {
-    backgroundColor: tokens.colors.surfaceMuted,
-    borderBottomColor: tokens.colors.border,
+    backgroundColor: colors.surfaceMuted,
+    borderBottomColor: colors.border,
   },
   statusLabel: {
     fontSize: tokens.typography.caption,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: tokens.colors.successInk,
+    color: colors.successInk,
     fontWeight: "700",
   },
   statusLabelStale: {
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
   },
   statusLabelUnknown: {
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   detailsLabel: {
     fontSize: tokens.typography.caption,
     lineHeight: 16,
-    color: tokens.colors.ink,
+    color: colors.ink,
     fontWeight: "600",
   },
   detailsLabelStale: {
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
   },
   detailsLabelUnknown: {
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import type { OraghInstrument } from "../auth/instruments";
 import { ORAGH_INSTRUMENT_OPTIONS } from "../auth/instruments";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { TextField } from "../ui/TextField";
 import { Notice } from "../ui/Notice";
@@ -315,7 +316,7 @@ export function RegisterScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   field: {
     marginTop: tokens.spacing.md,
   },
@@ -326,11 +327,11 @@ const styles = StyleSheet.create({
     marginTop: tokens.spacing.md,
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   fieldErrorText: {
     marginTop: 4,
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
     fontSize: 13,
   },
   title: textStyles.pageTitle,
@@ -347,8 +348,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryButtonLabel: {
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontSize: 15,
     fontWeight: "600",
   },
-});
+}));

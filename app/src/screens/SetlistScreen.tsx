@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { EventDetail } from "../domain/models";
 import { cleanSetlistLabel, isPlaceholderSetlist } from "../domain/setlist";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
 
@@ -132,10 +133,10 @@ export function SetlistScreen({ event, onBack }: SetlistScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   backdrop: {
     flex: 1,
-    backgroundColor: tokens.colors.readerBackdrop,
+    backgroundColor: colors.readerBackdrop,
   },
   header: {
     flexDirection: "row",
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: 10,
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.readerChrome,
+    backgroundColor: colors.readerChrome,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -159,7 +160,7 @@ const styles = StyleSheet.create({
   closeGlyph: {
     fontSize: 18,
     fontWeight: "700",
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   headerText: {
     flex: 1,
@@ -168,11 +169,11 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   headerMeta: {
     fontSize: 12,
-    color: tokens.colors.readerMeta,
+    color: colors.readerMeta,
   },
   sizeControls: {
     flexDirection: "row",
@@ -181,12 +182,12 @@ const styles = StyleSheet.create({
   sizeLabelSmall: {
     fontSize: 14,
     fontWeight: "700",
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   sizeLabelLarge: {
     fontSize: 18,
     fontWeight: "700",
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   outer: {
     flex: 1,
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
     maxWidth: 860,
     alignSelf: "center",
     borderRadius: tokens.radii.lg,
-    backgroundColor: tokens.colors.readerPage,
+    backgroundColor: colors.readerPage,
   },
   pageContent: {
     paddingHorizontal: tokens.spacing.lg,
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 0.8,
     textTransform: "uppercase",
-    color: tokens.colors.brand,
+    color: colors.brand,
     marginBottom: tokens.spacing.xs,
   },
   row: {
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
     minWidth: 32,
     textAlign: "right",
     fontWeight: "700",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   rowText: {
     flex: 1,
@@ -236,10 +237,10 @@ const styles = StyleSheet.create({
   },
   itemLabel: {
     fontWeight: "700",
-    color: tokens.colors.readerInk,
+    color: colors.readerInk,
   },
   itemDetail: {
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   empty: {
     paddingVertical: tokens.spacing.xl,
@@ -249,11 +250,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: tokens.colors.readerInk,
+    color: colors.readerInk,
   },
   emptyCopy: {
     fontSize: 15,
     textAlign: "center",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

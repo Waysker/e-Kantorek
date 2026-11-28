@@ -3,7 +3,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -11,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type AuthLayoutProps = {
@@ -58,16 +58,16 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screen: {
     flex: 1,
-    backgroundColor: tokens.colors.background,
+    backgroundColor: colors.background,
   },
   screenDesktop: {
     flexDirection: "row",
   },
   brand: {
-    backgroundColor: tokens.colors.brandDeep,
+    backgroundColor: colors.brandDeep,
     paddingHorizontal: tokens.spacing.lg,
     paddingTop: tokens.spacing.xl,
     paddingBottom: 56,
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     fontWeight: "800",
     letterSpacing: -0.6,
-    color: tokens.colors.surface,
+    color: colors.onStrong,
   },
   wordmarkDesktop: {
     fontSize: 48,
@@ -95,14 +95,14 @@ const styles = StyleSheet.create({
   orchestra: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.brandDeepAccent,
+    color: colors.brandDeepAccent,
   },
   tagline: {
     marginTop: tokens.spacing.md,
     maxWidth: 420,
     fontSize: 17,
     lineHeight: 25,
-    color: tokens.colors.brandDeepMuted,
+    color: colors.brandDeepMuted,
   },
   formSide: {
     flex: 1,
@@ -119,10 +119,10 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     marginTop: -32,
     marginHorizontal: tokens.spacing.md,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radii.lg,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     padding: tokens.spacing.lg,
   },
   cardDesktop: {
@@ -133,4 +133,4 @@ const styles = StyleSheet.create({
     marginTop: 0,
     padding: tokens.spacing.xl,
   },
-});
+}));

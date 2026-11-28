@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   useWindowDimensions,
   View,
@@ -17,6 +16,7 @@ import {
   normalizeInstrumentKey,
 } from "../domain/instruments";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Button } from "../ui/Button";
 import { TextField } from "../ui/TextField";
@@ -898,7 +898,7 @@ export function AttendanceSummaryScreen({ onBack, canSwitchSource = false }: Att
 
       {isLoading ? (
         <View style={styles.loadingRow}>
-          <ActivityIndicator color={tokens.colors.brand} />
+          <ActivityIndicator color={colors.brand} />
         </View>
       ) : null}
 
@@ -933,7 +933,7 @@ export function AttendanceSummaryScreen({ onBack, canSwitchSource = false }: Att
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -954,7 +954,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   backLinkLabel: {
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontWeight: "600",
   },
   header: {
@@ -964,12 +964,12 @@ const styles = StyleSheet.create({
   title: textStyles.pageTitle,
   muted: {
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.sm,
     gap: tokens.spacing.sm,
@@ -983,7 +983,7 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.sm,
     paddingTop: tokens.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   inputRow: {
     flexDirection: "row",
@@ -1013,9 +1013,9 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.sm,
   },
   sectionCard: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     paddingHorizontal: 14,
     paddingTop: 12,
@@ -1030,12 +1030,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   sectionCount: {
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   memberRow: {
     flexDirection: "row",
@@ -1045,13 +1045,13 @@ const styles = StyleSheet.create({
   },
   memberRowDivider: {
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   rank: {
     width: 24,
     fontSize: 13,
     fontWeight: "600",
-    color: tokens.colors.muted,
+    color: colors.muted,
     textAlign: "right",
   },
   memberMain: {
@@ -1061,21 +1061,21 @@ const styles = StyleSheet.create({
   },
   memberName: {
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   track: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: tokens.colors.surfaceMuted,
+    backgroundColor: colors.surfaceMuted,
     overflow: "hidden",
   },
   fill: {
     height: 4,
     borderRadius: 2,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   fillLow: {
-    backgroundColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningBorder,
   },
   memberMetrics: {
     alignItems: "flex-end",
@@ -1084,10 +1084,10 @@ const styles = StyleSheet.create({
   memberPercent: {
     fontSize: 15,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   memberPoints: {
     fontSize: 12,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
-});
+}));

@@ -3,7 +3,6 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -13,6 +12,7 @@ import type { AttendanceStatus, EventDetail } from "../domain/models";
 import { getForumThreadUrl, openForumThread } from "../domain/forumLinks";
 import { cleanSetlistLabel, isPlaceholderSetlist } from "../domain/setlist";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { Button } from "../ui/Button";
 import { textStyles } from "../theme/text";
@@ -217,7 +217,7 @@ export function EventDetailScreen({
                 accessibilityRole="button"
                 accessibilityLabel={tr("Wróć do wydarzeń", "Back to events")}
               >
-                <Icon name="chevronLeft" size={20} color={tokens.colors.surface} strokeWidth={2.2} />
+                <Icon name="chevronLeft" size={20} color={colors.onStrong} strokeWidth={2.2} />
                 {isDesktop ? (
                   <Text style={styles.heroButtonLabel}>{tr("Wydarzenia", "Events")}</Text>
                 ) : null}
@@ -229,7 +229,7 @@ export function EventDetailScreen({
                   accessibilityRole="link"
                 >
                   <Text style={styles.heroButtonLabel}>{tr("Wątek na forum", "Forum thread")}</Text>
-                  <Icon name="external" size={14} color={tokens.colors.surface} strokeWidth={2.2} />
+                  <Icon name="external" size={14} color={colors.onStrong} strokeWidth={2.2} />
                 </Pressable>
               ) : null}
             </View>
@@ -431,7 +431,7 @@ export function EventDetailScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -441,7 +441,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   hero: {
-    backgroundColor: tokens.colors.brandDeep,
+    backgroundColor: colors.brandDeep,
     paddingHorizontal: tokens.spacing.md,
     paddingTop: tokens.spacing.sm,
     paddingBottom: tokens.spacing.lg,
@@ -462,19 +462,19 @@ const styles = StyleSheet.create({
     minWidth: 44,
     paddingHorizontal: 12,
     borderRadius: tokens.radii.md,
-    backgroundColor: tokens.colors.brandDeepRaised,
+    backgroundColor: colors.brandDeepRaised,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
   },
   heroButtonLabel: {
-    color: tokens.colors.surface,
+    color: colors.onStrong,
     fontSize: 14,
     fontWeight: "600",
   },
   heroKicker: {
-    color: tokens.colors.brandDeepAccent,
+    color: colors.brandDeepAccent,
     fontSize: tokens.typography.caption,
     fontWeight: "600",
     letterSpacing: 0.7,
@@ -482,7 +482,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     marginTop: 6,
-    color: tokens.colors.surface,
+    color: colors.onStrong,
     fontSize: 30,
     lineHeight: 34,
     fontWeight: "800",
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
   },
   heroVenue: {
     marginTop: tokens.spacing.xs,
-    color: tokens.colors.brandDeepMuted,
+    color: colors.brandDeepMuted,
     fontSize: 15,
   },
   body: {
@@ -519,16 +519,16 @@ const styles = StyleSheet.create({
     width: 340,
   },
   card: {
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     borderRadius: tokens.radii.lg,
     padding: tokens.spacing.md,
     gap: tokens.spacing.sm,
   },
   cardAction: {
-    backgroundColor: tokens.colors.warningSurface,
-    borderColor: tokens.colors.warningBorder,
+    backgroundColor: colors.warningSurface,
+    borderColor: colors.warningBorder,
     borderWidth: 1.5,
   },
   cardHeaderRow: {
@@ -539,12 +539,12 @@ const styles = StyleSheet.create({
   },
   kicker: textStyles.kicker,
   kickerAction: {
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
   },
   hint: {
     fontSize: tokens.typography.caption,
     lineHeight: 17,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   statsRow: {
     flexDirection: "row",
@@ -569,90 +569,90 @@ const styles = StyleSheet.create({
   linkLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: tokens.colors.brand,
+    color: colors.brand,
   },
   smallButton: {
     minHeight: 36,
     paddingHorizontal: 14,
     borderRadius: tokens.radii.sm,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
     justifyContent: "center",
   },
   smallButtonDisabled: {
     opacity: 0.7,
   },
   smallButtonLabel: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
     fontWeight: "600",
     fontSize: 14,
   },
   reminderFeedback: {
     fontSize: tokens.typography.caption,
     lineHeight: 18,
-    color: tokens.colors.muted,
+    color: colors.muted,
     fontWeight: "600",
   },
   reminderFeedbackSuccess: {
-    color: tokens.colors.successInk,
+    color: colors.successInk,
   },
   reminderFeedbackError: {
-    color: tokens.colors.dangerInk,
+    color: colors.dangerInk,
   },
   bodyText: {
     fontSize: tokens.typography.body,
     lineHeight: 24,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   muted: {
     fontSize: 14,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   meta: {
     fontSize: 13,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   update: {
     gap: 4,
     paddingLeft: 12,
     borderLeftWidth: 3,
-    borderLeftColor: tokens.colors.border,
+    borderLeftColor: colors.border,
   },
   updateLatest: {
-    borderLeftColor: tokens.colors.brand,
+    borderLeftColor: colors.brand,
   },
   comment: {
     gap: 4,
     paddingTop: tokens.spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.surfaceMuted,
+    borderTopColor: colors.surfaceMuted,
   },
   setlistSectionTitle: {
     marginTop: tokens.spacing.xs,
     fontSize: tokens.typography.caption,
     fontWeight: "600",
     textTransform: "uppercase",
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   setlistRow: {
     flexDirection: "row",
     gap: 12,
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.surfaceMuted,
+    borderBottomColor: colors.surfaceMuted,
   },
   setlistIndex: {
     width: 20,
     fontSize: 15,
-    color: tokens.colors.muted,
+    color: colors.muted,
   },
   setlistLabel: {
     flex: 1,
     fontSize: 15,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   popupOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: colors.scrim,
     alignItems: "center",
     justifyContent: "center",
     padding: tokens.spacing.lg,
@@ -660,32 +660,32 @@ const styles = StyleSheet.create({
   popupCard: {
     width: "100%",
     maxWidth: 520,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radii.lg,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     padding: tokens.spacing.lg,
     gap: tokens.spacing.xs,
   },
   popupTitle: {
     fontSize: tokens.typography.title,
-    color: tokens.colors.ink,
+    color: colors.ink,
     fontWeight: "700",
   },
   popupIntro: {
     marginTop: tokens.spacing.xs,
     fontSize: tokens.typography.body,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   popupLine: {
     fontSize: tokens.typography.body,
     lineHeight: 22,
-    color: tokens.colors.ink,
+    color: colors.ink,
   },
   popupFooter: {
     marginTop: tokens.spacing.xs,
     fontSize: tokens.typography.caption,
-    color: tokens.colors.muted,
+    color: colors.muted,
     fontWeight: "700",
   },
   popupCloseButton: {
@@ -694,10 +694,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     borderRadius: tokens.radii.round,
-    backgroundColor: tokens.colors.brand,
+    backgroundColor: colors.brand,
   },
   popupCloseButtonLabel: {
-    color: tokens.colors.surface,
+    color: colors.onBrand,
     fontWeight: "700",
   },
-});
+}));

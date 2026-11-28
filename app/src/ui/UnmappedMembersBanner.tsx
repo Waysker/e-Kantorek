@@ -1,7 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import type { SquadMember } from "../domain/models";
 import { tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 
 type UnmappedMembersBannerProps = {
@@ -45,11 +46,11 @@ export function UnmappedMembersBanner({ members, canAssign }: UnmappedMembersBan
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   container: {
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.warningInk,
-    backgroundColor: tokens.colors.warningSurface,
+    borderBottomColor: colors.warningInk,
+    backgroundColor: colors.warningSurface,
     paddingHorizontal: tokens.spacing.md,
     paddingVertical: tokens.spacing.sm,
     gap: 2,
@@ -58,13 +59,13 @@ const styles = StyleSheet.create({
     fontSize: tokens.typography.caption,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
     fontWeight: "700",
   },
   detailsLabel: {
     fontSize: tokens.typography.caption,
     lineHeight: 16,
-    color: tokens.colors.warningInk,
+    color: colors.warningInk,
     fontWeight: "600",
   },
-});
+}));

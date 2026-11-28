@@ -31,11 +31,12 @@ export function installWebFonts() {
     "#root *{font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;",
     "font-feature-settings:'tnum' 1,'cv11' 1;}",
     // Keyboard focus ring for every focusable element (react-native-web renders
-    // Pressables as elements with tabindex). Green ring + white halo so it is
-    // visible on light and dark (brand-deep) surfaces alike.
+    // Pressables as elements with tabindex). Ring `focus` + halo `focus-halo`
+    // of the active theme (set as CSS variables by ./theme), so it shows on
+    // light, dark and brand-deep surfaces alike.
     "#root [tabindex]:focus-visible,#root input:focus-visible,#root textarea:focus-visible,",
-    "#root a:focus-visible,#root button:focus-visible{outline:2px solid #00693C !important;",
-    "outline-offset:2px !important;box-shadow:0 0 0 2px #FFFFFF !important;}",
+    "#root a:focus-visible,#root button:focus-visible{outline:2px solid var(--pt-focus,#00693C) !important;",
+    "outline-offset:2px !important;box-shadow:0 0 0 2px var(--pt-focus-halo,#FFFFFF) !important;}",
   ].join("");
   document.head.appendChild(style);
 }

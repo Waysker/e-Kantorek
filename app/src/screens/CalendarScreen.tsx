@@ -3,7 +3,6 @@ import {
   PanResponder,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   View,
   useWindowDimensions,
@@ -11,6 +10,7 @@ import {
 
 import type { AttendanceStatus, EventListItem } from "../domain/models";
 import { appLocaleTag, tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { stripTitleDatePrefix } from "../utils/format";
 import { StatusPill, statusMeta } from "../ui/StatusPill";
@@ -626,15 +626,15 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   desktopRoot: { flex: 1, flexDirection: "row" },
   mobileRoot: { flex: 1 },
   sidebar: {
     width: 340,
     flexGrow: 0,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderRightWidth: 1,
-    borderRightColor: tokens.colors.border,
+    borderRightColor: colors.border,
   },
   sidebarContent: {
     padding: tokens.spacing.lg,
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
   },
   miniMonth: {
     gap: 2,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: tokens.radii.md,
   },
   monthHeader: {
@@ -654,19 +654,19 @@ const styles = StyleSheet.create({
   monthLabel: {
     fontSize: 20,
     fontWeight: "700",
-    color: tokens.colors.ink,
+    color: colors.ink,
     textTransform: "capitalize",
   },
   monthNav: { flexDirection: "row" },
   navButton: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  navGlyph: { fontSize: 26, lineHeight: 28, color: tokens.colors.ink },
+  navGlyph: { fontSize: 26, lineHeight: 28, color: colors.ink },
   weekRow: { flexDirection: "row" },
   weekday: {
     flex: 1,
     textAlign: "center",
     fontSize: tokens.typography.caption,
     fontWeight: "700",
-    color: tokens.colors.muted,
+    color: colors.muted,
     textTransform: "uppercase",
     paddingVertical: tokens.spacing.xs,
   },
@@ -679,8 +679,8 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  cellDashed: { borderStyle: "solid", borderColor: tokens.colors.warningBorder },
-  cellSelected: { borderStyle: "solid", borderColor: tokens.colors.brand },
+  cellDashed: { borderStyle: "solid", borderColor: colors.warningBorder },
+  cellSelected: { borderStyle: "solid", borderColor: colors.brand },
   dayBubble: {
     width: 22,
     height: 22,
@@ -688,9 +688,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dayBubbleToday: { backgroundColor: tokens.colors.brand },
-  dayNumber: { fontSize: 14, lineHeight: 16, color: tokens.colors.ink },
-  dayNumberToday: { color: tokens.colors.surface, fontWeight: "700" },
+  dayBubbleToday: { backgroundColor: colors.brand },
+  dayNumber: { fontSize: 14, lineHeight: 16, color: colors.ink },
+  dayNumberToday: { color: colors.onBrand, fontWeight: "700" },
   cellGlyph: { fontSize: 12, lineHeight: 13, fontWeight: "700" },
   legend: { gap: tokens.spacing.xs, marginTop: tokens.spacing.sm },
   legendRow: { flexDirection: "row", alignItems: "center", gap: tokens.spacing.sm },
@@ -703,16 +703,16 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
-  legendLabel: { fontSize: 13, color: tokens.colors.muted },
+  legendLabel: { fontSize: 13, color: colors.muted },
   todayButton: {
     height: 44,
     borderRadius: tokens.radii.round,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  todayLabel: { fontSize: 14, fontWeight: "700", color: tokens.colors.ink },
+  todayLabel: { fontSize: 14, fontWeight: "700", color: colors.ink },
   agendaScroll: { flex: 1 },
   agendaContent: { padding: tokens.spacing.md, gap: tokens.spacing.sm, paddingBottom: tokens.spacing.xl },
   agendaContentDesktop: { paddingHorizontal: 56, paddingVertical: tokens.spacing.xl, gap: 10 },
@@ -720,15 +720,15 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   titleActions: { flexDirection: "row" },
   textButton: { minHeight: 44, paddingHorizontal: tokens.spacing.sm, justifyContent: "center" },
-  textButtonLabel: { fontSize: 14, fontWeight: "700", color: tokens.colors.brand },
+  textButtonLabel: { fontSize: 14, fontWeight: "700", color: colors.brand },
   kicker: {
     fontSize: tokens.typography.caption,
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: tokens.colors.brand,
+    color: colors.brand,
     fontWeight: "700",
   },
-  screenTitle: { fontSize: tokens.typography.hero, lineHeight: 36, color: tokens.colors.ink, fontWeight: "700" },
+  screenTitle: { fontSize: tokens.typography.hero, lineHeight: 36, color: colors.ink, fontWeight: "700" },
   actionBanner: {
     marginBottom: tokens.spacing.sm,
   },
@@ -737,10 +737,10 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 1,
     textTransform: "uppercase",
-    color: tokens.colors.muted,
+    color: colors.muted,
     marginTop: tokens.spacing.sm,
   },
-  sectionHeaderAccent: { color: tokens.colors.brand },
+  sectionHeaderAccent: { color: colors.brand },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -748,21 +748,21 @@ const styles = StyleSheet.create({
     padding: tokens.spacing.md,
     borderRadius: tokens.radii.md,
     borderLeftWidth: 5,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
   },
   rowMuted: { opacity: 0.65 },
-  rowSelected: { backgroundColor: tokens.colors.brandTint },
+  rowSelected: { backgroundColor: colors.brandTint },
   rowDate: { width: 48, alignItems: "flex-start" },
   rowWeekday: {
     fontSize: tokens.typography.caption,
     fontWeight: "700",
-    color: tokens.colors.muted,
+    color: colors.muted,
     textTransform: "uppercase",
   },
-  rowDay: { fontSize: 26, lineHeight: 28, fontWeight: "700", color: tokens.colors.ink },
+  rowDay: { fontSize: 26, lineHeight: 28, fontWeight: "700", color: colors.ink },
   rowBody: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 18, fontWeight: "700", color: tokens.colors.ink },
-  rowMeta: { fontSize: 14, color: tokens.colors.muted, marginTop: 2 },
+  rowTitle: { fontSize: 18, fontWeight: "700", color: colors.ink },
+  rowMeta: { fontSize: 14, color: colors.muted, marginTop: 2 },
   pill: {
     paddingHorizontal: tokens.spacing.sm,
     paddingVertical: 6,
@@ -770,28 +770,28 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "transparent",
   },
-  pillDashed: { borderStyle: "solid", borderColor: tokens.colors.warningBorder },
+  pillDashed: { borderStyle: "solid", borderColor: colors.warningBorder },
   pillLabel: { fontSize: 13, fontWeight: "700" },
   emptyBox: {
     padding: tokens.spacing.md,
     borderRadius: tokens.radii.md,
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: tokens.colors.border,
+    borderColor: colors.border,
   },
-  emptyCopy: { fontSize: 14, color: tokens.colors.muted },
+  emptyCopy: { fontSize: 14, color: colors.muted },
   weekHeader: {
     paddingHorizontal: tokens.spacing.md,
     paddingTop: tokens.spacing.sm,
-    backgroundColor: tokens.colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.border,
+    borderBottomColor: colors.border,
   },
-  weekTitle: { fontSize: 20, fontWeight: "700", color: tokens.colors.ink },
+  weekTitle: { fontSize: 20, fontWeight: "700", color: colors.ink },
   weekCell: { height: 56 },
   monthToggle: { minHeight: 44, alignItems: "center", justifyContent: "center" },
   daySection: { gap: tokens.spacing.xs },
   sectionHeaderPast: { opacity: 0.65 },
   pastBlock: { gap: tokens.spacing.sm, marginTop: tokens.spacing.sm },
   pastToggle: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", minHeight: 44 },
-});
+}));

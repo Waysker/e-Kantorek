@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { ScrollView, Text, View, useWindowDimensions } from "react-native";
 
 import type { EventListItem } from "../domain/models";
 import { appLocaleTag, tr } from "../i18n";
+import { colors, themedStyles } from "../theme/theme";
 import { tokens } from "../theme/tokens";
 import { EventRow } from "../ui/EventRow";
 import { EmptyState } from "../ui/EmptyState";
@@ -149,7 +150,7 @@ export function EventsScreen({ events, onOpenEvent, hideTitle }: EventsScreenPro
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles((colors) => ({
   screenScroll: {
     flex: 1,
   },
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.7,
     textTransform: "uppercase",
-    color: tokens.colors.muted,
+    color: colors.muted,
     paddingHorizontal: 4,
   },
-});
+}));
