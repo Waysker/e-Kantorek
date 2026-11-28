@@ -49,6 +49,14 @@ Use these components in screens instead of copying styles.
   `readerChrome` it uses `onStrong`. Not `surface`: it is dark in the dark
   theme.
 
+## App icon and installing
+
+The icon is the ORAGH mark from Partytura (`project/assets/app-icon/`), copied to
+`app/public/icons/` (web app manifest), `app/assets/icon.png` and `app/assets/favicon.png`.
+`app/public/manifest.webmanifest` and `app/public/sw.js` make the web app installable;
+`scripts/patch-web-dist-for-pages.mjs` adds the manifest link and registers the service
+worker. The service worker caches nothing (network only, a Polish offline page).
+
 ## Hidden features
 
 - Attendance reminders ("Ponaglij") are off via
