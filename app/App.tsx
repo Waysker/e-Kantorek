@@ -184,6 +184,11 @@ type AuthView = "sign_in" | "register";
 const ROOT_ROUTE: AppRoute = { name: "home" };
 const HISTORY_STATE_MARKER = "__oragh_route_stack__";
 const NOTIFICATION_FETCH_LIMIT = 80;
+// Reminders ("Ponaglij") are hidden for now; the code stays so the feature
+// can be revived on a branch by flipping this flag. The in-app notification
+// list (Ja) and its unread dots carry only reminders, so they follow it; push
+// notifications (Ja → Powiadomienia → Nowe wydarzenia) do not.
+const ATTENDANCE_REMINDERS_ENABLED = false;
 
 function normalizeNotificationRows(rows: NotificationRow[]): AppNotification[] {
   return rows
@@ -1085,9 +1090,6 @@ function AppContent() {
   const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
   const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
   const canCompareAttendanceSources = canCompareAttendanceSourcesByRole(effectiveCurrentUser.role);
-  // Reminders ("Ponaglij") are hidden for now; the code stays so the feature
-  // can be revived on a branch by flipping this flag.
-  const ATTENDANCE_REMINDERS_ENABLED = false;
   const canSendAttendanceReminders = ATTENDANCE_REMINDERS_ENABLED && canViewAttendanceSummary;
   const canManageRoles = canManageRolesByRole(effectiveCurrentUser.role);
   const canManageInstrumentMapping = canManageInstrumentMappingByRole(
@@ -1126,10 +1128,12 @@ function AppContent() {
     ...(boardSections.length > 0 ? (["board"] as const) : []),
     "profile",
   ];
-  const unreadNotificationsCount = notifications.reduce(
-    (count, notification) => (notification.readAt == null ? count + 1 : count),
-    0,
-  );
+  const unreadNotificationsCount = ATTENDANCE_REMINDERS_ENABLED
+    ? notifications.reduce(
+        (count, notification) => (notification.readAt == null ? count + 1 : count),
+        0,
+      )
+    : 0;
 
   async function handleRemindMissingDeclarations(
     eventId: string,
@@ -1443,6 +1447,7 @@ function AppContent() {
               setIsChangingForumIdentity(true);
             }}
             pushNotifications={pushNotifications}
+            showNotificationsList={ATTENDANCE_REMINDERS_ENABLED}
           />
         );
       case "orchestraAttendance":

@@ -43,4 +43,4 @@ Pełny opis: `docs/ops/forum-account-links.md`.
 - Używaj komponentów z `app/src/ui/` zamiast kopiować style.
 - Najważniejsze zasady (skrót, pełne w systemie): kolor = znaczenie, bursztyn tylko dla „czeka na Twoją reakcję”; status zawsze przez `StatusPill`; deklaracje tylko przez ankietę na forum (bez liczników „może”/„brak”); tytuły z forum bez daty; listy osób po nazwisku, kolumnami z góry na dół; teksty po polsku z pełnymi znakami, bez żargonu; obrys kontrolek `controlBorder`, globalny fokus klawiatury, cele dotyku ≥ 44 px; 4 zakładki (Start, Wydarzenia, Zarząd, Ja).
 - Dwa motywy (jasny i ciemny): kolory tylko przez `colors` / `themedStyles` z `app/src/theme/theme.ts`, nigdy `StyleSheet.create` z kolorem ani kolor w stałej modułu. Motyw idzie za systemem albo za wyborem w „Ja” → „Wygląd”.
-- Ponaglenia ukryte flagą `ATTENDANCE_REMINDERS_ENABLED` w `app/App.tsx`.
+- Ponaglenia ukryte flagą `ATTENDANCE_REMINDERS_ENABLED` w `app/App.tsx` (razem z listą powiadomień w aplikacji w Ja i kropkami nieprzeczytanych; push „Nowe wydarzenia” działa niezależnie, `docs/ops/push-notifications.md`).

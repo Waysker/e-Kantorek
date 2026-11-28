@@ -66,6 +66,7 @@ export function ProfileScreen({
   forumIdentityEditor,
   onChangeForumIdentity,
   pushNotifications,
+  showNotificationsList = true,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -88,12 +89,15 @@ export function ProfileScreen({
   onChangeForumIdentity?: () => void;
   /** Push notifications on this device ("Nowe wydarzenia"); hidden where unsupported. */
   pushNotifications?: PushNotifications;
+  /** The in-app list (now only attendance reminders); hidden while reminders are off. */
+  showNotificationsList?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const latestNotifications = notifications.slice(0, 30);
   const instrument = currentUser.primaryInstrument ?? tr("Bez instrumentu", "No instrument");
   const { preference, setPreference } = useTheme();
+  const showPushRow = Boolean(pushNotifications && pushNotifications.state !== "unsupported");
 
   return (
     <ScrollView
@@ -151,133 +155,141 @@ export function ProfileScreen({
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.kicker}>
-            {tr("Powiadomienia", "Notifications")}
-            {unreadNotificationsCount > 0
-              ? tr(` · ${unreadNotificationsCount} nowe`, ` · ${unreadNotificationsCount} new`)
-              : ""}
-          </Text>
-          <View style={styles.cardActions}>
-            {unreadNotificationsCount > 0 ? (
-              <Pressable
-                onPress={() => void onMarkAllNotificationsRead?.()}
-                disabled={isMarkingNotificationsRead}
-                accessibilityRole="button"
-                hitSlop={8}
-              >
-                <Text style={styles.link}>
-                  {isMarkingNotificationsRead
-                    ? tr("Zapisywanie…", "Saving…")
-                    : tr("Oznacz jako przeczytane", "Mark as read")}
-                </Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              onPress={() => void onRefreshNotifications?.()}
-              disabled={isNotificationsLoading}
-              accessibilityRole="button"
-              hitSlop={8}
-            >
-              <Text style={styles.link}>
-                {isNotificationsLoading ? tr("Odświeżanie…", "Refreshing…") : tr("Odśwież", "Refresh")}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {pushNotifications && pushNotifications.state !== "unsupported" ? (
-          <View style={styles.pushRow}>
-            <View style={styles.settingRow}>
-              <View style={styles.forumIdentityText}>
-                <Text style={styles.settingLabel}>{tr("Nowe wydarzenia", "New events")}</Text>
-                <Text style={styles.muted}>
-                  {pushNotifications.state === "on"
-                    ? tr("Włączone", "On")
-                    : pushNotifications.state === "blocked"
-                      ? tr(
-                          "Zablokowane w przeglądarce. Zmień to w ustawieniach strony.",
-                          "Blocked in the browser. Change it in the site settings.",
-                        )
-                      : tr("Wyłączone", "Off")}
-                </Text>
-              </View>
-              {pushNotifications.state === "blocked" ? null : (
+      {showNotificationsList || showPushRow ? (
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.kicker}>
+              {tr("Powiadomienia", "Notifications")}
+              {unreadNotificationsCount > 0
+                ? tr(` · ${unreadNotificationsCount} nowe`, ` · ${unreadNotificationsCount} new`)
+                : ""}
+            </Text>
+            {showNotificationsList ? (
+              <View style={styles.cardActions}>
+                {unreadNotificationsCount > 0 ? (
+                  <Pressable
+                    onPress={() => void onMarkAllNotificationsRead?.()}
+                    disabled={isMarkingNotificationsRead}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                  >
+                    <Text style={styles.link}>
+                      {isMarkingNotificationsRead
+                        ? tr("Zapisywanie…", "Saving…")
+                        : tr("Oznacz jako przeczytane", "Mark as read")}
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
-                  onPress={() =>
-                    void (pushNotifications.state === "on" ? pushNotifications.disable() : pushNotifications.enable())
-                  }
-                  disabled={pushNotifications.busy}
+                  onPress={() => void onRefreshNotifications?.()}
+                  disabled={isNotificationsLoading}
                   accessibilityRole="button"
                   hitSlop={8}
-                  style={styles.forumIdentityChange}
                 >
-                  <Text style={styles.forumIdentityChangeLabel}>
-                    {pushNotifications.busy
-                      ? "…"
-                      : pushNotifications.state === "on"
-                        ? tr("Wyłącz", "Turn off")
-                        : tr("Włącz", "Turn on")}
+                  <Text style={styles.link}>
+                    {isNotificationsLoading ? tr("Odświeżanie…", "Refreshing…") : tr("Odśwież", "Refresh")}
                   </Text>
                 </Pressable>
-              )}
-            </View>
-            {pushNotifications.errorMessage ? (
-              <Notice tone="error">{pushNotifications.errorMessage}</Notice>
+              </View>
             ) : null}
           </View>
-        ) : null}
 
-        {notificationsErrorMessage ? (
-          <View style={styles.noticeWrap}>
-            <Notice tone="error">{notificationsErrorMessage}</Notice>
-          </View>
-        ) : null}
-
-        {isNotificationsLoading && latestNotifications.length === 0 ? (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.brand} />
-            <Text style={styles.muted}>{tr("Wczytuję powiadomienia…", "Loading notifications…")}</Text>
-          </View>
-        ) : null}
-
-        {!isNotificationsLoading && latestNotifications.length === 0 ? (
-          <Text style={styles.muted}>{tr("Brak powiadomień.", "No notifications yet.")}</Text>
-        ) : null}
-
-        {latestNotifications.map((notification, index) => {
-          const isUnread = notification.readAt == null;
-          return (
-            <View
-              key={notification.id}
-              style={[styles.notification, index > 0 && styles.rowDivider]}
-              accessibilityLabel={isUnread ? tr("Nowe powiadomienie", "New notification") : undefined}
-            >
-              <View style={[styles.dot, isUnread && styles.dotUnread]} />
-              <View style={styles.notificationText}>
-                <Text style={styles.notificationTitle}>
-                  {/* Skip the kind when the title already starts with it ("Ponaglenie obecności"). */}
-                  {notification.title
-                    .toLowerCase()
-                    .startsWith(formatNotificationKindLabel(notification.kind).toLowerCase()) ? null : (
-                    <Text style={styles.notificationKind}>
-                      {formatNotificationKindLabel(notification.kind)}:{" "}
-                    </Text>
-                  )}
-                  {notification.title}
-                </Text>
-                {notification.body ? (
-                  <Text style={styles.notificationBody} numberOfLines={3}>
-                    {notification.body}
+          {pushNotifications && showPushRow ? (
+            <View style={[styles.pushRow, !showNotificationsList && styles.pushRowAlone]}>
+              <View style={styles.settingRow}>
+                <View style={styles.forumIdentityText}>
+                  <Text style={styles.settingLabel}>{tr("Nowe wydarzenia", "New events")}</Text>
+                  <Text style={styles.muted}>
+                    {pushNotifications.state === "on"
+                      ? tr("Włączone", "On")
+                      : pushNotifications.state === "blocked"
+                        ? tr(
+                            "Zablokowane w przeglądarce. Zmień to w ustawieniach strony.",
+                            "Blocked in the browser. Change it in the site settings.",
+                          )
+                        : tr("Wyłączone", "Off")}
                   </Text>
-                ) : null}
-                <Text style={styles.meta}>{formatRelativeLabel(notification.createdAt)}</Text>
+                </View>
+                {pushNotifications.state === "blocked" ? null : (
+                  <Pressable
+                    onPress={() =>
+                      void (pushNotifications.state === "on" ? pushNotifications.disable() : pushNotifications.enable())
+                    }
+                    disabled={pushNotifications.busy}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={styles.forumIdentityChange}
+                  >
+                    <Text style={styles.forumIdentityChangeLabel}>
+                      {pushNotifications.busy
+                        ? "…"
+                        : pushNotifications.state === "on"
+                          ? tr("Wyłącz", "Turn off")
+                          : tr("Włącz", "Turn on")}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
+              {pushNotifications.errorMessage ? (
+                <Notice tone="error">{pushNotifications.errorMessage}</Notice>
+              ) : null}
             </View>
-          );
-        })}
-      </View>
+          ) : null}
+
+          {showNotificationsList ? (
+            <>
+              {notificationsErrorMessage ? (
+                <View style={styles.noticeWrap}>
+                  <Notice tone="error">{notificationsErrorMessage}</Notice>
+              </View>
+          ) : null}
+
+          {isNotificationsLoading && latestNotifications.length === 0 ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color={colors.brand} />
+              <Text style={styles.muted}>{tr("Wczytuję powiadomienia…", "Loading notifications…")}</Text>
+            </View>
+          ) : null}
+
+          {!isNotificationsLoading && latestNotifications.length === 0 ? (
+            <Text style={styles.muted}>{tr("Brak powiadomień.", "No notifications yet.")}</Text>
+          ) : null}
+
+          {latestNotifications.map((notification, index) => {
+            const isUnread = notification.readAt == null;
+            return (
+              <View
+                key={notification.id}
+                style={[styles.notification, index > 0 && styles.rowDivider]}
+                accessibilityLabel={isUnread ? tr("Nowe powiadomienie", "New notification") : undefined}
+              >
+                <View style={[styles.dot, isUnread && styles.dotUnread]} />
+                <View style={styles.notificationText}>
+                  <Text style={styles.notificationTitle}>
+                    {/* Skip the kind when the title already starts with it ("Ponaglenie obecności"). */}
+                    {notification.title
+                      .toLowerCase()
+                      .startsWith(formatNotificationKindLabel(notification.kind).toLowerCase()) ? null : (
+                      <Text style={styles.notificationKind}>
+                        {formatNotificationKindLabel(notification.kind)}:{" "}
+                      </Text>
+                    )}
+                    {notification.title}
+                  </Text>
+                  {notification.body ? (
+                    <Text style={styles.notificationBody} numberOfLines={3}>
+                      {notification.body}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.meta}>{formatRelativeLabel(notification.createdAt)}</Text>
+                </View>
+              </View>
+            );
+          })}
+          </>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <Text style={styles.kicker}>
@@ -467,6 +479,11 @@ const styles = themedStyles((colors) => ({
   meta: {
     fontSize: 12,
     color: colors.muted,
+  },
+  pushRowAlone: {
+    paddingBottom: 0,
+    marginBottom: 0,
+    borderBottomWidth: 0,
   },
   pushRow: {
     gap: tokens.spacing.xs,
