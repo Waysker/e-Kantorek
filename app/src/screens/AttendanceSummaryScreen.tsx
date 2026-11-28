@@ -28,7 +28,13 @@ import { formatDateLabel } from "../utils/format";
 
 type AttendanceSummaryScreenProps = {
   onBack?: () => void;
+  /** Board/admin: switch between the original sheet and app-entered attendance. */
+  canSwitchSource?: boolean;
 };
+
+// "sheet": the original sheet (source of truth); "app": what the board entered in
+// the app (docs/reference/attendance-model.md).
+type AttendanceSource = "sheet" | "app";
 
 type MemberRow = {
   member_id: string;
@@ -366,7 +372,10 @@ function shouldHideLikelyDuplicateZeroPointRow(
   return false;
 }
 
-async function fetchAttendanceEntriesForEvents(eventIds: string[]): Promise<AttendanceEntryRow[]> {
+async function fetchAttendanceEntriesForEvents(
+  eventIds: string[],
+  source: AttendanceSource,
+): Promise<AttendanceEntryRow[]> {
   if (!supabaseAuthClient || eventIds.length === 0) {
     return [];
   }
@@ -377,7 +386,7 @@ async function fetchAttendanceEntriesForEvents(eventIds: string[]): Promise<Atte
   while (true) {
     const pageEnd = pageStart + ATTENDANCE_ENTRIES_PAGE_SIZE - 1;
     const { data, error } = await supabaseAuthClient
-      .from("attendance_entries")
+      .from(source === "app" ? "app_attendance_entries" : "attendance_entries")
       .select("event_id,member_id,attendance_ratio,updated_at")
       .in("event_id", eventIds)
       .order("event_id", { ascending: true })
@@ -401,7 +410,7 @@ async function fetchAttendanceEntriesForEvents(eventIds: string[]): Promise<Atte
   return allRows;
 }
 
-export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps) {
+export function AttendanceSummaryScreen({ onBack, canSwitchSource = false }: AttendanceSummaryScreenProps) {
   const { width: viewportWidth } = useWindowDimensions();
   const isDesktopLayout = viewportWidth >= tokens.breakpoints.desktop;
   const webDateInputProps = useMemo(() => {
@@ -429,8 +438,11 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [consistencyNotice, setConsistencyNotice] = useState<string | null>(null);
+  const [sourceNotice, setSourceNotice] = useState<string | null>(null);
   const [latestRefSyncAt, setLatestRefSyncAt] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("alpha");
+  const [selectedSource, setSelectedSource] = useState<AttendanceSource>("sheet");
+  const source: AttendanceSource = canSwitchSource ? selectedSource : "sheet";
   const [activeScope, setActiveScope] = useState<ScopePreset | "custom" | "month">("season");
   const [showCustomScope, setShowCustomScope] = useState(false);
 
@@ -533,6 +545,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
       setIsLoading(true);
       setErrorMessage(null);
       setConsistencyNotice(null);
+      setSourceNotice(null);
 
       try {
         const [membersResult, eventsResult, latestSyncRunResult] = await Promise.all([
@@ -584,16 +597,21 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           .map((event) => normalizeWhitespace(event.event_id))
           .filter((eventId) => eventId.length > 0);
 
-        const eventsCount = eventIds.length;
-        setTotalEvents(eventsCount);
-
         const entries = eventIds.length > 0
-          ? await fetchAttendanceEntriesForEvents(eventIds)
+          ? await fetchAttendanceEntriesForEvents(eventIds, source)
           : [];
 
         if (isDisposed) {
           return;
         }
+
+        // App-entered attendance covers only the events the board entered in the
+        // app; counting the others as absences would skew the comparison.
+        const countedEventIds = source === "app"
+          ? Array.from(new Set(entries.map((entry) => entry.event_id)))
+          : eventIds;
+        const eventsCount = countedEventIds.length;
+        setTotalEvents(eventsCount);
 
         let changedAfterSyncCount = 0;
         for (const entry of entries) {
@@ -603,7 +621,19 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
           }
         }
 
-        if (hasSyncMetadataError) {
+        if (source === "app") {
+          setSourceNotice(
+            eventsCount === 0
+              ? tr(
+                "W tym zakresie nie ma jeszcze obecności wpisanej w aplikacji.",
+                "No attendance entered in the app in this range yet.",
+              )
+              : tr(
+                `Obecność wpisana w aplikacji. Procenty liczone tylko z wydarzeń wpisanych w aplikacji (${eventsCount}).`,
+                `Attendance entered in the app. Percentages count only events entered in the app (${eventsCount}).`,
+              ),
+          );
+        } else if (hasSyncMetadataError) {
           setConsistencyNotice(
             tr(
               "Nie wiemy, kiedy ostatnio zsynchronizowano arkusz obecności. Pokazuję bieżące dane.",
@@ -674,6 +704,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         setTotalEvents(0);
         setLatestRefSyncAt(null);
         setConsistencyNotice(null);
+        setSourceNotice(null);
         setErrorMessage(
           error instanceof Error
             ? error.message
@@ -691,7 +722,7 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     return () => {
       isDisposed = true;
     };
-  }, [scopeEndDate, scopeStartDate]);
+  }, [scopeEndDate, scopeStartDate, source]);
 
   const presetOptions: Array<{ key: ScopePreset; label: string }> = [
     { key: "season", label: tr("Sezon", "Season") },
@@ -702,6 +733,10 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
     { key: "last_3_months", label: tr("3 miesiące", "3 months") },
     { key: "ytd", label: tr("Ten rok", "This year") },
     { key: "all", label: tr("Wszystko", "All") },
+  ];
+  const sourceOptions: Array<{ key: AttendanceSource; label: string }> = [
+    { key: "sheet", label: tr("Oryginał", "Original") },
+    { key: "app", label: tr("Aplikacja", "App") },
   ];
   const sortOptions: Array<{ key: SortMode; label: string }> = [
     { key: "alpha", label: tr("A–Z", "A–Z") },
@@ -855,6 +890,10 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
         ) : null}
       </View>
 
+      {canSwitchSource ? (
+        <SegmentedControl options={sourceOptions} value={selectedSource} onChange={setSelectedSource} />
+      ) : null}
+
       <SegmentedControl options={sortOptions} value={sortMode} onChange={setSortMode} />
 
       {isLoading ? (
@@ -865,6 +904,10 @@ export function AttendanceSummaryScreen({ onBack }: AttendanceSummaryScreenProps
 
       {!isLoading && errorMessage ? (
         <Notice tone="error">{errorMessage}</Notice>
+      ) : null}
+
+      {!isLoading && !errorMessage && sourceNotice ? (
+        <Notice tone="info">{sourceNotice}</Notice>
       ) : null}
 
       {!isLoading && !errorMessage && consistencyNotice ? (

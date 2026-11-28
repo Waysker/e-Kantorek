@@ -153,5 +153,9 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    Oryginał to arkusz najnowszego wydarzenia; ID kopii w `attendance_settings`
    (klucz `copy_sheet_id`). Wynik eksportu do kopii zapisuje się w dzienniku
    zmian przy każdym zapisie z panelu.
-8. Podsumowanie: przełącznik referencja / aplikacja; dostęp dla wszystkich.
+8. ~~Podsumowanie: przełącznik referencja / aplikacja; dostęp dla wszystkich~~ (w repo):
+   członkowie otwierają podsumowanie z „Ja” → „Obecność orkiestry” (trasa
+   `orchestraAttendance`, tylko odczyt); przełącznik „Oryginał / Aplikacja” widzą
+   tylko `board`/`admin`. W trybie „Aplikacja” procenty liczą się tylko z wydarzeń
+   wpisanych w aplikacji. Zasada zapisana najpierw w Partyturze (README, Navigation).
 9. Później: lista osób z forum.

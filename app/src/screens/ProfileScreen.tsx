@@ -4,6 +4,7 @@ import type { AppNotification, UserProfile } from "../domain/models";
 import { tr } from "../i18n";
 import { tokens } from "../theme/tokens";
 import { textStyles } from "../theme/text";
+import { Icon } from "../ui/Icon";
 import { Notice } from "../ui/Notice";
 import { formatRelativeLabel } from "../utils/format";
 
@@ -55,6 +56,7 @@ export function ProfileScreen({
   onMarkAllNotificationsRead,
   signedInEmail,
   onSignOut,
+  onOpenOrchestraAttendance,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -68,6 +70,8 @@ export function ProfileScreen({
   onMarkAllNotificationsRead?: () => Promise<void> | void;
   signedInEmail?: string | null;
   onSignOut?: () => Promise<void>;
+  /** Opens the attendance summary of the whole orchestra (read-only for members). */
+  onOpenOrchestraAttendance?: () => void;
 }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
@@ -91,6 +95,19 @@ export function ProfileScreen({
           </Text>
         </View>
       </View>
+
+      {onOpenOrchestraAttendance ? (
+        <View style={styles.card}>
+          <Pressable
+            onPress={onOpenOrchestraAttendance}
+            accessibilityRole="button"
+            style={styles.settingRow}
+          >
+            <Text style={styles.settingLabel}>{tr("Obecność orkiestry", "Orchestra attendance")}</Text>
+            <Icon name="chevronRight" size={18} color={tokens.colors.muted} />
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.card}>
         <View style={styles.cardHeader}>

@@ -17,6 +17,7 @@ import type {
 } from "./src/domain/models";
 import {
   canViewAttendanceSummaryByRole,
+  canCompareAttendanceSourcesByRole,
   canWriteAttendanceByRole,
   canManageRolesByRole,
   normalizePrimaryRole,
@@ -241,6 +242,7 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     candidate.name === "calendar" ||
     candidate.name === "instrumentMapping" ||
     candidate.name === "profile" ||
+    candidate.name === "orchestraAttendance" ||
     candidate.name === "attendanceWorkspace" ||
     candidate.name === "attendanceManager" ||
     candidate.name === "attendanceSummary" ||
@@ -924,6 +926,7 @@ export default function App() {
     "eventId" in route ? eventDetailsById[route.eventId] : undefined;
   const canWriteAttendance = canWriteAttendanceByRole(effectiveCurrentUser.role);
   const canViewAttendanceSummary = canViewAttendanceSummaryByRole(effectiveCurrentUser.role);
+  const canCompareAttendanceSources = canCompareAttendanceSourcesByRole(effectiveCurrentUser.role);
   // Reminders ("Ponaglij") are hidden for now; the code stays so the feature
   // can be revived on a branch by flipping this flag.
   const ATTENDANCE_REMINDERS_ENABLED = false;
@@ -1228,6 +1231,15 @@ export default function App() {
             onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
             signedInEmail={signedInEmail}
             onSignOut={handleSignOut}
+            onOpenOrchestraAttendance={() => pushRoute({ name: "orchestraAttendance" })}
+          />
+        );
+      case "orchestraAttendance":
+        // Every member reads the summary here (Ja); the source switch is board/admin only.
+        return (
+          <AttendanceSummaryScreen
+            canSwitchSource={canCompareAttendanceSources}
+            onBack={() => goBack({ name: "profile" })}
           />
         );
       case "attendanceWorkspace":
@@ -1235,7 +1247,7 @@ export default function App() {
         return canWriteAttendance ? (
           <AttendanceManagerScreen />
         ) : canViewAttendanceSummary ? (
-          <AttendanceSummaryScreen />
+          <AttendanceSummaryScreen canSwitchSource={canCompareAttendanceSources} />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "events" })}
@@ -1253,7 +1265,7 @@ export default function App() {
         );
       case "attendanceSummary":
         return canViewAttendanceSummary ? (
-          <AttendanceSummaryScreen />
+          <AttendanceSummaryScreen canSwitchSource={canCompareAttendanceSources} />
         ) : (
           <MissingEventScreen
             onBack={() => goBack({ name: "events" })}
