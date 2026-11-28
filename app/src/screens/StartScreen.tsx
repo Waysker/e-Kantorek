@@ -18,6 +18,8 @@ type StartScreenProps = {
   events: EventListItem[];
   /** ForumIdentityPrompt while the account has no forum person: replaces DeclarationPrompt. */
   identityPrompt?: ReactNode;
+  /** One-time NotificationsPrompt; never shown together with identityPrompt. */
+  notificationsPrompt?: ReactNode;
   /** A Notice shown at the top (e.g. after linking the forum account). */
   topNotice?: ReactNode;
   firstName: string | null;
@@ -83,6 +85,7 @@ function daysUntilLabel(eventKey: string, todayKey: string) {
 export function StartScreen({
   events,
   identityPrompt,
+  notificationsPrompt,
   topNotice,
   firstName,
   unreadNotificationsCount,
@@ -257,6 +260,7 @@ export function StartScreen({
           <View style={styles.column}>
             {topNotice}
             {identityPrompt ?? <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />}
+            {identityPrompt ? null : notificationsPrompt}
             {nextGigCard}
           </View>
           <View style={styles.column}>
@@ -268,6 +272,7 @@ export function StartScreen({
         <>
           {topNotice}
           {identityPrompt ?? <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />}
+          {identityPrompt ? null : notificationsPrompt}
           {nextGigCard}
           {weekStrip}
           {laterList}

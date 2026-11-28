@@ -32,3 +32,47 @@ self.addEventListener("fetch", (event) => {
     ),
   );
 });
+
+// Push notifications (Partytura → Patterns → Notifications), sent by the Edge
+// Function push_new_events: { title, body, eventId?, tag }.
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: "e-Kantorek", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "e-Kantorek";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      tag: data.tag || undefined,
+      icon: "./icons/icon-192.png",
+      lang: "pl",
+      data: { eventId: data.eventId || null },
+    }),
+  );
+});
+
+// Tap: focus an open app window and tell it which event to open, or open the
+// app at ?event=<id> (App.tsx reads it once and drops it from the address).
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const eventId = event.notification.data && event.notification.data.eventId;
+  const target = new URL(self.registration.scope);
+  if (eventId) {
+    target.searchParams.set("event", eventId);
+  }
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      const open = windows.find((client) => client.url.startsWith(self.registration.scope));
+      if (open) {
+        if (eventId) {
+          open.postMessage({ type: "open-event", eventId });
+        }
+        return open.focus();
+      }
+      return self.clients.openWindow(target.href);
+    }),
+  );
+});

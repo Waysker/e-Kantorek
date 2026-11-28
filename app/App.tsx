@@ -6,6 +6,8 @@ import type { Session } from "@supabase/supabase-js";
 
 import type { OraghInstrument } from "./src/auth/instruments";
 import { isSupabaseAuthConfigured, supabaseAuthClient } from "./src/auth/supabaseAuthClient";
+import { usePushNotifications } from "./src/push/usePushNotifications";
+import { NotificationsPrompt } from "./src/ui/NotificationsPrompt";
 import { describeAuthError } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
@@ -363,6 +365,10 @@ function AppContent() {
   const isWeb = Platform.OS === "web";
   const authenticatedUserId =
     authState.status === "signed_in" ? authState.session.user.id : null;
+  const pushNotifications = usePushNotifications(authenticatedUserId);
+  // Event to open from a tapped push notification (?event=… or a message from sw.js).
+  const pendingEventIdRef = useRef<string | null>(null);
+  const [pendingEventTick, setPendingEventTick] = useState(0);
 
   function pushRoute(nextRoute: AppRoute) {
     setRouteStack((current) => {
@@ -459,6 +465,48 @@ function AppContent() {
     );
     setIsMarkingNotificationsRead(false);
   }
+
+  useEffect(() => {
+    if (!isWeb || typeof window === "undefined") {
+      return;
+    }
+    const isEventId = (value: unknown): value is string =>
+      typeof value === "string" && /^forum-event-\d+$/.test(value);
+
+    const url = new URL(window.location.href);
+    const fromUrl = url.searchParams.get("event");
+    if (fromUrl !== null) {
+      url.searchParams.delete("event");
+      window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      if (isEventId(fromUrl)) {
+        pendingEventIdRef.current = fromUrl;
+        setPendingEventTick((tick) => tick + 1);
+      }
+    }
+
+    const serviceWorker = typeof navigator !== "undefined" ? navigator.serviceWorker : undefined;
+    const handleMessage = (message: MessageEvent) => {
+      const data = message.data as { type?: unknown; eventId?: unknown } | null;
+      if (data?.type === "open-event" && isEventId(data.eventId)) {
+        pendingEventIdRef.current = data.eventId;
+        setPendingEventTick((tick) => tick + 1);
+      }
+    };
+    serviceWorker?.addEventListener("message", handleMessage);
+    return () => {
+      serviceWorker?.removeEventListener("message", handleMessage);
+    };
+  }, [isWeb]);
+
+  useEffect(() => {
+    if (state.status !== "ready" || !pendingEventIdRef.current) {
+      return;
+    }
+    const eventId = pendingEventIdRef.current;
+    pendingEventIdRef.current = null;
+    pushRoute({ name: "eventDetail", eventId });
+    // pushRoute only sets state; it is recreated every render, so not a dependency.
+  }, [state.status, pendingEventTick]);
 
   useEffect(() => {
     if (!isWeb || typeof window === "undefined") {
@@ -1241,6 +1289,16 @@ function AppContent() {
           <StartScreen
             events={events}
             identityPrompt={forumIdentity.kind === "unlinked" ? renderForumIdentityPrompt("suggest") : undefined}
+            notificationsPrompt={
+              pushNotifications.shouldPrompt ? (
+                <NotificationsPrompt
+                  busy={pushNotifications.busy}
+                  errorMessage={pushNotifications.errorMessage}
+                  onEnable={() => void pushNotifications.enable()}
+                  onDismiss={pushNotifications.dismissPrompt}
+                />
+              ) : undefined
+            }
             topNotice={identityNoticeNode}
             firstName={effectiveCurrentUser.fullName.trim().split(/\s+/)[0] || null}
             unreadNotificationsCount={unreadNotificationsCount}
@@ -1384,6 +1442,7 @@ function AppContent() {
               setIdentityNotice(null);
               setIsChangingForumIdentity(true);
             }}
+            pushNotifications={pushNotifications}
           />
         );
       case "orchestraAttendance":

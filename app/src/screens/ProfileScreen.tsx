@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensio
 
 import type { ForumIdentity } from "../domain/forumIdentity";
 import type { AppNotification, UserProfile } from "../domain/models";
+import type { PushNotifications } from "../push/usePushNotifications";
 import { tr } from "../i18n";
 import { colors, themedStyles, useTheme, type ThemePreference } from "../theme/theme";
 import { tokens } from "../theme/tokens";
@@ -64,6 +65,7 @@ export function ProfileScreen({
   forumIdentity,
   forumIdentityEditor,
   onChangeForumIdentity,
+  pushNotifications,
 }: {
   currentUser: UserProfile;
   dataSourceLabel: string;
@@ -84,6 +86,8 @@ export function ProfileScreen({
   /** The ForumIdentityPrompt while the member changes the link. */
   forumIdentityEditor?: ReactNode;
   onChangeForumIdentity?: () => void;
+  /** Push notifications on this device ("Nowe wydarzenia"); hidden where unsupported. */
+  pushNotifications?: PushNotifications;
 }) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
@@ -182,6 +186,48 @@ export function ProfileScreen({
             </Pressable>
           </View>
         </View>
+
+        {pushNotifications && pushNotifications.state !== "unsupported" ? (
+          <View style={styles.pushRow}>
+            <View style={styles.settingRow}>
+              <View style={styles.forumIdentityText}>
+                <Text style={styles.settingLabel}>{tr("Nowe wydarzenia", "New events")}</Text>
+                <Text style={styles.muted}>
+                  {pushNotifications.state === "on"
+                    ? tr("Włączone", "On")
+                    : pushNotifications.state === "blocked"
+                      ? tr(
+                          "Zablokowane w przeglądarce. Zmień to w ustawieniach strony.",
+                          "Blocked in the browser. Change it in the site settings.",
+                        )
+                      : tr("Wyłączone", "Off")}
+                </Text>
+              </View>
+              {pushNotifications.state === "blocked" ? null : (
+                <Pressable
+                  onPress={() =>
+                    void (pushNotifications.state === "on" ? pushNotifications.disable() : pushNotifications.enable())
+                  }
+                  disabled={pushNotifications.busy}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  style={styles.forumIdentityChange}
+                >
+                  <Text style={styles.forumIdentityChangeLabel}>
+                    {pushNotifications.busy
+                      ? "…"
+                      : pushNotifications.state === "on"
+                        ? tr("Wyłącz", "Turn off")
+                        : tr("Włącz", "Turn on")}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+            {pushNotifications.errorMessage ? (
+              <Notice tone="error">{pushNotifications.errorMessage}</Notice>
+            ) : null}
+          </View>
+        ) : null}
 
         {notificationsErrorMessage ? (
           <View style={styles.noticeWrap}>
@@ -421,6 +467,13 @@ const styles = themedStyles((colors) => ({
   meta: {
     fontSize: 12,
     color: colors.muted,
+  },
+  pushRow: {
+    gap: tokens.spacing.xs,
+    paddingBottom: tokens.spacing.sm,
+    marginBottom: tokens.spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.surfaceMuted,
   },
   settingRow: {
     minHeight: 52,

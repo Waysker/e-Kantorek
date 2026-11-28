@@ -61,6 +61,8 @@ jobs:
           EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY_STAGING || secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
           EXPO_PUBLIC_APP_LOCALE: pl
           EXPO_PUBLIC_ATTENDANCE_WRITE_ENABLED: "true"
+          # Public VAPID key for push notifications (not a secret); empty = no push UI.
+          EXPO_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
         run: npm run web:build:pages
 
       - name: Prepare root metadata for Pages
