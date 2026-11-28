@@ -1,5 +1,7 @@
 export type PrimaryRole = "member" | "section" | "board" | "admin";
-export type AttendanceStatus = "going" | "maybe" | "not_going" | "no_response";
+// "unknown": the account is not linked to a forum person, so the app cannot tell
+// (never shown as "Brak deklaracji").
+export type AttendanceStatus = "going" | "maybe" | "not_going" | "no_response" | "unknown";
 
 export type UserProfile = {
   id: string;

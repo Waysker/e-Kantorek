@@ -39,8 +39,20 @@ type RawProfileRoleRow = {
   full_name?: string;
   instrument?: string;
   role?: string;
+  created_at?: string;
   updated_at?: string;
+  /** Missing on databases before migration 033: treated as confirmed. */
+  email_confirmed?: boolean;
 };
+
+type UnconfirmedProfileRow = {
+  id: string;
+  full_name: string;
+  instrument: string;
+  created_at: string;
+};
+
+const CREATED_DATE = new Intl.DateTimeFormat("pl-PL", { day: "numeric", month: "numeric", timeZone: "Europe/Warsaw" });
 
 type RawRoleUpdateRow = {
   id?: string;
@@ -131,6 +143,7 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
   const isWide = width >= 760;
   const isDesktop = width >= tokens.breakpoints.desktop;
   const [profiles, setProfiles] = useState<ProfileRoleRow[]>([]);
+  const [unconfirmedProfiles, setUnconfirmedProfiles] = useState<UnconfirmedProfileRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [savingProfileId, setSavingProfileId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -157,9 +170,22 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
       return;
     }
 
-    const normalizedRows = (data ?? [])
+    const rawRows = (data ?? [])
       .map((row: unknown) => row as RawProfileRoleRow)
-      .filter((row: RawProfileRoleRow) => normalizeWhitespace(row.id).length > 0)
+      .filter((row: RawProfileRoleRow) => normalizeWhitespace(row.id).length > 0);
+    // An account without a confirmed e-mail cannot sign in: keep it apart.
+    setUnconfirmedProfiles(
+      rawRows
+        .filter((row: RawProfileRoleRow) => row.email_confirmed === false)
+        .map((row: RawProfileRoleRow) => ({
+          id: normalizeWhitespace(row.id),
+          full_name: normalizeWhitespace(row.full_name) || tr("Nieznany użytkownik", "Unknown user"),
+          instrument: normalizeWhitespace(row.instrument),
+          created_at: normalizeWhitespace(row.created_at),
+        })),
+    );
+    const normalizedRows = rawRows
+      .filter((row: RawProfileRoleRow) => row.email_confirmed !== false)
       .map((row: RawProfileRoleRow) => ({
         id: normalizeWhitespace(row.id),
         full_name: normalizeWhitespace(row.full_name) || tr("Nieznany użytkownik", "Unknown user"),
@@ -390,11 +416,50 @@ export function RoleManagementScreen({ currentUserId, onBack }: RoleManagementSc
           })}
         </Card>
       )}
+
+      {!isLoading && unconfirmedProfiles.length > 0 ? (
+        <View style={styles.unconfirmedCard}>
+          <Text style={styles.kicker}>
+            {tr(
+              `Niepotwierdzone konta (${unconfirmedProfiles.length})`,
+              `Unconfirmed accounts (${unconfirmedProfiles.length})`,
+            )}
+          </Text>
+          <Text style={styles.muted}>
+            {tr(
+              "Te osoby nie kliknęły linku z maila, więc nie mogą się zalogować.",
+              "These people haven't clicked the e-mail link, so they can't sign in.",
+            )}
+          </Text>
+          {unconfirmedProfiles.map((profile) => (
+            <Text key={profile.id} style={styles.meta}>
+              <Text style={styles.unconfirmedName}>{profile.full_name}</Text>
+              {profile.instrument ? ` · ${profile.instrument}` : ""}
+              {profile.created_at
+                ? tr(
+                    ` · założone ${CREATED_DATE.format(new Date(profile.created_at))}`,
+                    ` · created ${CREATED_DATE.format(new Date(profile.created_at))}`,
+                  )
+                : ""}
+            </Text>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  unconfirmedCard: {
+    backgroundColor: tokens.colors.surfaceMuted,
+    borderRadius: tokens.radii.lg,
+    padding: tokens.spacing.md,
+    gap: 6,
+  },
+  unconfirmedName: {
+    color: tokens.colors.ink,
+    fontWeight: "600",
+  },
   screenScroll: {
     flex: 1,
   },

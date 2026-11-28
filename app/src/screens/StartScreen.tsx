@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import type { AttendanceStatus, EventListItem } from "../domain/models";
@@ -15,6 +15,10 @@ import { StatusPill, statusMeta } from "../ui/StatusPill";
 
 type StartScreenProps = {
   events: EventListItem[];
+  /** ForumIdentityPrompt while the account has no forum person: replaces DeclarationPrompt. */
+  identityPrompt?: ReactNode;
+  /** A Notice shown at the top (e.g. after linking the forum account). */
+  topNotice?: ReactNode;
   firstName: string | null;
   unreadNotificationsCount: number;
   onOpenEvent: (eventId: string) => void;
@@ -62,7 +66,7 @@ function capitalize(value: string) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-const STATUS_PRIORITY: AttendanceStatus[] = ["no_response", "maybe", "going", "not_going"];
+const STATUS_PRIORITY: AttendanceStatus[] = ["no_response", "maybe", "going", "not_going", "unknown"];
 
 function daysUntilLabel(eventKey: string, todayKey: string) {
   const days = Math.round((keyToUtc(eventKey) - keyToUtc(todayKey)) / DAY_MS);
@@ -77,6 +81,8 @@ function daysUntilLabel(eventKey: string, todayKey: string) {
 
 export function StartScreen({
   events,
+  identityPrompt,
+  topNotice,
   firstName,
   unreadNotificationsCount,
   onOpenEvent,
@@ -153,7 +159,7 @@ export function StartScreen({
       <View style={styles.weekRow}>
         {weekDays.map((key) => {
           const status = statusByDay.get(key);
-          const meta = status ? statusMeta(status) : null;
+          const meta = status && status !== "unknown" ? statusMeta(status) : null;
           const isToday = key === todayKey;
           return (
             <Pressable
@@ -248,7 +254,8 @@ export function StartScreen({
       {isDesktop ? (
         <View style={styles.columns}>
           <View style={styles.column}>
-            <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />
+            {topNotice}
+            {identityPrompt ?? <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />}
             {nextGigCard}
           </View>
           <View style={styles.column}>
@@ -258,7 +265,8 @@ export function StartScreen({
         </View>
       ) : (
         <>
-          <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />
+          {topNotice}
+          {identityPrompt ?? <DeclarationPrompt events={needsResponse} onOpenEvent={onOpenEvent} />}
           {nextGigCard}
           {weekStrip}
           {laterList}

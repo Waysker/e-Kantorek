@@ -21,8 +21,9 @@ import { Chip } from "../ui/Chip";
 import { Notice } from "../ui/Notice";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { formatRelativeLabel } from "../utils/format";
+import { ForumAccountLinksPanel } from "./ForumAccountLinksPanel";
 
-type PanelTab = "assign" | "mapped" | "history";
+type PanelTab = "assign" | "mapped" | "history" | "accounts";
 
 type UnmappedMemberRow = {
   memberId: string;
@@ -80,7 +81,8 @@ function normalizeSearchText(value: string): string {
     .toLowerCase();
 }
 
-export function InstrumentMappingScreen() {
+// Zarząd → Osoby z forum: instruments of forum people and links of app accounts to them.
+export function InstrumentMappingScreen({ onAccountsChanged }: { onAccountsChanged?: () => void } = {}) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= tokens.breakpoints.desktop;
   const [activeTab, setActiveTab] = useState<PanelTab>("assign");
@@ -506,6 +508,7 @@ export function InstrumentMappingScreen() {
     },
     { key: "mapped", label: tr("Przypisani", "Assigned") },
     { key: "history", label: tr("Historia", "History") },
+    { key: "accounts", label: tr("Konta", "Accounts") },
   ];
 
   return (
@@ -515,16 +518,16 @@ export function InstrumentMappingScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <Text style={styles.kicker}>{tr("Instrumenty z forum", "Forum instruments")}</Text>
+        <Text style={styles.kicker}>{tr("Osoby z forum", "Forum people")}</Text>
         <Text style={styles.title}>
           {isLoadingMembers
-            ? tr("Instrumenty", "Instruments")
+            ? tr("Osoby z forum", "Forum people")
             : waitingCount > 0
               ? tr(
                   `${waitingCount} ${polishPeopleWithout(waitingCount)} instrumentu`,
                   `${waitingCount} without an instrument`,
                 )
-              : tr("Instrumenty", "Instruments")}
+              : tr("Osoby z forum", "Forum people")}
         </Text>
       </View>
 
@@ -536,6 +539,7 @@ export function InstrumentMappingScreen() {
       {activeTab === "assign" ? renderAssignTab() : null}
       {activeTab === "mapped" ? renderMappedTab() : null}
       {activeTab === "history" ? renderHistoryTab() : null}
+      {activeTab === "accounts" ? <ForumAccountLinksPanel onChanged={onAccountsChanged} /> : null}
     </ScrollView>
   );
 }

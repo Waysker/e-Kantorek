@@ -15,11 +15,11 @@ group "Instrument not mapped yet".
 3. Alerts, so it cannot be missed:
    - ntfy push from `notify.sh unmapped` on the first sync that sees a new member,
      repeated every 24h (`UNMAPPED_REPEAT_HOURS`) while anyone is still unmapped.
-   - In the app, board/admin see a count badge on the "Zarząd" tab and on its "Instrumenty"
+   - In the app, board/admin see a count badge on the "Zarząd" tab and on its "Osoby z forum" (formerly "Instrumenty")
      sub-tab ("N do przypisania"). Section leaders (who cannot assign) instead see a banner with
      the names, asking them to tell the board which instrument the person plays. The banner lists
      all unmapped people, not only one section, because an unmapped member has no section yet.
-4. Board/admin opens **Zarząd → Instrumenty** (view "Do przypisania"), picks an instrument for each
+4. Board/admin opens **Zarząd → Osoby z forum** (view "Do przypisania"), picks an instrument for each
    person. The tab calls `set_forum_member_instrument`, which writes the entry to
    `byUid` (forum UID) or `byFullName` (when the member has no numeric UID).
 5. The entry takes effect on the next sync (up to ~20 min). Until then the card shows

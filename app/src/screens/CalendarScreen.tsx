@@ -95,7 +95,12 @@ function dominantStatus(dayEvents: EventListItem[]): AttendanceStatus {
       return status;
     }
   }
-  return "no_response";
+  return "unknown";
+}
+
+function dayMeta(dayEvents: EventListItem[]) {
+  const status = dayEvents.length > 0 ? dominantStatus(dayEvents) : "unknown";
+  return status === "unknown" ? null : statusMeta(status);
 }
 
 type AgendaItem =
@@ -300,7 +305,7 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
               return <View key={cellIndex} style={styles.cellSlot} />;
             }
             const dayEvents = eventsByDay.get(cell.key) ?? [];
-            const meta = dayEvents.length > 0 ? statusMeta(dominantStatus(dayEvents)) : null;
+            const meta = dayMeta(dayEvents);
             const isToday = cell.key === todayKey;
             const isSelected = cell.key === selectedKey;
             return (
@@ -522,7 +527,7 @@ export function CalendarScreen({ events, onOpenEvent, hideTitle }: CalendarScree
           <View style={styles.weekRow}>
             {weekDays.map((key, index) => {
               const dayEvents = eventsByDay.get(key) ?? [];
-              const meta = dayEvents.length > 0 ? statusMeta(dominantStatus(dayEvents)) : null;
+              const meta = dayMeta(dayEvents);
               const isToday = key === todayKey;
               return (
                 <View key={key} style={styles.cellSlot}>
