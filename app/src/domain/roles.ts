@@ -56,6 +56,12 @@ export function canWriteAttendanceByRole(role: PrimaryRole): boolean {
   return role === "board" || role === "admin";
 }
 
+// Switch the attendance summary between the original sheet and app-entered
+// attendance; the comparison is for the board building trust in the app.
+export function canCompareAttendanceSourcesByRole(role: PrimaryRole): boolean {
+  return role === "board" || role === "admin";
+}
+
 export function canViewAttendanceSummaryByRole(role: PrimaryRole): boolean {
   return role === "section" || role === "board" || role === "admin";
 }

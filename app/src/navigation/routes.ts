@@ -15,6 +15,7 @@ export type AppRoute =
   | { name: "attendanceSummary" }
   | { name: "roleManagement" }
   | { name: "instrumentMapping" }
+  | { name: "orchestraAttendance" }
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
@@ -22,7 +23,7 @@ export function routeToTab(route: AppRoute): PrimaryTab {
     return "home";
   }
 
-  if (route.name === "profile") {
+  if (route.name === "profile" || route.name === "orchestraAttendance") {
     return "profile";
   }
 
