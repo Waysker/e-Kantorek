@@ -52,9 +52,12 @@ function BackLink({ onBack }: { onBack: () => void }) {
 export function FeedScreen({
   onOpenPost,
   onCompose,
+  onImport,
 }: {
   onOpenPost: (postId: string) => void;
   onCompose: () => void;
+  /** Board/admin: "Import z Facebooka". */
+  onImport?: () => void;
 }) {
   const [posts, setPosts] = useState<FeedPost[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +113,11 @@ export function FeedScreen({
         <Text style={styles.title}>{tr("Kantorek", "Kantorek")}</Text>
         <Button label={tr("Nowy wpis", "New post")} onPress={onCompose} />
       </View>
+      {onImport ? (
+        <Pressable onPress={onImport} accessibilityRole="button" style={styles.textAction}>
+          <Text style={styles.textActionLabel}>{tr("Import z Facebooka", "Import from Facebook")}</Text>
+        </Pressable>
+      ) : null}
       {error ? <Notice tone="error">{error}</Notice> : null}
       {posts === null && !error ? <ActivityIndicator color={colors.brand} /> : null}
       {posts && posts.length === 0 ? (
@@ -240,7 +248,7 @@ export function FeedPostScreen({
 
       {post && editingPost === null && (post.mine || isModerator) ? (
         <View style={styles.textActions}>
-          {post.mine ? (
+          {post.mine || (isModerator && post.source === "facebook") ? (
             <Pressable onPress={() => setEditingPost(post.body)} accessibilityRole="button" style={styles.textAction}>
               <Text style={styles.textActionLabel}>{tr("Edytuj", "Edit")}</Text>
             </Pressable>

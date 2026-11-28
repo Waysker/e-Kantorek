@@ -19,6 +19,7 @@ export type AppRoute =
   | { name: "feed" }
   | { name: "feedPost"; postId: string }
   | { name: "feedCompose" }
+  | { name: "feedImport" }
   | { name: "profile" };
 
 export function routeToTab(route: AppRoute): PrimaryTab {
@@ -34,7 +35,10 @@ export function routeToTab(route: AppRoute): PrimaryTab {
     return "events";
   }
 
-  if (route.name === "feed" || route.name === "feedPost" || route.name === "feedCompose") {
+  if (route.name === "feed" ||
+    route.name === "feedPost" ||
+    route.name === "feedCompose" ||
+    route.name === "feedImport") {
     return "feed";
   }
 

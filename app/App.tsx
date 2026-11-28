@@ -10,6 +10,7 @@ import { usePushNotifications } from "./src/push/usePushNotifications";
 import { NotificationsPrompt } from "./src/ui/NotificationsPrompt";
 import { PullToRefresh } from "./src/ui/PullToRefresh";
 import { FeedComposeScreen, FeedPostScreen, FeedScreen } from "./src/feed/FeedScreens";
+import { FeedImportScreen } from "./src/feed/FeedImportScreen";
 import { describeAuthError } from "./src/auth/authErrorMessage";
 import { createPrototypeRepositories } from "./src/data/prototypeRepositories";
 import type {
@@ -286,7 +287,8 @@ function isValidAppRoute(value: unknown): value is AppRoute {
     candidate.name === "attendanceSummary" ||
     candidate.name === "roleManagement" ||
     candidate.name === "feed" ||
-    candidate.name === "feedCompose"
+    candidate.name === "feedCompose" ||
+    candidate.name === "feedImport"
   ) {
     return true;
   }
@@ -1492,6 +1494,11 @@ function AppContent() {
           <FeedScreen
             onOpenPost={(postId) => pushRoute({ name: "feedPost", postId })}
             onCompose={() => pushRoute({ name: "feedCompose" })}
+            onImport={
+              effectiveCurrentUser.role === "board" || effectiveCurrentUser.role === "admin"
+                ? () => pushRoute({ name: "feedImport" })
+                : undefined
+            }
           />
         );
       case "feedPost":
@@ -1511,6 +1518,13 @@ function AppContent() {
               resetToRoute({ name: "feed" });
               pushRoute({ name: "feedPost", postId });
             }}
+          />
+        );
+      case "feedImport":
+        return (
+          <FeedImportScreen
+            onBack={() => goBack({ name: "feed" })}
+            onOpenPost={(postId) => pushRoute({ name: "feedPost", postId })}
           />
         );
       case "orchestraAttendance":

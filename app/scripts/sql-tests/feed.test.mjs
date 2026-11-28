@@ -66,6 +66,7 @@ before(async () => {
   await db.exec(migration("001_forum_snapshot_cache.sql"));
   await db.exec(migration("034_push_notifications.sql"));
   await db.exec(migration("035_feed.sql"));
+  await db.exec(migration("037_feed_facebook_import.sql"));
 });
 
 after(async () => {
@@ -193,6 +194,53 @@ describe("feed (035)", () => {
     await assert.rejects(
       as(ANIA, "select public.set_push_topics('https://fcm.googleapis.com/fcm/send/ania', array['spam'])"),
       /unknown_topic/,
+    );
+  });
+
+  it("imports a Facebook post for the board only, with a closed poll, FB likes and comments", async () => {
+    const payload = {
+      authorName: "Ania Raczkowska",
+      createdAt: "2026-10-21T18:40:00+02:00",
+      body: "[warsztaty] [imprezka przebierana]",
+      externalUrl: "https://www.facebook.com/groups/x/posts/1",
+      likeCount: 2,
+      poll: { question: "Motyw", multiple: false, options: [{ label: "PRL", votes: 24 }, { label: "Kosmici", votes: 18 }] },
+      comments: [{ authorName: "Michał Ziobro", body: "Jeśli na walnym nie osiągniemy konsensusu…" }, { authorName: "X", body: "  " }],
+    };
+    await assert.rejects(as(ANIA, "select public.import_feed_post($1::jsonb)", [JSON.stringify(payload)]), /only_board/);
+    const { id } = await one(BOARD, "select public.import_feed_post($1::jsonb) as id", [JSON.stringify(payload)]);
+    const detail = await post(ANIA, id);
+    assert.equal(detail.post.authorName, "Ania Raczkowska");
+    assert.equal(detail.post.source, "facebook");
+    assert.equal(detail.post.likeCount, 2);
+    assert.equal(detail.post.mine, false);
+    assert.deepEqual(detail.post.poll.options.map((o) => [o.label, o.votes]), [["PRL", 24], ["Kosmici", 18]]);
+    assert.equal(detail.post.poll.closed, true);
+    assert.equal(detail.post.poll.voterCount, 42);
+    assert.deepEqual(detail.comments.map((c) => c.authorName), ["Michał Ziobro"]);
+    await assert.rejects(
+      as(BARTEK, "select public.vote_feed_poll($1, $2::uuid[])", [id, [detail.post.poll.options[0].id]]),
+      /poll_closed/,
+    );
+    // Board corrects the text; nobody else can.
+    await assert.rejects(as(ANIA, "select public.update_feed_post($1, 'x')", [id]), /not_your_post/);
+    await as(BOARD, "select public.update_feed_post($1, 'poprawione')", [id]);
+    // Imports never go to push.
+    const claimed = await db.query("select id from public.claim_feed_posts_for_push()");
+    assert.equal(claimed.rows.length, 0);
+    // Sorted by the original date: after newer app posts.
+    const items = await feed(ANIA);
+    assert.equal(items[items.length - 1].id, id);
+  });
+
+  it("rejects an import without author or with a bad date", async () => {
+    await assert.rejects(
+      as(BOARD, "select public.import_feed_post($1::jsonb)", [JSON.stringify({ authorName: "", createdAt: "2026-10-01", body: "x" })]),
+      /author_required/,
+    );
+    await assert.rejects(
+      as(BOARD, "select public.import_feed_post($1::jsonb)", [JSON.stringify({ authorName: "A", createdAt: "wczoraj", body: "x" })]),
+      /invalid_date/,
     );
   });
 });
