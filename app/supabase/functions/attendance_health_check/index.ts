@@ -41,6 +41,10 @@ const HEALTH_CHECK_AUTH_TOKEN = Deno.env.get("ATTENDANCE_HEALTH_CHECK_FUNCTION_A
 
 const DEFAULT_FAILURE_WINDOW_MINUTES = 150;
 const DEFAULT_STALE_PROCESSING_MINUTES = 15;
+// The sheet sync runs every 15 minutes; no successful run for an hour means it is
+// not running at all (e.g. 2026-10/11 on orbit: every call failed before it could
+// record a run, so there were no failed runs to report either).
+const DEFAULT_MAX_SYNC_AGE_MINUTES = 60;
 const DEFAULT_ROW_LIMIT = 20;
 
 function normalizeWhitespace(value: unknown): string {
@@ -128,6 +132,24 @@ async function loadRecentFailedSyncRuns(
   return data ?? [];
 }
 
+async function loadLatestSuccessfulSyncAt(supabaseAdmin: SupabaseAdminClient): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from("sync_runs")
+    .select("finished_at")
+    .eq("pipeline_name", "sheet_to_supabase_sync")
+    .eq("status", "success")
+    .not("finished_at", "is", null)
+    .order("finished_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<{ finished_at: string }>();
+
+  if (error) {
+    throw new HttpError(500, "sync_runs_load_failed", error.message);
+  }
+
+  return data?.finished_at ?? null;
+}
+
 async function loadDeadLetterRows(
   supabaseAdmin: SupabaseAdminClient,
   rowLimit: number,
@@ -204,13 +226,18 @@ Deno.serve(async (request) => {
       DEFAULT_STALE_PROCESSING_MINUTES,
     );
     const rowLimit = parsePositiveInteger(body.rowLimit ?? body.row_limit, DEFAULT_ROW_LIMIT);
+    const maxSyncAgeMinutes = parsePositiveInteger(
+      body.maxSyncAgeMinutes ?? body.max_sync_age_minutes,
+      DEFAULT_MAX_SYNC_AGE_MINUTES,
+    );
 
     const supabaseAdmin = createSupabaseAdminClient();
 
-    const [recentFailedSyncRuns, deadLetterRows, staleProcessingRows] = await Promise.all([
+    const [recentFailedSyncRuns, deadLetterRows, staleProcessingRows, latestSuccessfulSyncAt] = await Promise.all([
       loadRecentFailedSyncRuns(supabaseAdmin, failureWindowMinutes, rowLimit),
       loadDeadLetterRows(supabaseAdmin, rowLimit),
       loadStaleProcessingRows(supabaseAdmin, staleProcessingMinutes, rowLimit),
+      loadLatestSuccessfulSyncAt(supabaseAdmin),
     ]);
 
     const issues: Array<Record<string, unknown>> = [];
@@ -221,6 +248,19 @@ Deno.serve(async (request) => {
         severity: "error",
         count: recentFailedSyncRuns.length,
         window_minutes: failureWindowMinutes,
+      });
+    }
+
+    const syncAgeMinutes = latestSuccessfulSyncAt
+      ? Math.floor((Date.now() - new Date(latestSuccessfulSyncAt).getTime()) / 60_000)
+      : null;
+    if (syncAgeMinutes == null || syncAgeMinutes > maxSyncAgeMinutes) {
+      issues.push({
+        code: "sheet_sync_stale",
+        severity: "error",
+        last_success_at: latestSuccessfulSyncAt,
+        age_minutes: syncAgeMinutes,
+        max_age_minutes: maxSyncAgeMinutes,
       });
     }
 
@@ -248,8 +288,10 @@ Deno.serve(async (request) => {
       thresholds: {
         failure_window_minutes: failureWindowMinutes,
         stale_processing_minutes: staleProcessingMinutes,
+        max_sync_age_minutes: maxSyncAgeMinutes,
         row_limit: rowLimit,
       },
+      last_successful_sheet_sync_at: latestSuccessfulSyncAt,
       counts: {
         recent_failed_sheet_to_supabase_sync_runs: recentFailedSyncRuns.length,
         dead_letter_count: deadLetterRows.length,

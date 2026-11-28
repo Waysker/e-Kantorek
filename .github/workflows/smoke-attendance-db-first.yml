@@ -1,19 +1,10 @@
 name: Smoke Attendance DB-First
 
+# Runs against the self-hosted Supabase on orbit (SUPABASE_URL). The smoke test
+# writes only to its own hidden fixture event and cleans up after itself
+# (docs/reference/attendance-model.md), so it runs daily and on demand, not on PRs.
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - ".github/workflows/smoke-attendance-db-first.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - ".github/workflows/smoke-attendance-db-first.yml"
   schedule:
     - cron: "17 3 * * *"
 
@@ -36,33 +27,18 @@ jobs:
       - name: Trigger Supabase smoke function
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN: ${{ secrets.SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN }}
-          SMOKE_REQUIRE_EXPORT_TRIGGER_OK: ${{ vars.SMOKE_REQUIRE_EXPORT_TRIGGER_OK || 'false' }}
           SMOKE_CHECK_SYNC_CONTRACT: ${{ vars.SMOKE_CHECK_SYNC_CONTRACT || 'true' }}
         run: |
-          if [ -z "$SUPABASE_PROJECT_REF" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              echo "::notice::Skipping smoke on pull_request because SUPABASE_PROJECT_REF is unavailable."
-              exit 0
-            fi
-            echo "::error::SUPABASE_PROJECT_REF is missing (repo variable)."
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "::error::SUPABASE_URL is missing (repo secret)."
             exit 1
           fi
           if [ -z "$SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              echo "::notice::Skipping smoke on pull_request because SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is unavailable (likely fork PR)."
-              exit 0
-            fi
             echo "::error::SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is missing (repo secret)."
             exit 1
           fi
-
-          normalized_flag="$(echo "${SMOKE_REQUIRE_EXPORT_TRIGGER_OK:-false}" | tr '[:upper:]' '[:lower:]')"
-          case "$normalized_flag" in
-            1|true|yes|on) require_export=true ;;
-            *) require_export=false ;;
-          esac
 
           normalized_contract_flag="$(echo "${SMOKE_CHECK_SYNC_CONTRACT:-true}" | tr '[:upper:]' '[:lower:]')"
           case "$normalized_contract_flag" in
@@ -70,8 +46,8 @@ jobs:
             *) check_sync_contract=false ;;
           esac
 
-          smoke_url="https://${SUPABASE_PROJECT_REF}.functions.supabase.co/smoke_attendance_db_first"
-          payload="{\"requireExportTriggerOk\":${require_export},\"checkSyncContract\":${check_sync_contract}}"
+          smoke_url="${SUPABASE_URL%/}/functions/v1/smoke_attendance_db_first"
+          payload="{\"checkSyncContract\":${check_sync_contract}}"
 
           raw_response=""
           max_attempts=3

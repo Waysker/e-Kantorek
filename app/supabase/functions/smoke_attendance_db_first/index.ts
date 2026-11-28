@@ -8,14 +8,10 @@ type ProfileRow = {
   role: string | null;
 };
 
-type AttendanceEntryRow = {
-  event_id: string;
-  member_id: string;
+type AppAttendanceEntryRow = {
   attendance_ratio: number;
-};
-
-type ChangeJournalRow = {
-  payload: Record<string, unknown> | null;
+  recorded_by_profile_id: string | null;
+  source: string | null;
 };
 
 class HttpError extends Error {
@@ -46,16 +42,14 @@ const SMOKE_TEST_EMAIL =
 const SMOKE_TEST_PASSWORD =
   normalizeWhitespace(Deno.env.get("SMOKE_ATTENDANCE_TEST_PASSWORD") ?? "") ||
   normalizeWhitespace(Deno.env.get("SMOKE_TEST_PASSWORD") ?? "");
-const SMOKE_EVENT_ID =
-  normalizeWhitespace(Deno.env.get("SMOKE_ATTENDANCE_EVENT_ID") ?? "") ||
-  normalizeWhitespace(Deno.env.get("SMOKE_EVENT_ID") ?? "");
-const SMOKE_MEMBER_ID =
-  normalizeWhitespace(Deno.env.get("SMOKE_ATTENDANCE_MEMBER_ID") ?? "") ||
-  normalizeWhitespace(Deno.env.get("SMOKE_MEMBER_ID") ?? "");
-const DEFAULT_REQUIRE_EXPORT_TRIGGER_OK = parseBooleanEnv(
-  Deno.env.get("SMOKE_ATTENDANCE_REQUIRE_EXPORT_TRIGGER_OK"),
-  false,
-);
+// The smoke test never touches real attendance: it writes to its own fixture
+// event and member, which the app hides (the member is inactive, the event is not
+// from the forum, not a rehearsal and not in any sheet), skips the copy-sheet
+// export and deletes what it wrote. See docs/reference/attendance-model.md.
+const SMOKE_EVENT_ID = "evt-smoke-fixture";
+const SMOKE_EVENT_DATE = "2000-01-01";
+const SMOKE_MEMBER_ID = "member-smoke-fixture";
+const SMOKE_TEMPORARY_RATIO = 0.5;
 const DEFAULT_CHECK_SYNC_CONTRACT = parseBooleanEnv(
   Deno.env.get("SMOKE_ATTENDANCE_CHECK_SYNC_CONTRACT"),
   false,
@@ -275,20 +269,6 @@ function deriveSheetSyncFunctionUrl(supabaseUrl: string): string {
   return `${base.origin}/functions/v1/sheet_to_supabase_sync`;
 }
 
-function parseNumericRatio(rawValue: unknown): number | null {
-  if (rawValue === null || rawValue === undefined) {
-    return null;
-  }
-  const parsed = Number(rawValue);
-  if (!Number.isFinite(parsed)) {
-    return null;
-  }
-  if (parsed < 0 || parsed > 4) {
-    return null;
-  }
-  return Number(parsed.toFixed(4));
-}
-
 async function callAttendanceWrite(params: {
   functionUrl: string;
   jwt: string;
@@ -314,6 +294,7 @@ async function callAttendanceWrite(params: {
         attendanceRatio: params.attendanceRatio,
       }],
       smokeRunTag: params.runTag,
+      skipSheetExport: true,
     }),
   });
 
@@ -551,75 +532,71 @@ async function loadProfile(
   return data;
 }
 
-async function loadAttendanceRow(
-  supabaseAdmin: SupabaseAdminClient,
-  eventId: string,
-  memberId: string,
-): Promise<AttendanceEntryRow> {
+async function ensureSmokeFixtures(supabaseAdmin: SupabaseAdminClient): Promise<void> {
+  const { error: memberError } = await supabaseAdmin.from("members").upsert({
+    member_id: SMOKE_MEMBER_ID,
+    first_name: "Smoke",
+    last_name: "Test",
+    full_name: "Smoke Test",
+    instrument: "Test",
+    is_active: false,
+  }, { onConflict: "member_id" });
+  if (memberError) {
+    throw new HttpError(500, "smoke_fixture_member_failed", memberError.message);
+  }
+
+  const { error: eventError } = await supabaseAdmin.from("events").upsert({
+    event_id: SMOKE_EVENT_ID,
+    title: "Smoke test",
+    event_date: SMOKE_EVENT_DATE,
+  }, { onConflict: "event_id" });
+  if (eventError) {
+    throw new HttpError(500, "smoke_fixture_event_failed", eventError.message);
+  }
+}
+
+async function loadAppEntry(supabaseAdmin: SupabaseAdminClient): Promise<AppAttendanceEntryRow | null> {
   const { data, error } = await supabaseAdmin
+    .from("app_attendance_entries")
+    .select("attendance_ratio,recorded_by_profile_id,source")
+    .eq("event_id", SMOKE_EVENT_ID)
+    .eq("member_id", SMOKE_MEMBER_ID)
+    .maybeSingle<AppAttendanceEntryRow>();
+  if (error) {
+    throw new HttpError(500, "smoke_app_entry_load_failed", error.message);
+  }
+  return data ?? null;
+}
+
+async function countSheetEntries(supabaseAdmin: SupabaseAdminClient): Promise<number> {
+  const { count, error } = await supabaseAdmin
     .from("attendance_entries")
-    .select("event_id,member_id,attendance_ratio")
-    .eq("event_id", eventId)
-    .eq("member_id", memberId)
-    .maybeSingle<AttendanceEntryRow>();
+    .select("member_id", { count: "exact", head: true })
+    .eq("event_id", SMOKE_EVENT_ID);
   if (error) {
-    throw new HttpError(500, "attendance_row_load_failed", error.message);
+    throw new HttpError(500, "smoke_sheet_entries_load_failed", error.message);
   }
-  if (!data) {
-    throw new HttpError(
-      404,
-      "attendance_row_not_found",
-      `Attendance row not found for event_id=${eventId} and member_id=${memberId}.`,
-    );
-  }
-  if (!Number.isFinite(Number(data.attendance_ratio))) {
-    throw new HttpError(500, "attendance_row_invalid_ratio", "Attendance row has invalid attendance_ratio value.");
-  }
-  return data;
+  return count ?? 0;
 }
 
-function toStringList(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
+// Removes the fixture's app entry and its journal rows, so the board's "Ostatnie
+// zapisy" list and the app-side summary never show the smoke run.
+async function cleanUpSmokeWrites(supabaseAdmin: SupabaseAdminClient): Promise<void> {
+  const { error: entryError } = await supabaseAdmin
+    .from("app_attendance_entries")
+    .delete()
+    .eq("event_id", SMOKE_EVENT_ID);
+  if (entryError) {
+    throw new HttpError(500, "smoke_cleanup_entry_failed", entryError.message);
   }
-  return value
-    .map((entry) => normalizeWhitespace(entry))
-    .filter((entry) => !!entry);
-}
-
-async function hasDbFirstWriteEvidence(
-  supabaseAdmin: SupabaseAdminClient,
-  runTag: string,
-  eventId: string,
-  memberId: string,
-): Promise<boolean> {
-  const requestNote = `${runTag}:step1`;
-  const { data, error } = await supabaseAdmin
+  const { error: journalError } = await supabaseAdmin
     .from("change_journal")
-    .select("payload")
-    .eq("action", "attendance_write_db_applied_batch")
-    .order("created_at", { ascending: false })
-    .limit(40)
-    .returns<ChangeJournalRow[]>();
-  if (error) {
-    throw new HttpError(500, "change_journal_load_failed", error.message);
+    .delete()
+    .eq("entity_type", "app_attendance_entries")
+    .eq("entity_id", SMOKE_EVENT_ID);
+  if (journalError) {
+    throw new HttpError(500, "smoke_cleanup_journal_failed", journalError.message);
   }
-
-  for (const row of data ?? []) {
-    const payload = row.payload ?? {};
-    const payloadRequestNote = normalizeWhitespace(payload.request_note ?? "");
-    const payloadEventId = normalizeWhitespace(payload.resolved_event_id ?? payload.event_id ?? "");
-    const payloadChangedMembers = toStringList(payload.changed_member_ids);
-    if (
-      payloadRequestNote === requestNote &&
-      payloadEventId === eventId &&
-      payloadChangedMembers.includes(memberId)
-    ) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function almostEqual(left: number, right: number): boolean {
@@ -645,19 +622,13 @@ Deno.serve(async (request) => {
         "SMOKE_ATTENDANCE_TEST_EMAIL and SMOKE_ATTENDANCE_TEST_PASSWORD are required.",
       );
     }
-    if (!SMOKE_EVENT_ID || !SMOKE_MEMBER_ID) {
-      throw new HttpError(
-        500,
-        "missing_smoke_target",
-        "SMOKE_ATTENDANCE_EVENT_ID and SMOKE_ATTENDANCE_MEMBER_ID are required.",
-      );
+    // The smoke run writes to the database, so it is never open to anonymous calls.
+    if (!SMOKE_AUTH_TOKEN) {
+      throw new HttpError(500, "missing_smoke_auth_token", "SMOKE_ATTENDANCE_FUNCTION_AUTH_TOKEN is required.");
     }
-
-    if (SMOKE_AUTH_TOKEN) {
-      const token = parseBearerToken(request.headers.get("authorization"));
-      if (token !== SMOKE_AUTH_TOKEN) {
-        throw new HttpError(401, "unauthorized", "Invalid bearer token.");
-      }
+    const token = parseBearerToken(request.headers.get("authorization"));
+    if (token !== SMOKE_AUTH_TOKEN) {
+      throw new HttpError(401, "unauthorized", "Invalid bearer token.");
     }
 
     let body: Record<string, unknown> = {};
@@ -667,16 +638,9 @@ Deno.serve(async (request) => {
       body = {};
     }
 
-    const requireExportTriggerOk = parseBooleanInput(
-      body.requireExportTriggerOk ?? body.require_export_trigger_ok,
-      DEFAULT_REQUIRE_EXPORT_TRIGGER_OK,
-    );
     const checkSyncContract = parseBooleanInput(
       body.checkSyncContract ?? body.check_sync_contract,
       DEFAULT_CHECK_SYNC_CONTRACT,
-    );
-    const overrideTemporaryRatio = parseNumericRatio(
-      body.temporaryRatio ?? body.temporary_ratio ?? body.testRatio ?? body.test_ratio,
     );
     const runTag = `smoke_attendance_db_first:${crypto.randomUUID()}`;
 
@@ -703,97 +667,63 @@ Deno.serve(async (request) => {
     const jwt = signInData.session.access_token;
     const profile = await loadProfile(supabaseAdmin, signInData.user.id);
     const role = normalizeRole(profile.role);
-    if (!["section", "board", "admin"].includes(role)) {
+    if (!["board", "admin"].includes(role)) {
       throw new HttpError(
         403,
-        "smoke_user_not_manager",
-        `Smoke user role must be section/board/admin, got ${role}.`,
+        "smoke_user_not_board",
+        `Smoke user role must be board/admin (the only roles that write attendance), got ${role}.`,
       );
     }
 
-    const initialRow = await loadAttendanceRow(supabaseAdmin, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
-    const originalRatio = Number(initialRow.attendance_ratio);
-    const temporaryRatio = overrideTemporaryRatio ?? (almostEqual(originalRatio, 1) ? 0.5 : 1);
-    if (almostEqual(temporaryRatio, originalRatio)) {
-      throw new HttpError(422, "invalid_temporary_ratio", "temporaryRatio must differ from current attendance ratio.");
-    }
+    await ensureSmokeFixtures(supabaseAdmin);
+    await cleanUpSmokeWrites(supabaseAdmin);
+    const sheetEntriesBefore = await countSheetEntries(supabaseAdmin);
 
-    let restoreAttempted = false;
     try {
-      const firstPayload = await callAttendanceWrite({
+      const writePayload = await callAttendanceWrite({
         functionUrl: attendanceWriteUrl,
         jwt,
         eventId: SMOKE_EVENT_ID,
         memberId: SMOKE_MEMBER_ID,
-        attendanceRatio: temporaryRatio,
-        requestNote: `${runTag}:step1`,
+        attendanceRatio: SMOKE_TEMPORARY_RATIO,
+        requestNote: `${runTag}:write`,
         runTag,
       });
 
-      if (firstPayload.mode !== "db_first" || firstPayload.status !== "applied") {
+      if (writePayload.mode !== "db_first" || writePayload.status !== "applied") {
         throw new HttpError(
           502,
           "unexpected_write_response",
-          `Expected mode=db_first/status=applied, got mode=${String(firstPayload.mode)} status=${String(firstPayload.status)}.`,
-          { first_payload: firstPayload },
+          `Expected mode=db_first/status=applied, got mode=${String(writePayload.mode)} status=${String(writePayload.status)}.`,
+          { write_payload: writePayload },
         );
       }
-
-      if (requireExportTriggerOk) {
-        const exportTrigger = firstPayload.export_trigger as Record<string, unknown> | null | undefined;
-        const exportOk = exportTrigger?.ok === true;
-        if (!exportOk) {
-          throw new HttpError(
-            502,
-            "export_trigger_not_ok",
-            "Expected export_trigger.ok=true for smoke run.",
-            { export_trigger: exportTrigger ?? null },
-          );
-        }
-      }
-
-      const afterFirstRow = await loadAttendanceRow(supabaseAdmin, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
-      const afterFirstRatio = Number(afterFirstRow.attendance_ratio);
-      const firstStepRatioObserved = almostEqual(afterFirstRatio, temporaryRatio);
-      let firstStepWriteEvidence = false;
-      if (!firstStepRatioObserved) {
-        firstStepWriteEvidence = await hasDbFirstWriteEvidence(supabaseAdmin, runTag, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
-        if (!firstStepWriteEvidence) {
-          throw new HttpError(
-            500,
-            "smoke_first_step_ratio_mismatch",
-            `After step1 expected ratio=${temporaryRatio}, got ratio=${afterFirstRatio}.`,
-          );
-        }
-      }
-
-      restoreAttempted = true;
-      const restorePayload = await callAttendanceWrite({
-        functionUrl: attendanceWriteUrl,
-        jwt,
-        eventId: SMOKE_EVENT_ID,
-        memberId: SMOKE_MEMBER_ID,
-        attendanceRatio: originalRatio,
-        requestNote: `${runTag}:restore`,
-        runTag,
-      });
-
-      if (restorePayload.mode !== "db_first" || restorePayload.status !== "applied") {
-        throw new HttpError(
-          502,
-          "unexpected_restore_response",
-          `Expected restore mode=db_first/status=applied, got mode=${String(restorePayload.mode)} status=${String(restorePayload.status)}.`,
-          { restore_payload: restorePayload },
-        );
-      }
-
-      const finalRow = await loadAttendanceRow(supabaseAdmin, SMOKE_EVENT_ID, SMOKE_MEMBER_ID);
-      const finalRatio = Number(finalRow.attendance_ratio);
-      if (!almostEqual(finalRatio, originalRatio)) {
+      if (writePayload.event_id !== SMOKE_EVENT_ID) {
         throw new HttpError(
           500,
-          "smoke_restore_ratio_mismatch",
-          `After restore expected ratio=${originalRatio}, got ratio=${finalRatio}.`,
+          "smoke_wrong_event",
+          `Write resolved to ${String(writePayload.event_id)} instead of the fixture event.`,
+        );
+      }
+
+      const written = await loadAppEntry(supabaseAdmin);
+      if (!written || !almostEqual(Number(written.attendance_ratio), SMOKE_TEMPORARY_RATIO)) {
+        throw new HttpError(
+          500,
+          "smoke_app_entry_mismatch",
+          `Expected app entry ratio=${SMOKE_TEMPORARY_RATIO}, got ${written ? written.attendance_ratio : "none"}.`,
+        );
+      }
+      if (written.recorded_by_profile_id !== profile.id) {
+        throw new HttpError(500, "smoke_recorded_by_mismatch", "App entry does not name the smoke user as its author.");
+      }
+
+      const sheetEntriesAfter = await countSheetEntries(supabaseAdmin);
+      if (sheetEntriesAfter !== sheetEntriesBefore) {
+        throw new HttpError(
+          500,
+          "smoke_touched_sheet_data",
+          "The app write changed attendance_entries (original sheet data).",
         );
       }
 
@@ -819,39 +749,29 @@ Deno.serve(async (request) => {
         });
       }
 
+      await cleanUpSmokeWrites(supabaseAdmin);
+      const leftover = await loadAppEntry(supabaseAdmin);
+
       return jsonResponse({
-        status: "ok",
+        status: leftover ? "cleanup_failed" : "ok",
         smoke_run_tag: runTag,
         mode: "db_first",
         event_id: SMOKE_EVENT_ID,
         member_id: SMOKE_MEMBER_ID,
         actor_profile_id: profile.id,
-        actor_full_name: profile.full_name,
         actor_role: role,
-        original_ratio: originalRatio,
-        temporary_ratio: temporaryRatio,
-        first_step_ratio_observed: firstStepRatioObserved,
-        first_step_ratio_after_write: afterFirstRatio,
-        first_step_write_evidence: firstStepWriteEvidence,
-        require_export_trigger_ok: requireExportTriggerOk,
+        written_ratio: SMOKE_TEMPORARY_RATIO,
+        export_trigger: writePayload.export_trigger ?? null,
+        sheet_data_untouched: true,
+        cleaned_up: !leftover,
         check_sync_contract: checkSyncContract,
         sync_contract_check: syncContractCheck,
-      });
+      }, leftover ? 500 : 200);
     } catch (error) {
-      if (!restoreAttempted) {
-        try {
-          await callAttendanceWrite({
-            functionUrl: attendanceWriteUrl,
-            jwt,
-            eventId: SMOKE_EVENT_ID,
-            memberId: SMOKE_MEMBER_ID,
-            attendanceRatio: originalRatio,
-            requestNote: `${runTag}:best_effort_restore`,
-            runTag,
-          });
-        } catch {
-          // Best effort rollback only.
-        }
+      try {
+        await cleanUpSmokeWrites(supabaseAdmin);
+      } catch {
+        // Best effort; the next run cleans up before writing.
       }
       throw error;
     }
