@@ -67,6 +67,13 @@ const APPS_SCRIPT_WEBHOOK_TOKEN =
 const TARGET_ATTENDANCE_SHEET_ID =
   Deno.env.get("ATTENDANCE_EXPORT_TARGET_SHEET_ID") ??
   Deno.env.get("ATTENDANCE_SHEET_TARGET_ID");
+// The copy sheet is a "Make a copy" of the original, so its rows follow the
+// original's layout. Rows are looked up in the original's tab of the event,
+// never guessed from older seasons.
+const LAYOUT_SHEET_ID =
+  Deno.env.get("ATTENDANCE_EXPORT_LAYOUT_SHEET_ID") ??
+  Deno.env.get("ATTENDANCE_SHEET_ID") ??
+  null;
 const DEFAULT_EVENT_LOOKBACK_DAYS = 31;
 const MAX_EVENTS_PER_RUN = 60;
 const DEFAULT_CELL_WRITE_CONCURRENCY = 6;
@@ -457,6 +464,25 @@ async function writeAttendanceCellsWithConcurrency(params: {
   }
 }
 
+function pickLayoutRowNumber(
+  memberId: string,
+  layoutRows: FallbackRowMaps,
+  layoutSheetId: string,
+  candidateGids: Array<string | null | undefined>,
+): number | null {
+  for (const gid of candidateGids) {
+    const sourceRef = toSourceRef(layoutSheetId, gid);
+    if (!sourceRef) {
+      continue;
+    }
+    const row = layoutRows.bySourceRef.get(sourceRef)?.get(memberId) ?? null;
+    if (typeof row === "number" && Number.isInteger(row) && row > 0) {
+      return row;
+    }
+  }
+  return null;
+}
+
 function pickMemberRowNumber(
   memberId: string,
   membersById: Map<string, MemberRow>,
@@ -684,7 +710,7 @@ Deno.serve(async (request) => {
 
     const [members, fallbackRows, attendanceEntries] = await Promise.all([
       loadMembers(supabaseAdmin),
-      loadFallbackRows(supabaseAdmin, TARGET_ATTENDANCE_SHEET_ID),
+      loadFallbackRows(supabaseAdmin, LAYOUT_SHEET_ID ?? TARGET_ATTENDANCE_SHEET_ID),
       loadAttendanceEntries(supabaseAdmin, events.map((event) => event.event_id)),
     ]);
 
@@ -746,17 +772,25 @@ Deno.serve(async (request) => {
         sourceHeader: event.source_header,
       });
 
+      // With a layout sheet: the original's tab of this event, then the copy tab's
+      // gid (kept by "Make a copy"). A member missing there is reported, not guessed.
+      // Events read from another workbook (e.g. last season, whose tabs share gids
+      // with this one) have no rows in the layout sheet.
+      const eventFromOtherWorkbook = Boolean(
+        LAYOUT_SHEET_ID && event.source_sheet_id && event.source_sheet_id !== LAYOUT_SHEET_ID,
+      );
+      const resolveRow = (memberId: string): number | null =>
+        LAYOUT_SHEET_ID
+          ? (eventFromOtherWorkbook
+            ? null
+            : pickLayoutRowNumber(memberId, fallbackRows, LAYOUT_SHEET_ID, [event.source_gid, ensuredSheet.gid]))
+          : pickMemberRowNumber(memberId, membersById, fallbackRows, TARGET_ATTENDANCE_SHEET_ID, ensuredSheet.gid);
+
       const eventEntries = attendanceByEventId.get(event.event_id) ?? new Map<string, number>();
       if (overwriteMissingWithZero) {
         const writes: CellWriteTarget[] = [];
         for (const memberId of pagedMemberIds) {
-          const rowNumber = pickMemberRowNumber(
-            memberId,
-            membersById,
-            fallbackRows,
-            TARGET_ATTENDANCE_SHEET_ID,
-            ensuredSheet.gid,
-          );
+          const rowNumber = resolveRow(memberId);
           if (!rowNumber) {
             missingRows.add(memberId);
             continue;
@@ -789,13 +823,7 @@ Deno.serve(async (request) => {
             continue;
           }
 
-          const rowNumber = pickMemberRowNumber(
-            memberId,
-            membersById,
-            fallbackRows,
-            TARGET_ATTENDANCE_SHEET_ID,
-            ensuredSheet.gid,
-          );
+          const rowNumber = resolveRow(memberId);
           if (!rowNumber) {
             missingRows.add(memberId);
             continue;
@@ -841,6 +869,7 @@ Deno.serve(async (request) => {
       total_member_targets_count: filteredMemberIds.length,
       has_more_member_pages: hasMoreMemberPages,
       next_member_offset: hasMoreMemberPages ? memberOffset + pagedMemberIds.length : null,
+      layout_sheet_id: LAYOUT_SHEET_ID,
       missing_member_row_mappings: Array.from(missingRows).slice(0, 100),
       missing_member_row_mappings_count: missingRows.size,
     });

@@ -119,8 +119,14 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
      Wdrożone na orbit 2026-11-27 19:14 UTC (kopia starego kodu:
      `index.ts.bak-2026-11-27`), `evt-2026-01-12-proba` usunięte. Przebieg 19:15:
      „Próba 2026-01-12” → 2026-12-01, 734 wpisy, 0 błędów.
-   - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`
-     (pokazują się w panelu wpisywania).
+   - 9 osób z zeszłego sezonu nie ma w nowym arkuszu, a nadal ma `is_active=true`.
+     Panel wpisywania pokazuje tylko osoby z arkusza najnowszego wydarzenia
+     (`sheet_member_rows`, migracja 030), więc ich nie widać; w bazie zostają.
+   - Eksport do kopii bierze wiersz osoby tylko z zakładki oryginału tego
+     wydarzenia (`ATTENDANCE_SHEET_ID`, ewentualnie `ATTENDANCE_EXPORT_LAYOUT_SHEET_ID`).
+     Wcześniej brał ostatni znany wiersz, także z zeszłego sezonu: 2026-11-27
+     Agnieszka Barnaś (zeszły sezon, wiersz 2) trafiła w wiersz Julii Depczyńskiej.
+     Poprawka i migracja 030 wdrożone na orbit 2026-11-27 (kopia `index.ts.bak-rows`).
 3. ~~Rozdzielić zbiory~~ (w repo: migracja 029, zapis, eksport do kopii, panel).
    Wdrożone na orbit 2026-11-27: migracja 029, obie funkcje (kopie
    `index.ts.bak-step3`), `ATTENDANCE_WRITE_SOURCE_MODE=db_first` w
