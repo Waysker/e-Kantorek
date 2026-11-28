@@ -12,6 +12,7 @@ export type SessionRow = {
   source_header: string | null;
   source_column: string | null;
   source_sheet_id?: string | null;
+  forum_event_id?: string | null;
 };
 
 export type AttendanceEntryRow = {
@@ -29,6 +30,8 @@ export type SnapshotAttendanceGroup = {
 };
 
 export type SnapshotEventDetail = {
+  /** Forum event id ("forum-event-<tid>"): the key in eventDetailsById. */
+  id?: string;
   title?: string;
   startsAt?: string;
   attendanceGroups?: SnapshotAttendanceGroup[];

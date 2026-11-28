@@ -80,7 +80,7 @@ export function useAttendanceBootData({
         const [sessionsResult, membersResult] = await Promise.all([
           client
             .from("events")
-            .select("event_id,title,event_date,source_header,source_column,source_sheet_id")
+            .select("event_id,title,event_date,source_header,source_column,source_sheet_id,forum_event_id")
             .order("event_date", { ascending: false })
             .limit(500),
           client

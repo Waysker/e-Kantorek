@@ -33,7 +33,10 @@ type EventLookupRow = {
   event_id: string;
   title: string;
   event_date: string;
+  forum_event_id?: string | null;
 };
+
+const FORUM_EVENT_ID_PATTERN = /^forum-event-\d+$/;
 
 type QueueRow = {
   id: number;
@@ -1140,14 +1143,127 @@ async function createPlaceholderEvent(
   return candidateEventId;
 }
 
+type EventResolution =
+  | "direct_event_id"
+  | "date_unique"
+  | "date_title_match"
+  | "created_placeholder"
+  | "forum_link"
+  | "forum_title_match";
+
+// Polish titles inflect ("Koncert w Gwarku" vs "Gwarek"), so forum titles also
+// count words sharing their first four letters.
+function stemOverlapScore(requestedTitle: string, candidateTitle: string): number {
+  const stem = (token: string) => token.slice(0, 4);
+  const requestedStems = new Set(requestedTitle.split(" ").filter((token) => token.length >= 4).map(stem));
+  const candidateStems = new Set(candidateTitle.split(" ").filter((token) => token.length >= 4).map(stem));
+  let overlap = 0;
+  for (const value of requestedStems) {
+    if (candidateStems.has(value)) {
+      overlap += 1;
+    }
+  }
+  return overlap * 10;
+}
+
+// Events picked in the panel come from the forum (step 6 in
+// docs/reference/attendance-model.md). The first save links the forum thread to
+// the original-sheet event with the same date and a matching title, or to a new
+// event; later saves find it through events.forum_event_id. Unlike rehearsals, a
+// lone event on that date is not taken unless its title matches, so a second
+// event on the same day (e.g. a match next to a concert) gets its own row.
+async function resolveForumEvent(
+  supabaseAdmin: SupabaseAdminClient,
+  payload: {
+    forumEventId: string;
+    eventDateInput: string | null;
+    eventTitleInput: string;
+  },
+): Promise<{ eventId: string; resolution: EventResolution }> {
+  const { data: linked, error: linkedError } = await supabaseAdmin
+    .from("events")
+    .select("event_id")
+    .eq("forum_event_id", payload.forumEventId)
+    .maybeSingle<{ event_id: string }>();
+  if (linkedError) {
+    throw new HttpError(500, "event_lookup_failed", linkedError.message);
+  }
+  if (linked?.event_id) {
+    return { eventId: linked.event_id, resolution: "forum_link" };
+  }
+
+  if (!payload.eventDateInput) {
+    throw new HttpError(422, "missing_event_date", "eventDate is required for a forum event that is not linked yet.");
+  }
+
+  const { data: dateMatches, error: dateMatchError } = await supabaseAdmin
+    .from("events")
+    .select("event_id,title,event_date,forum_event_id")
+    .eq("event_date", payload.eventDateInput)
+    .is("forum_event_id", null)
+    .returns<EventLookupRow[]>();
+  if (dateMatchError) {
+    throw new HttpError(500, "event_lookup_failed", dateMatchError.message);
+  }
+
+  const requestedTitle = normalizeMatchText(payload.eventTitleInput);
+  const ranked = (dateMatches ?? [])
+    .map((candidate) => ({
+      candidate,
+      score: scoreTitleMatch(requestedTitle, normalizeMatchText(candidate.title)) +
+        stemOverlapScore(requestedTitle, normalizeMatchText(candidate.title)),
+    }))
+    .sort((left, right) => right.score - left.score);
+  const best = ranked[0];
+  const second = ranked[1];
+  const isConfident = Boolean(best) && best.score > 0 && (!second || best.score > second.score);
+
+  let eventId: string;
+  let resolution: EventResolution;
+  if (isConfident) {
+    eventId = best.candidate.event_id;
+    resolution = "forum_title_match";
+  } else {
+    eventId = await createPlaceholderEvent(supabaseAdmin, {
+      eventDate: payload.eventDateInput,
+      eventTitleInput: payload.eventTitleInput,
+    });
+    resolution = "created_placeholder";
+  }
+
+  const { error: linkError } = await supabaseAdmin
+    .from("events")
+    .update({ forum_event_id: payload.forumEventId })
+    .eq("event_id", eventId)
+    .is("forum_event_id", null);
+  if (linkError) {
+    throw new HttpError(500, "event_forum_link_failed", linkError.message);
+  }
+
+  return { eventId, resolution };
+}
+
 async function resolveCanonicalEventId(
   supabaseAdmin: SupabaseAdminClient,
   payload: {
     eventIdInput: string;
     eventDateInput: string | null;
     eventTitleInput: string;
+    forumEventIdInput?: string;
   },
-): Promise<{ eventId: string; resolution: "direct_event_id" | "date_unique" | "date_title_match" | "created_placeholder" }> {
+): Promise<{ eventId: string; resolution: EventResolution }> {
+  const forumEventId = normalizeWhitespace(payload.forumEventIdInput ?? "");
+  if (forumEventId) {
+    if (!FORUM_EVENT_ID_PATTERN.test(forumEventId)) {
+      throw new HttpError(422, "invalid_forum_event_id", "forumEventId must look like forum-event-<number>.");
+    }
+    return await resolveForumEvent(supabaseAdmin, {
+      forumEventId,
+      eventDateInput: payload.eventDateInput,
+      eventTitleInput: payload.eventTitleInput,
+    });
+  }
+
   if (payload.eventIdInput) {
     const { data: exactMatch, error: exactMatchError } = await supabaseAdmin
       .from("events")
@@ -1888,6 +2004,7 @@ async function handleDbFirstEnqueueMode(
     eventIdInput,
     eventDateInput,
     eventTitleInput,
+    forumEventIdInput: normalizeWhitespace(body.forumEventId ?? body.forum_event_id ?? ""),
   });
   const eventId = resolvedEvent.eventId;
   const exportEventDate = await resolveEventDateForExport(supabaseAdmin, eventId, eventDateInput);
@@ -2032,6 +2149,7 @@ async function handleDbFirstEnqueueBatchMode(
     eventIdInput,
     eventDateInput,
     eventTitleInput,
+    forumEventIdInput: normalizeWhitespace(body.forumEventId ?? body.forum_event_id ?? ""),
   });
   const eventId = resolvedEvent.eventId;
   const exportEventDate = await resolveEventDateForExport(supabaseAdmin, eventId, eventDateInput);
@@ -2159,6 +2277,7 @@ async function handleEnqueueMode(
     eventIdInput,
     eventDateInput,
     eventTitleInput,
+    forumEventIdInput: normalizeWhitespace(body.forumEventId ?? body.forum_event_id ?? ""),
   });
   const eventId = resolvedEvent.eventId;
   const eventSourceSnapshot = await resolveEventSource(supabaseAdmin, eventId);
@@ -2340,6 +2459,7 @@ async function handleEnqueueBatchMode(
     eventIdInput,
     eventDateInput,
     eventTitleInput,
+    forumEventIdInput: normalizeWhitespace(body.forumEventId ?? body.forum_event_id ?? ""),
   });
   const eventId = resolvedEvent.eventId;
   const eventSourceSnapshot = await resolveEventSource(supabaseAdmin, eventId);

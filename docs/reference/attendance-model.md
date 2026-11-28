@@ -145,8 +145,15 @@ parowanie byłoby kruche). Zamiast tego w panelu zarządu:
    wierszy. Test ręczny: `deploy/orbit/attendance-export-test.sh`.
 5. ~~Backend: zapis tylko dla `board`/`admin`~~ (w repo). Zapis zbiorczy nie
    wymaga już, żeby osoba z zarządu była w arkuszu (`actor_member_id` może być puste).
-6. Kalendarz wpisywania: wydarzenia z forum zamiast z kolumn oryginału (dziś
-   `AttendanceManagerScreen` czyta tabelę `events` z syncu arkusza).
+6. ~~Kalendarz wpisywania: wydarzenia z forum~~ (w repo). Forum jest jedynym
+   źródłem wydarzeń: panel pokazuje wydarzenia z forum oraz próby (próby
+   z arkusza albo planowane wt/czw). Wydarzeń tylko z arkusza, które nie są
+   próbami, panel nie pokazuje; jeśli jednego dnia jest wydarzenie z forum i próba,
+   są dwie sesje. `events.forum_event_id` (migracja 032) łączy wiersz z wątkiem
+   forum: przy pierwszym zapisie serwer szuka wydarzenia z arkusza z tą samą datą
+   i pasującym tytułem (także po początkach słów: „Gwarku” ↔ „Gwarek”), inaczej
+   tworzy nowe. Skrypt kopii dopasowuje kolumnę po dacie i tytule, więc dwa
+   wydarzenia jednego dnia dostają dwie kolumny.
 7. ~~Panel zarządu: odnośniki do arkuszy i lista ostatnich zapisów~~ (w repo):
    karta „Porównanie z arkuszami” w panelu wpisywania (`SheetCheckPanel`),
    RPC `attendance_board_overview` (migracja 031, tylko `board`/`admin`).

@@ -1,4 +1,4 @@
-// Runs migrations 010, 013, 029 and 030 on an in-process Postgres (PGlite) and checks that
+// Runs migrations 010, 013, 029, 030 and 032 on an in-process Postgres (PGlite) and checks that
 // app-entered attendance (app_attendance_entries) is readable by every signed-in
 // member, writable only server-side, and kept apart from attendance_entries
 // (the original sheet). See docs/reference/attendance-model.md.
@@ -53,6 +53,7 @@ before(async () => {
   await db.exec(migration("013_attendance_sheet_first_write_path.sql"));
   await db.exec(migration("029_app_attendance_entries.sql"));
   await db.exec(migration("030_sheet_member_rows_read.sql"));
+  await db.exec(migration("032_events_forum_event_id.sql"));
   await db.exec(`
     insert into profiles values ('${BOARD}', 'Zarząd', 'board');
     insert into members (member_id, first_name, last_name, full_name, instrument)
@@ -144,5 +145,18 @@ describe("sheet_member_rows (030)", () => {
     await errorOf("authenticated", "update sheet_member_rows set source_row_number = 9");
     const { rows: unchanged } = await db.query("select count(*)::int as n from sheet_member_rows where source_row_number = 9");
     assert.deepEqual(unchanged, [{ n: 0 }]);
+  });
+});
+
+describe("events.forum_event_id (032)", () => {
+  it("links one event per forum thread and leaves sheet events unlinked", async () => {
+    await db.exec("update events set forum_event_id = 'forum-event-1128' where event_id = 'evt-2026-12-01-proba'");
+    await assert.rejects(
+      db.exec("insert into events (event_id, title, event_date, forum_event_id) values ('evt-x', 'X', '2026-12-02', 'forum-event-1128')"),
+      /unique/,
+    );
+    await db.exec("insert into events (event_id, title, event_date) values ('evt-y', 'Y', '2026-12-02'), ('evt-z', 'Z', '2026-12-02')");
+    const { rows } = await as("authenticated", "select count(*)::int as n from events where forum_event_id is null and event_date = '2026-12-02'");
+    assert.deepEqual(rows, [{ n: 2 }]);
   });
 });
