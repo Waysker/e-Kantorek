@@ -272,12 +272,23 @@ function ensureAttendanceMonthSheet(ss, eventDate, suggestedGid) {
   return { sheet: created, created: true };
 }
 
-function findColumnByDateToken(sheet, eventDate) {
+// Date tokens in a header: "2026-12-01", "2026-01-12" (board's RRRR-DD-MM), "03.12".
+var ANY_DATE_TOKEN = /(^|[^0-9])(\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}|\d{1,2}\.\d{1,2}(\.\d{2,4})?)(?![0-9])/g;
+
+function titleKeyOfHeader(header) {
+  return normalizeSearchText(String(header || "").replace(ANY_DATE_TOKEN, "$1 "));
+}
+
+// A column belongs to an event when its header carries the event's date AND the
+// same title: two events on one day (a match and a concert) get two columns.
+function findColumnByDateToken(sheet, eventDate, eventTitle) {
+  var wantedTitle = titleKeyOfHeader(eventTitle);
   var headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getDisplayValues()[0] || [];
   for (var i = 4; i < headerRow.length; i++) {
     var header = String(headerRow[i] || "").trim();
     if (!header) continue;
-    if (header.indexOf(eventDate) >= 0) {
+    if (header.indexOf(eventDate) < 0) continue;
+    if (!wantedTitle || titleKeyOfHeader(header) === wantedTitle) {
       return { columnNumber: i + 1, header: header, created: false };
     }
   }
@@ -299,10 +310,9 @@ function buildCanonicalHeader(eventDate, eventTitle, sourceHeader) {
 
   // Strip every date token from the original header ("Próba 2026-01-12",
   // "Gwarek 03.12"): the canonical date goes on its own line below.
-  var anyDateToken = /(^|[^0-9])(\d{4}[.\-\/]\d{1,2}[.\-\/]\d{1,2}|\d{1,2}\.\d{1,2}(\.\d{2,4})?)(?![0-9])/g;
   var titleWithoutDate = String(base || "")
     .replace(dateRegex || /$^/, " ")
-    .replace(anyDateToken, "$1 ")
+    .replace(ANY_DATE_TOKEN, "$1 ")
     .replace(/\s+/g, " ")
     .trim();
   var fallbackTitleWithoutDate = String(fallbackTitle || "")
@@ -326,8 +336,8 @@ function applyHeaderCellStyle(cell) {
 }
 
 function ensureAttendanceColumn(sheet, eventDate, eventTitle, sourceHeader) {
-  var existing = findColumnByDateToken(sheet, eventDate);
   var canonicalHeader = buildCanonicalHeader(eventDate, eventTitle, sourceHeader);
+  var existing = findColumnByDateToken(sheet, eventDate, canonicalHeader);
 
   if (existing) {
     var existingCell = sheet.getRange(1, existing.columnNumber);

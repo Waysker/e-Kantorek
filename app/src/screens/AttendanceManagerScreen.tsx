@@ -33,7 +33,7 @@ import { Button } from "../ui/Button";
 import { textStyles } from "../theme/text";
 import { Notice } from "../ui/Notice";
 import { Icon } from "../ui/Icon";
-import { formatDateLabel } from "../utils/format";
+import { formatDateLabel, stripTitleDatePrefix } from "../utils/format";
 
 type AttendanceManagerScreenProps = {
   onBack?: () => void;
@@ -46,7 +46,10 @@ type ManagerSession = {
   event_date: string;
   source_header: string | null;
   source_column: string | null;
+  /** No event row yet: the first save links or creates it. */
   isVirtual: boolean;
+  /** Set for events from the forum ("forum-event-<tid>"). */
+  forum_event_id: string | null;
 };
 
 const ATTENDANCE_CYCLE_SEQUENCE = [0, 1, 0.75, 0.5, 0.25] as const;
@@ -335,7 +338,9 @@ function buildExpectedRehearsalDates(now: Date, pastWeeks = 8, futureWeeks = 6):
   return dates;
 }
 
-function chooseDefaultSession(sessions: SessionRow[]): SessionRow | null {
+function chooseDefaultSession(allSessions: SessionRow[]): SessionRow | null {
+  // Only events the panel lists: forum-linked ones and rehearsals.
+  const sessions = allSessions.filter((session) => Boolean(session.forum_event_id) || isRehearsalLikeSession(session));
   if (sessions.length === 0) {
     return null;
   }
@@ -417,64 +422,9 @@ function extractSnapshotEventDetails(payload: ForumSnapshotPayload | null): Snap
     return [];
   }
 
-  const values = Object.values(payload.eventDetailsById);
-  return values.filter((item) => item && typeof item === "object");
-}
-
-function scoreSnapshotTitleMatch(sessionTitle: string, eventTitle: string): number {
-  const normalizedSessionTitle = normalizePersonName(sessionTitle);
-  const normalizedEventTitle = normalizePersonName(eventTitle);
-  if (!normalizedSessionTitle || !normalizedEventTitle) {
-    return 0;
-  }
-
-  let score = 0;
-  if (normalizedSessionTitle === normalizedEventTitle) {
-    score += 1000;
-  }
-  if (normalizedEventTitle.includes(normalizedSessionTitle)) {
-    score += 250;
-  }
-  if (normalizedSessionTitle.includes(normalizedEventTitle)) {
-    score += 150;
-  }
-
-  const leftTokens = normalizedSessionTitle.split(" ").filter((token) => token.length >= 3);
-  const rightTokens = new Set(normalizedEventTitle.split(" ").filter((token) => token.length >= 3));
-  const overlap = leftTokens.filter((token) => rightTokens.has(token)).length;
-  score += overlap * 25;
-
-  return score;
-}
-
-function findMatchingSnapshotEvent(
-  session: ManagerSession,
-  snapshotEvents: SnapshotEventDetail[],
-): SnapshotEventDetail | null {
-  const dateMatches = snapshotEvents.filter((event) => parseDateOnly(event.startsAt) === session.event_date);
-  if (dateMatches.length === 0) {
-    return null;
-  }
-
-  if (dateMatches.length === 1) {
-    return dateMatches[0];
-  }
-
-  const ranked = dateMatches
-    .map((event) => ({
-      event,
-      score: scoreSnapshotTitleMatch(session.title, normalizeWhitespace(event.title ?? "")),
-    }))
-    .sort((left, right) => right.score - left.score);
-
-  const best = ranked[0];
-  const second = ranked[1];
-  const scoreGap = second ? best.score - second.score : best.score;
-  if (best.score <= 0 || scoreGap <= 0) {
-    return null;
-  }
-
-  return best.event;
+  return Object.entries(payload.eventDetailsById)
+    .filter(([, item]) => item && typeof item === "object")
+    .map(([id, item]) => ({ ...item, id }));
 }
 
 export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps) {
@@ -555,68 +505,126 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     onDefaultSession: handleDefaultSessionResolved,
   });
 
-  const sessionsByDate = useMemo(() => {
-    const grouped = new Map<string, SessionRow[]>();
-    const sorted = [...sessions].sort((left, right) => {
-      const byDate = left.event_date.localeCompare(right.event_date);
-      if (byDate !== 0) {
-        return byDate;
-      }
-      return left.title.localeCompare(right.title, "pl");
-    });
-
-    for (const session of sorted) {
-      const bucket = grouped.get(session.event_date) ?? [];
-      bucket.push(session);
-      grouped.set(session.event_date, bucket);
-    }
-
-    return grouped;
-  }, [sessions]);
-
   const expectedRehearsalSet = useMemo(() => {
     return new Set(buildExpectedRehearsalDates(new Date(), 20, 20));
   }, []);
 
-  const calendarCells = useMemo(() => buildCalendarCells(visibleMonthKey), [visibleMonthKey]);
+  const snapshotEvents = useMemo(() => extractSnapshotEventDetails(snapshotPayload), [snapshotPayload]);
 
-  const selectedDateSessions = useMemo<ManagerSession[]>(() => {
-    const realSessions = (sessionsByDate.get(selectedDate) ?? []).map((session) => ({
-      key: session.event_id,
-      event_id: session.event_id,
-      title: session.title,
-      event_date: session.event_date,
-      source_header: session.source_header,
-      source_column: session.source_column,
-      isVirtual: false,
-    }));
-
-    const shouldOfferVirtualRehearsal = expectedRehearsalSet.has(selectedDate) &&
-      !realSessions.some((session) => isRehearsalLikeSession({
-        event_id: session.key,
-        title: session.title,
-        event_date: session.event_date,
-        source_header: session.source_header,
-        source_column: session.source_column,
-      }));
-
-    if (!shouldOfferVirtualRehearsal) {
-      return realSessions;
+  // The forum is the one source of events (docs/reference/attendance-model.md,
+  // step 6): the panel lists forum events, plus rehearsals (sheet rehearsals, or a
+  // planned Tuesday/Thursday one). Sheet events that are not on the forum and are
+  // not rehearsals are not offered.
+  const panelSessions = useMemo<ManagerSession[]>(() => {
+    const result: ManagerSession[] = [];
+    const rowByForumId = new Map<string, SessionRow>();
+    for (const row of sessions) {
+      if (row.forum_event_id) {
+        rowByForumId.set(row.forum_event_id, row);
+      }
     }
 
-    return [
-      ...realSessions,
-      {
-        key: `virtual-rehearsal-${selectedDate}`,
+    const listedForumIds = new Set<string>();
+    for (const detail of snapshotEvents) {
+      const forumId = normalizeWhitespace(detail.id ?? "");
+      const eventDate = parseDateOnly(detail.startsAt);
+      if (!forumId || !eventDate) {
+        continue;
+      }
+      listedForumIds.add(forumId);
+      const linked = rowByForumId.get(forumId) ?? null;
+      result.push({
+        key: `forum:${forumId}`,
+        event_id: linked?.event_id ?? null,
+        title: stripTitleDatePrefix(normalizeWhitespace(detail.title ?? "")) || (linked?.title ?? ""),
+        event_date: eventDate,
+        source_header: linked?.source_header ?? null,
+        source_column: linked?.source_column ?? null,
+        isVirtual: !linked,
+        forum_event_id: forumId,
+      });
+    }
+
+    // Forum events saved earlier stay listed after the forum snapshot drops them.
+    for (const [forumId, row] of rowByForumId) {
+      if (listedForumIds.has(forumId)) {
+        continue;
+      }
+      result.push({
+        key: `forum:${forumId}`,
+        event_id: row.event_id,
+        title: row.title,
+        event_date: row.event_date,
+        source_header: row.source_header,
+        source_column: row.source_column,
+        isVirtual: false,
+        forum_event_id: forumId,
+      });
+    }
+
+    const rehearsalDates = new Set<string>();
+    for (const row of sessions) {
+      if (row.forum_event_id || !isRehearsalLikeSession(row)) {
+        continue;
+      }
+      rehearsalDates.add(row.event_date);
+      result.push({
+        key: row.event_id,
+        event_id: row.event_id,
+        title: row.title,
+        event_date: row.event_date,
+        source_header: row.source_header,
+        source_column: row.source_column,
+        isVirtual: false,
+        forum_event_id: null,
+      });
+    }
+
+    for (const date of expectedRehearsalSet) {
+      if (rehearsalDates.has(date)) {
+        continue;
+      }
+      result.push({
+        key: `virtual-rehearsal-${date}`,
         event_id: null,
-        title: tr(`Próba ${selectedDate}`, `Rehearsal ${selectedDate}`),
-        event_date: selectedDate,
-        source_header: tr(`Próba ${selectedDate}`, `Rehearsal ${selectedDate}`),
+        title: tr("Próba", "Rehearsal"),
+        event_date: date,
+        source_header: tr(`Próba ${date}`, `Rehearsal ${date}`),
         source_column: null,
         isVirtual: true,
-      },
-    ];
-  }, [expectedRehearsalSet, selectedDate, sessionsByDate]);
+        forum_event_id: null,
+      });
+    }
+
+    return result.sort((left, right) => {
+      const byDate = left.event_date.localeCompare(right.event_date);
+      if (byDate !== 0) {
+        return byDate;
+      }
+      // Forum events first, rehearsals after them on the same day.
+      if (Boolean(left.forum_event_id) !== Boolean(right.forum_event_id)) {
+        return left.forum_event_id ? -1 : 1;
+      }
+      return left.title.localeCompare(right.title, "pl");
+    });
+  }, [expectedRehearsalSet, sessions, snapshotEvents]);
+
+  const sessionsByDate = useMemo(() => {
+    const grouped = new Map<string, ManagerSession[]>();
+    for (const session of panelSessions) {
+      const bucket = grouped.get(session.event_date) ?? [];
+      bucket.push(session);
+      grouped.set(session.event_date, bucket);
+    }
+    return grouped;
+  }, [panelSessions]);
+
+  const calendarCells = useMemo(() => buildCalendarCells(visibleMonthKey), [visibleMonthKey]);
+
+  const selectedDateSessions = useMemo<ManagerSession[]>(
+    () => sessionsByDate.get(selectedDate) ?? [],
+    [selectedDate, sessionsByDate],
+  );
 
   useEffect(() => {
     if (selectedDateSessions.length === 0) {
@@ -735,15 +743,14 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
     return map;
   }, [members]);
 
-  const snapshotEvents = useMemo(() => extractSnapshotEventDetails(snapshotPayload), [snapshotPayload]);
-
   const rsvpHintMemberIds = useMemo(() => {
     const hinted = new Set<string>();
-    if (!selectedSession || selectedSession.isVirtual || snapshotEvents.length === 0) {
+    // Declarations exist only for forum events; rehearsals have no forum poll.
+    if (!selectedSession?.forum_event_id || snapshotEvents.length === 0) {
       return hinted;
     }
 
-    const matchedSnapshotEvent = findMatchingSnapshotEvent(selectedSession, snapshotEvents);
+    const matchedSnapshotEvent = snapshotEvents.find((event) => event.id === selectedSession.forum_event_id) ?? null;
     if (!matchedSnapshotEvent) {
       return hinted;
     }
@@ -894,7 +901,9 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
         },
         body: JSON.stringify({
           mode: "enqueue_batch",
-          eventId: selectedSession.event_id ?? selectedSession.key,
+          // Forum events are found by forumEventId; the key "forum:…" is not an event id.
+          eventId: selectedSession.event_id ?? (selectedSession.forum_event_id ? "" : selectedSession.key),
+          forumEventId: selectedSession.forum_event_id ?? undefined,
           eventDate: selectedSession.event_date,
           eventTitle: selectedSession.title,
           source: "manager_panel",
@@ -922,7 +931,30 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
       }
 
       const resolvedEventId = normalizeWhitespace(payload?.event_id ?? "");
-      if (selectedSession.isVirtual && resolvedEventId) {
+      const savedForumEventId = selectedSession.forum_event_id;
+      if (savedForumEventId && resolvedEventId) {
+        // The forum event is now linked to an event row (a sheet event with a
+        // matching title, or a new one); the session keeps its "forum:…" key.
+        setSessions((current) => {
+          const hasRow = current.some((row) => row.event_id === resolvedEventId);
+          if (hasRow) {
+            return current.map((row) =>
+              row.event_id === resolvedEventId ? { ...row, forum_event_id: savedForumEventId } : row,
+            );
+          }
+          return [
+            {
+              event_id: resolvedEventId,
+              title: selectedSession.title,
+              event_date: selectedSession.event_date,
+              source_header: null,
+              source_column: null,
+              forum_event_id: savedForumEventId,
+            },
+            ...current,
+          ];
+        });
+      } else if (selectedSession.isVirtual && resolvedEventId) {
         setSessions((current) => {
           if (current.some((row) => row.event_id === resolvedEventId)) {
             return current;
@@ -1029,13 +1061,18 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
 
           <View style={styles.calendarGrid}>
             {calendarCells.map((cell) => {
-              const sessionsForDate = sessionsByDate.get(cell.date) ?? [];
+              const allSessionsForDate = sessionsByDate.get(cell.date) ?? [];
+              // Counted: forum events and sheet rehearsals; a planned rehearsal without
+              // a sheet column shows as the amber "P" only.
+              const sessionsForDate = allSessionsForDate.filter(
+                (session) => Boolean(session.forum_event_id) || !session.isVirtual,
+              );
               const hasSessions = sessionsForDate.length > 0;
               const isSelected = cell.date === selectedDate;
               const isToday = cell.date === todayIso;
               const rehearsalExpected = expectedRehearsalSet.has(cell.date);
-              const rehearsalMissingMapping =
-                rehearsalExpected && !sessionsForDate.some((session) => isRehearsalLikeSession(session));
+              const rehearsalMissingMapping = rehearsalExpected &&
+                allSessionsForDate.some((session) => session.isVirtual && !session.forum_event_id);
 
               return (
                 <View key={cell.date} style={styles.dayCellSlot}>
@@ -1121,12 +1158,16 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
                       {session.title}
                     </Text>
                     <Text style={styles.sessionMeta} numberOfLines={2}>
-                      {session.isVirtual
-                        ? tr(
-                            "Brak kolumny w arkuszu: pierwszy zapis ją utworzy.",
-                            "No sheet column yet: the first save creates it.",
-                          )
-                        : sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
+                      {session.forum_event_id
+                        ? session.isVirtual
+                          ? tr("Z forum · jeszcze bez wpisów w aplikacji", "From the forum · nothing entered in the app yet")
+                          : tr("Z forum", "From the forum")
+                        : session.isVirtual
+                          ? tr(
+                              "Brak kolumny w arkuszu: pierwszy zapis ją utworzy.",
+                              "No sheet column yet: the first save creates it.",
+                            )
+                          : sourceMeta || tr("bez metadanych kolumny", "no column metadata")}
                     </Text>
                   </Pressable>
                 );
@@ -1186,7 +1227,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           <Text style={styles.muted}>
             {selectedSession
               ? `${formatDateLabel(`${selectedSession.event_date}T12:00:00`)}${
-                  selectedSession.isVirtual
+                  selectedSession.isVirtual && !selectedSession.forum_event_id
                     ? tr(" · utworzy nową kolumnę", " · will create a new column")
                     : ""
                 }`
@@ -1262,7 +1303,7 @@ export function AttendanceManagerScreen({ onBack }: AttendanceManagerScreenProps
           )}
         </Notice>
       ) : null}
-      {!selectedSession?.isVirtual && rsvpHintMemberIds.size > 0 ? (
+      {rsvpHintMemberIds.size > 0 ? (
         <Text style={styles.hint}>
           {tr(
             `Podświetlono ${rsvpHintMemberIds.size} osób zadeklarowanych na forum (podpowiedź).`,
