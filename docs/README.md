@@ -33,6 +33,10 @@
 
 - `docs/design-system.md` — the "Partytura" design system: where its source of truth lives (Claude Design), how a change travels (system first, then code) and where each token and component lives in the code. Read before adding or changing a screen.
 
+## Push notifications
+
+- `docs/ops/push-notifications.md` — push "Nowe wydarzenie" from the installed web app: how it works, keys, deploy on orbit, testing, turning it off.
+
 ## Supabase hosting
 
 - `docs/ops/cloudflare-tunnel-supabase-self-hosting.md` — current self-hosted database topology, Cloudflare Tunnel, GitHub secret names, data-copy status, and operating runbook. Read this before changing the Supabase endpoint or sync deployment.

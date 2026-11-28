@@ -33,7 +33,7 @@ explicit decision changes the look of the app.
 | Text styles (`screen-title`, `kicker`, …) | `app/src/theme/text.ts` → `textStyles.<camelCase>` |
 | Font (Inter) and the global keyboard focus ring | `app/src/theme/webFonts.ts` |
 | Theme choice (device setting or Ja → Wygląd), page background, focus ring colours | `app/src/theme/theme.ts` (`useThemeRoot` in `App.tsx`, `useTheme` in screens) |
-| Components (cards in the system) | `app/src/ui/<Name>.tsx`: `StatusPill`, `DeclarationPrompt`, `ForumIdentityPrompt`, `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `StatusMark`, `Tag`, `SectionTile` |
+| Components (cards in the system) | `app/src/ui/<Name>.tsx`: `StatusPill`, `DeclarationPrompt`, `ForumIdentityPrompt`, `NotificationsPrompt` (pattern Notifications), `SegmentedControl`, `Chip`, `Button`, `Card`, `Notice`, `TextField`, `EventRow`, `Badge`, `EmptyState`, `StatusMark`, `Tag`, `SectionTile` |
 | App chrome (not carded) | `app/src/ui/`: `Icon`, `AppShell`, `BoardSubNav`, `AuthLayout`, `DataFreshnessBanner`, `UnmappedMembersBanner` |
 | Pattern helpers | `app/src/domain/forumLinks.ts` (forum poll links), `stripTitleDatePrefix` in `app/src/utils/format.ts`, `app/src/domain/setlist.ts` |
 
